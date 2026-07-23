@@ -528,16 +528,22 @@ def figura_control(dem, acc, red, cuencas, grid, ruta_png: Path):
     xmin, ymin, xmax, ymax = grid.bbox
     extension = (xmin, xmax, ymin, ymax)
 
+    # El "sin dato" (mar y anillo) se oculta para que no ensucie la vista: se
+    # tapa con transparencia en vez de dejar que el colormap lo pinte.
+    dem_arr = np.asarray(dem, dtype="float32")
+    dem_vista = np.ma.masked_equal(dem_arr, dem.nodata)
+    acc_vista = np.ma.masked_where(dem_arr == dem.nodata, np.asarray(acc))
+
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 7))
 
-    ax1.imshow(np.asarray(dem), cmap="terrain", extent=extension)
+    ax1.imshow(dem_vista, cmap="terrain", extent=extension)
     cuencas.boundary.plot(ax=ax1, color="black", linewidth=0.8)
     red.plot(ax=ax1, color="tab:blue", linewidth=1.2)
     ax1.set_title("Elevacion + cuencas y quebradas delineadas")
 
     # Escala logaritmica: sin ella, un par de pixeles enormes en la desembocadura
     # aplastan todo el resto y el mapa se ve negro.
-    ax2.imshow(np.log1p(np.asarray(acc)), cmap="cubehelix", extent=extension)
+    ax2.imshow(np.log1p(acc_vista), cmap="cubehelix", extent=extension)
     ax2.scatter(cuencas["salida_x"], cuencas["salida_y"],
                 c="red", s=28, marker="v", zorder=3, label="desembocaduras")
     ax2.set_title("Acumulacion de flujo (escala log)")
@@ -594,6 +600,13 @@ def main():
 
     dem_acondicionado = acondicionar(grid, dem)
     fdir, acc = direccion_y_acumulacion(grid, dem_acondicionado)
+
+    # El agua no corre por el mar. pysheds igual rellena las celdas sin dato y
+    # deja correr flujo imaginario a traves de ellas, que despues se extraeria
+    # como quebradas fantasma sobre el oceano. Anular la acumulacion sobre el
+    # "sin dato" corta eso de raiz: sin acumulacion no hay cauce ni salida ahi.
+    np.asarray(acc)[~valido] = 0
+
     red = extraer_red(grid, fdir, acc, umbral_celdas, crs)
     cuencas = delinear_cuencas(
         grid, fdir, acc, umbral_celdas, args.area_min_km2, crs, m2_pixel, valido

@@ -138,11 +138,21 @@ def descargar(bbox, carpeta: Path, hilos: int) -> list[Path]:
 
 
 def unir(tiles: list[Path], salida: Path):
-    """Une los tiles en un solo raster continuo."""
+    """Une los tiles en un solo raster continuo.
+
+    Sobre el oceano abierto no existen tiles de Copernicus (dan 404), asi que el
+    mosaico queda con huecos donde el mar no toca tierra. Hay que rellenarlos con
+    "sin dato" (-9999) y NO con 0, que es el valor por defecto de merge. Si se
+    quedaran en 0, el paso siguiente los confundiria con terreno a nivel del mar
+    e interpolaria alturas falsas en el borde, generando quebradas fantasma.
+    """
     print("\nUniendo tiles...")
     fuentes = [rasterio.open(t) for t in tiles]
     try:
-        merge(fuentes, dst_path=salida, dst_kwds={"compress": "deflate", "tiled": True})
+        merge(
+            fuentes, dst_path=salida, nodata=-9999,
+            dst_kwds={"compress": "deflate", "tiled": True},
+        )
     finally:
         for f in fuentes:
             f.close()
@@ -159,11 +169,17 @@ def reproyectar(entrada: Path, salida: Path, resolucion: float, enmascarar_mar: 
     son cuadrados y las areas salen deformadas, asi que se reproyecta a UTM 19S,
     donde las coordenadas estan en metros.
 
-    Sobre el mar: el DEM trae el oceano como una enorme superficie plana en 0 m.
+    Sobre el mar: el DEM trae el oceano costero como una superficie plana en 0 m.
     Una planicie perfecta de ese tamano le da trabajo inutil al acondicionamiento
     hidrologico y ademas confunde el borde de las cuencas. Marcandola como
     "sin dato", cada quebrada termina limpiamente en la linea de costa, que es
     justo donde queremos su desembocadura.
+
+    Clave: se le pasa `src_nodata=-9999` a reproject. Sin eso, la interpolacion
+    no distingue los huecos (mar abierto sin tile) del terreno y mezcla ambos,
+    inventando alturas intermedias en el borde de los datos. Esas alturas falsas
+    son positivas, asi que la mascara de mar (que borra lo que vale <= 0) no las
+    atrapa, y terminan como quebradas fantasma sobre el oceano.
     """
     print("\nReproyectando a UTM 19S...")
 
@@ -182,12 +198,13 @@ def reproyectar(entrada: Path, salida: Path, resolucion: float, enmascarar_mar: 
         print(f"  destino: {ancho} x {alto} px a {resolucion:.0f} m")
 
         with rasterio.open(salida, "w", **perfil) as destino:
-            datos = np.empty((alto, ancho), dtype="float32")
+            datos = np.full((alto, ancho), -9999, dtype="float32")
             reproject(
                 source=rasterio.band(origen, 1),
                 destination=datos,
                 src_transform=origen.transform,
                 src_crs=origen.crs,
+                src_nodata=-9999,   # los huecos de mar abierto no se interpolan
                 dst_transform=transformacion,
                 dst_crs=CRS_METRICO,
                 dst_nodata=-9999,
