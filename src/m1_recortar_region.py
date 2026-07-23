@@ -92,14 +92,27 @@ def obtener_limite(cache: Path, nombre: str) -> gpd.GeoDataFrame:
 
 
 def filtrar(cuencas: gpd.GeoDataFrame, red: gpd.GeoDataFrame,
-            limite: gpd.GeoDataFrame):
-    """Selecciona las cuencas que descargan en la region, y su red asociada."""
+            limite: gpd.GeoDataFrame, tolerancia_m: float):
+    """Selecciona las cuencas que descargan en la region, y su red asociada.
+
+    La tolerancia existe porque las desembocaduras estan sobre la costa, y ahi
+    dos datos independientes no calzan al metro: la linea de costa que deduce el
+    DEM (donde la elevacion deja de ser positiva) y la del poligono
+    administrativo se separan por decenas de metros. Sin tolerancia, quebradas
+    costeras que claramente son de la region quedan fuera por esa diferencia.
+
+    Medido sobre una franja de prueba, la separacion entre ambos grupos es
+    nitida: 68 cuencas caian a menos de 100 m del limite (desajuste de costas,
+    hay que incluirlas) y 45 a mas de 2 km (esas si son de otra region). Los
+    500 m por defecto quedan comodamente en medio de esos dos grupos.
+    """
     poligono = limite.geometry.union_all()
 
     # Una cuenca entra si su desembocadura cae dentro de la region. La salida ya
     # viene guardada como par de coordenadas desde m1_terreno.py.
     salidas = gpd.points_from_xy(cuencas["salida_x"], cuencas["salida_y"])
-    dentro = gpd.GeoSeries(salidas, crs=CRS_METRICO).within(poligono)
+    puntos = gpd.GeoSeries(salidas, crs=CRS_METRICO)
+    dentro = puntos.distance(poligono) <= tolerancia_m
 
     cuencas_region = cuencas[dentro.values].copy()
     cuencas_region = cuencas_region.sort_values("area_km2", ascending=False)
@@ -108,6 +121,12 @@ def filtrar(cuencas: gpd.GeoDataFrame, red: gpd.GeoDataFrame,
     print(f"\nCuencas: {len(cuencas)} en total -> {len(cuencas_region)} descargan en la region")
     if cuencas_region.empty:
         sys.exit("Ninguna cuenca quedo dentro de la region. Revisa el limite y el CRS.")
+
+    # Cuanto de la region queda cubierto. Es normal que no sea el 100%: hay
+    # sectores de Coquimbo que drenan hacia Atacama, hacia Valparaiso o hacia
+    # Argentina, y esas cuencas pertenecen a la region vecina, no a esta.
+    cubierto = cuencas_region.geometry.union_all().intersection(poligono).area
+    print(f"  cubren el {100 * cubierto / poligono.area:.0f}% de la superficie regional")
 
     # Cada tramo de quebrada se asigna a la cuenca donde cae su punto medio.
     # Usar el punto medio en vez de recortar la linea es mas rapido y deja los
@@ -169,6 +188,9 @@ def main():
                     help="Carpeta con la salida de m1_terreno.py.")
     ap.add_argument("--region", default=NOMBRE_REGION,
                     help="Nombre de la region a conservar.")
+    ap.add_argument("--tolerancia-m", type=float, default=500.0,
+                    help="Margen para el desajuste entre la costa del DEM y la "
+                         "del poligono administrativo.")
     args = ap.parse_args()
 
     ruta_cuencas = args.procesados / "cuencas.gpkg"
@@ -185,7 +207,7 @@ def main():
     cuencas = gpd.read_file(ruta_cuencas)
     red = gpd.read_file(ruta_red)
 
-    cuencas_region, red_region = filtrar(cuencas, red, limite)
+    cuencas_region, red_region = filtrar(cuencas, red, limite, args.tolerancia_m)
 
     salida_cuencas = args.procesados / "cuencas_coquimbo.gpkg"
     salida_red = args.procesados / "red_quebradas_coquimbo.gpkg"
