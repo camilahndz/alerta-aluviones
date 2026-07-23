@@ -53,6 +53,30 @@ esas dos con conda/mamba y el resto con pip.
 
 ---
 
+## Cómo se corre M1
+
+Tres scripts, en este orden:
+
+```bash
+python src/m1_preparar_dem.py     # baja el DEM, lo une y lo pasa a UTM 19S
+python src/m1_terreno.py          # rellena, calcula flujo, delinea cuencas
+python src/m1_recortar_region.py  # deja solo las cuencas que descargan en Coquimbo
+```
+
+Los dos parámetros que vale la pena mover están en el segundo:
+
+| Parámetro | Qué controla |
+|---|---|
+| `--umbral-km2` | Área drenada mínima para considerar que hay cauce. Bajarlo densifica la red hacia las quebradas chicas. |
+| `--area-min-km2` | Bajo qué tamaño se descarta una cuenca. |
+
+**Sobre el margen:** la hidrología se corre sobre un área más grande que la región,
+porque hay quebradas cuyas cabeceras nacen fuera del límite administrativo y
+cortarlas daría áreas falsas. El tercer script filtra al final, conservando las
+cuencas completas cuya desembocadura cae dentro de Coquimbo.
+
+---
+
 ## Hoja de ruta (milestones)
 
 - [x] **M0 — Andamiaje**: repo, estructura, README, primer commit.
