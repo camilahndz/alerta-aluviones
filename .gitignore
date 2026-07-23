@@ -1,0 +1,98 @@
+# --- Datos ---
+# Los datos pesados no van a git. Regla del proyecto: data/processed/ y outputs/
+# tienen que poder reconstruirse corriendo el codigo sobre data/raw/.
+data/raw/*
+!data/raw/.gitkeep
+data/processed/*
+!data/processed/.gitkeep
+outputs/*
+!outputs/.gitkeep
+
+# Formatos geoespaciales sueltos (por si alguno queda fuera de data/)
+*.tif
+*.tiff
+*.img
+*.vrt
+*.nc
+*.hdf
+*.he5
+*.grib
+*.grib2
+*.shp
+*.shx
+*.dbf
+*.prj
+*.cpg
+*.sbn
+*.sbx
+*.qix
+*.gpkg
+*.gpkg-shm
+*.gpkg-wal
+*.gdb/
+*.zip
+*.7z
+*.tar.gz
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Entornos virtuales
+.venv/
+venv/
+env/
+ENV/
+.conda/
+
+# Testing / coverage / linters
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.mypy_cache/
+.ruff_cache/
+
+# --- Notebooks ---
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/*
+
+# --- QGIS ---
+*.qgs~
+*.qgz~
+*.qgd
+
+# --- Editores / SO ---
+.vscode/
+.idea/
+*.swp
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# --- Secretos / credenciales ---
+.env
+.env.*
+*.key
+credentials.json
+service_account.json

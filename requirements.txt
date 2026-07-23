@@ -1,0 +1,14 @@
+# Instalar con: pip install -r requirements.txt
+# Nota: rasterio y geopandas traen dependencias binarias (GDAL, PROJ). Si pip da
+# problemas en Windows, conviene instalar estas dos con conda/mamba y el resto con pip.
+
+# Raster y vectorial
+rasterio>=1.3
+geopandas>=0.14
+
+# Numerico y modelado
+numpy>=1.26
+scikit-learn>=1.4
+
+# Visualizacion
+matplotlib>=3.8
