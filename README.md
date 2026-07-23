@@ -75,12 +75,33 @@ porque hay quebradas cuyas cabeceras nacen fuera del límite administrativo y
 cortarlas daría áreas falsas. El tercer script filtra al final, conservando las
 cuencas completas cuya desembocadura cae dentro de Coquimbo.
 
+### Resultado de M1
+
+174 cuencas · 39.257 km² · 42.425 tramos de quebrada · 96% de la región cubierta.
+
+El 4% restante drena hacia Atacama, Valparaíso o Argentina, así que esas cuencas
+le pertenecen a la región vecina.
+
+Contraste contra las áreas oficiales de la DGA, como control de que la
+delineación reproduce la hidrología real:
+
+| Cuenca | Delineada | Oficial DGA | Desvío |
+|---|---|---|---|
+| Choapa | 7.620,6 km² | ~7.650 km² | 0,4% |
+| Elqui | 9.410,7 km² | ~9.657 km² | 2,5% |
+| Limarí | 9.309,0 km² | ~11.800 km² | 21% |
+
+La diferencia del Limarí probablemente sea de definición y no un error: la DGA
+agrupa en esa cuenca varias quebradas costeras que hidrológicamente son
+independientes. Sumando la cuenca contigua (1.878 km²) se llega a 11.187 km²,
+cerca del valor oficial. Queda por confirmar en M2, con los nombres a la vista.
+
 ---
 
 ## Hoja de ruta (milestones)
 
 - [x] **M0 — Andamiaje**: repo, estructura, README, primer commit.
-- [ ] **M1 — Terreno**: DEM descargado; cuencas y red de quebradas delineadas.
+- [x] **M1 — Terreno**: DEM descargado; cuencas y red de quebradas delineadas.
 - [ ] **M2 — Susceptibilidad**: mapa de quebradas rankeadas por peligro (heurístico).
 - [ ] **M3 — Exposición**: cruce con red vial y zonas urbanas → puntos de corte.
 - [ ] **M4 — Gatillo de lluvia**: umbral intensidad-duración calibrado.
