@@ -32,6 +32,7 @@ from pathlib import Path
 import geopandas as gpd
 import matplotlib
 import numpy as np
+import pyproj
 import rasterio
 from rasterio import features
 from shapely.geometry import shape
@@ -43,6 +44,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import compat_pysheds  # noqa: E402,F401  parche numpy 2, tiene que ir antes de pysheds
 from pysheds.grid import Grid  # noqa: E402
+from pysheds.sview import Raster, ViewFinder  # noqa: E402
 
 # Raiz del proyecto = carpeta que contiene a src/. Asi el script funciona igual
 # corriendolo desde la raiz o desde cualquier otra parte.
@@ -63,7 +65,26 @@ DIRMAP = (64, 128, 1, 2, 4, 8, 16, 32)
 # --------------------------------------------------------------------------
 
 def cargar_dem(ruta_dem: Path):
-    """Abre el DEM y devuelve la grilla de pysheds junto al raster de elevacion.
+    """Abre el DEM, lo rodea con un anillo sin dato y arma la grilla de pysheds.
+
+    El anillo no es decorativo: es un rodeo obligado a un bug de pysheds.
+
+    Antes de delinear una cuenca, `catchment()` llama internamente a `_pop_rim`,
+    que pone en cero todo el borde del raster de direcciones de flujo, y lo hace
+    modificando el arreglo en el lugar. La libreria tiene un `_replace_rim` para
+    devolverlo a su estado original, pero nunca lo invoca. Eso provoca dos
+    problemas:
+
+      - Una desembocadura ubicada en el borde pierde a sus vecinos de aguas
+        arriba, que quedan en cero. La cuenca sale de un par de pixeles, o
+        directamente revienta con segmentation fault.
+      - El dano es acumulativo: cada llamada deja el raster mas roto para la
+        siguiente, asi que a partir de la segunda cuenca los resultados ya no
+        son confiables.
+
+    Agregando un anillo de celdas sin dato alrededor, ninguna desembocadura real
+    queda en el borde del arreglo, y lo unico que pysheds destruye es ese
+    relleno artificial, que de todas formas nace sin direccion de flujo valida.
 
     Tambien avisa si el DEM viene en coordenadas geograficas (grados). No es un
     error fatal, pero conviene saberlo: en grados, un pixel no mide lo mismo en
@@ -72,17 +93,21 @@ def cargar_dem(ruta_dem: Path):
     if not ruta_dem.exists():
         sys.exit(
             f"No encuentro el DEM en {ruta_dem}\n"
-            "Deja el archivo ahi, o pasa la ruta con --dem."
+            "Genera el DEM con: python src/m1_preparar_dem.py\n"
+            "O pasa la ruta de otro archivo con --dem."
         )
 
-    grid = Grid.from_raster(str(ruta_dem))
-    dem = grid.read_raster(str(ruta_dem))
+    with rasterio.open(ruta_dem) as origen:
+        elevacion = origen.read(1)
+        afin_original = origen.transform
+        crs = origen.crs
+        sin_dato = origen.nodata if origen.nodata is not None else -9999.0
 
-    crs = rasterio.crs.CRS.from_wkt(grid.crs.to_wkt())
     print(f"DEM cargado    : {ruta_dem}")
-    print(f"  dimensiones  : {dem.shape[0]} filas x {dem.shape[1]} columnas")
+    print(f"  dimensiones  : {elevacion.shape[0]} filas x {elevacion.shape[1]} columnas")
     print(f"  CRS          : {crs.to_string()}")
-    print(f"  altura min/max: {float(np.nanmin(dem)):.0f} / {float(np.nanmax(dem)):.0f} m")
+    validos = elevacion[elevacion != sin_dato]
+    print(f"  altura min/max: {validos.min():.0f} / {validos.max():.0f} m")
 
     if crs.is_geographic:
         print(
@@ -91,7 +116,25 @@ def cargar_dem(ruta_dem: Path):
             "         reproyectas el DEM a UTM 19S antes de correr esto."
         )
 
-    return grid, dem, crs
+    # Anillo de una celda. El origen de las coordenadas se corre exactamente una
+    # celda hacia el noroeste, para que el resto de la grilla siga cayendo sobre
+    # el mismo terreno que antes.
+    con_anillo = np.pad(elevacion, 1, constant_values=sin_dato)
+    afin_anillo = rasterio.Affine(
+        afin_original.a, afin_original.b, afin_original.c - afin_original.a,
+        afin_original.d, afin_original.e, afin_original.f - afin_original.e,
+    )
+
+    mirador = ViewFinder(
+        affine=afin_anillo,
+        shape=con_anillo.shape,
+        crs=pyproj.Proj(crs.to_wkt()),
+        nodata=sin_dato,
+    )
+    dem = Raster(con_anillo, viewfinder=mirador)
+    grid = Grid(viewfinder=mirador)
+
+    return grid, dem, crs, afin_original
 
 
 def area_pixel_m2(grid, crs) -> float:
@@ -213,14 +256,22 @@ def extraer_red(grid, fdir, acc, umbral_celdas: int, crs) -> gpd.GeoDataFrame:
 # Paso 5b - Cuencas
 # --------------------------------------------------------------------------
 
-def puntos_de_salida(grid, fdir, acc, umbral_celdas: int, separacion_px: int = 3):
-    """Encuentra las desembocaduras: por donde el agua abandona el DEM.
+def puntos_de_salida(grid, fdir, acc, umbral_celdas: int, valido, separacion_px: int = 3):
+    """Encuentra las desembocaduras: por donde el agua abandona el terreno.
 
-    Un pixel es punto de salida si acumula bastante agua (o sea, es un cauce) y
-    ademas ya no tiene hacia donde seguir. Eso pasa en dos situaciones:
+    Una desembocadura es **la ultima celda con terreno antes del vacio**, y esa
+    distincion es la clave de esta funcion. El agua de las celdas del borde
+    drena hacia las celdas sin dato (el mar, o el anillo que agregamos al
+    cargar), asi que ahi la acumulacion tambien se dispara. Pero esas celdas no
+    son terreno: no tienen cuenca que delinear, y pedirle a pysheds que lo haga
+    termina en segmentation fault.
 
-      - pysheds le asigno el codigo -2, que significa "drena fuera de la grilla";
-      - su vecino de aguas abajo cae fuera del borde del arreglo.
+    Entonces se exige que la celda cumpla tres condiciones a la vez:
+
+      - que acumule bastante agua, o sea que sea un cauce y no una ladera;
+      - que sea terreno de verdad, no una celda sin dato;
+      - que su vecino de aguas abajo sea vacio, este fuera del arreglo, o que
+        pysheds le haya asignado el codigo -2 ("drena fuera de la grilla").
 
     En la costa de Coquimbo esto corresponde a la boca de cada quebrada, que es
     justo el punto desde el cual queremos delinear la cuenca hacia arriba.
@@ -256,7 +307,19 @@ def puntos_de_salida(grid, fdir, acc, umbral_celdas: int, separacion_px: int = 3
         (fila_abajo < 0) | (fila_abajo >= filas)
         | (col_abajo < 0) | (col_abajo >= columnas)
     )
-    es_salida = (acc_arr > umbral_celdas) & (sin_direccion | fuera_del_borde)
+
+    # A donde apunta cada celda, con los indices recortados para no salirse del
+    # arreglo al consultar. Las que apuntaban afuera ya quedaron marcadas arriba.
+    destino_vacio = ~valido[
+        np.clip(fila_abajo, 0, filas - 1),
+        np.clip(col_abajo, 0, columnas - 1),
+    ]
+
+    es_salida = (
+        (acc_arr > umbral_celdas)
+        & valido  # la celda misma tiene que ser terreno
+        & (sin_direccion | fuera_del_borde | destino_vacio)
+    )
 
     indices = np.argwhere(es_salida)
     if indices.size == 0:
@@ -319,7 +382,7 @@ def mascara_cuenca(grid, fdir, fila, col):
     return np.asarray(cuenca) > 0
 
 
-def delinear_cuencas(grid, fdir, acc, umbral_celdas, area_min_km2, crs, m2_pixel):
+def delinear_cuencas(grid, fdir, acc, umbral_celdas, area_min_km2, crs, m2_pixel, valido):
     """Delinea, para cada desembocadura, todo el terreno que drena hacia ella.
 
     Delinear una cuenca es caminar la direccion de flujo al reves: partir del
@@ -328,14 +391,18 @@ def delinear_cuencas(grid, fdir, acc, umbral_celdas, area_min_km2, crs, m2_pixel
     despues se calcula susceptibilidad (M2) y lluvia gatillante (M4).
 
     Hay una verificacion incorporada: la acumulacion de la celda de salida ya
-    dice cuantos pixeles deberian drenar por ahi, asi que sirve de control. Si
-    la cuenca sale mucho mas chica que ese numero, la delineacion fallo y se
-    reintenta desde la celda inmediatamente aguas arriba, que drena practicamente
-    lo mismo.
+    dice cuantos pixeles deberian drenar por ahi, asi que sirve de control
+    gratis. Si la cuenca sale mucho mas chica que ese numero, se reintenta desde
+    la celda inmediatamente aguas arriba, que drena practicamente lo mismo.
+
+    Con el anillo sin dato que agrega cargar_dem(), esto ya no deberia saltar
+    nunca: era la forma en que se manifestaba el bug del borde de pysheds. Se
+    deja como red de seguridad, y avisa cuando actua. Si lo ves saltar seguido,
+    algo anda mal en el DEM y vale la pena mirarlo.
     """
     print("\nDelineando cuencas...")
 
-    salidas = puntos_de_salida(grid, fdir, acc, umbral_celdas)
+    salidas = puntos_de_salida(grid, fdir, acc, umbral_celdas, valido)
     print(f"  {len(salidas)} desembocaduras candidatas")
 
     afin = grid.affine
@@ -423,21 +490,28 @@ def delinear_cuencas(grid, fdir, acc, umbral_celdas, area_min_km2, crs, m2_pixel
 # Guardado y figura de control
 # --------------------------------------------------------------------------
 
-def guardar_raster(ruta: Path, datos, grid, crs, dtype, nodata):
-    """Escribe un array como GeoTIFF comprimido, conservando la georreferencia."""
+def guardar_raster(ruta: Path, datos, afin_original, crs, dtype, nodata):
+    """Escribe un array como GeoTIFF comprimido, conservando la georreferencia.
+
+    Se le quita el anillo que agregamos al cargar, para que la salida calce
+    pixel a pixel con el DEM de entrada.
+    """
+    recortado = np.asarray(datos)[1:-1, 1:-1]
     with rasterio.open(
         ruta, "w",
         driver="GTiff",
-        height=datos.shape[0],
-        width=datos.shape[1],
+        height=recortado.shape[0],
+        width=recortado.shape[1],
         count=1,
         dtype=dtype,
         crs=crs,
-        transform=grid.affine,
+        transform=afin_original,
         nodata=nodata,
         compress="deflate",
+        tiled=True,
+        BIGTIFF="IF_SAFER",
     ) as dst:
-        dst.write(np.asarray(datos).astype(dtype), 1)
+        dst.write(recortado.astype(dtype), 1)
 
 
 def figura_control(dem, acc, red, cuencas, grid, ruta_png: Path):
@@ -489,7 +563,10 @@ def figura_control(dem, acc, red, cuencas, grid, ruta_png: Path):
 
 def main():
     ap = argparse.ArgumentParser(description="M1 - Delinea quebradas y cuencas desde un DEM.")
-    ap.add_argument("--dem", type=Path, default=RAIZ / "data" / "raw" / "dem.tif",
+    # El DEM de entrada vive en processed/ y no en raw/ porque es un derivado:
+    # lo produce m1_preparar_dem.py uniendo y reproyectando los tiles crudos.
+    ap.add_argument("--dem", type=Path,
+                    default=RAIZ / "data" / "processed" / "dem_utm19s.tif",
                     help="GeoTIFF de elevacion de entrada.")
     ap.add_argument("--salida", type=Path, default=RAIZ / "data" / "processed",
                     help="Carpeta donde escribir los resultados.")
@@ -503,7 +580,7 @@ def main():
     dir_outputs = RAIZ / "outputs"
     dir_outputs.mkdir(parents=True, exist_ok=True)
 
-    grid, dem, crs = cargar_dem(args.dem)
+    grid, dem, crs, afin_original = cargar_dem(args.dem)
 
     # El umbral se pide en km2 porque es lo interpretable, pero el algoritmo
     # trabaja contando pixeles. Aca se traduce de uno al otro.
@@ -511,15 +588,21 @@ def main():
     umbral_celdas = max(1, int(args.umbral_km2 * 1e6 / m2_pixel))
     print(f"  pixel        : {m2_pixel:,.0f} m2 -> umbral = {umbral_celdas:,} pixeles")
 
+    # Que celdas son terreno de verdad. Sirve para no confundir el vacio (el mar,
+    # o el anillo que agrega cargar_dem) con una desembocadura.
+    valido = np.asarray(dem) != dem.nodata
+
     dem_acondicionado = acondicionar(grid, dem)
     fdir, acc = direccion_y_acumulacion(grid, dem_acondicionado)
     red = extraer_red(grid, fdir, acc, umbral_celdas, crs)
-    cuencas = delinear_cuencas(grid, fdir, acc, umbral_celdas, args.area_min_km2, crs, m2_pixel)
+    cuencas = delinear_cuencas(
+        grid, fdir, acc, umbral_celdas, args.area_min_km2, crs, m2_pixel, valido
+    )
 
     print("\nGuardando resultados...")
-    guardar_raster(args.salida / "dem_acondicionado.tif", dem_acondicionado, grid, crs, "float32", -9999)
-    guardar_raster(args.salida / "direccion_flujo.tif", fdir, grid, crs, "int16", 0)
-    guardar_raster(args.salida / "acumulacion_flujo.tif", acc, grid, crs, "float32", -9999)
+    guardar_raster(args.salida / "dem_acondicionado.tif", dem_acondicionado, afin_original, crs, "float32", -9999)
+    guardar_raster(args.salida / "direccion_flujo.tif", fdir, afin_original, crs, "int16", 0)
+    guardar_raster(args.salida / "acumulacion_flujo.tif", acc, afin_original, crs, "float32", -9999)
     red.to_file(args.salida / "red_quebradas.gpkg", layer="red_quebradas", driver="GPKG")
     cuencas.to_file(args.salida / "cuencas.gpkg", layer="cuencas", driver="GPKG")
 

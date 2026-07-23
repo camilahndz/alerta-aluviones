@@ -71,12 +71,20 @@ M0–M3 = versión mínima mostrable (v0). M4–M5 = calibración y validación 
 
 | Dato | Fuente | Acceso |
 |---|---|---|
-| Modelo de elevación (DEM) | IDE Chile (ALOS PALSAR 12.5 m) | Libre |
+| Modelo de elevación (DEM) | Copernicus GLO-30 (TanDEM-X, 30 m) | Libre, sin registro |
 | Precipitación climatológica | CR2MET (CR2) | Libre |
 | Precipitación evento jul-2026 | Estaciones DGA/DMC + GPM IMERG | Libre |
 | Geología / peligro | SERNAGEOMIN | Libre |
 | Red vial y urbana | OpenStreetMap | Libre |
 | Validación satelital | Sentinel-1 / Sentinel-2 (Copernicus) | Libre (registro) |
+
+> **Sobre el DEM:** el README original apuntaba a ALOS PALSAR "12,5 m". Ese producto
+> se descartó: los RTC de alta resolución se generan desde NED13 (solo EE.UU.) o
+> desde SRTM 30 m, y para Chile aplica el segundo caso. La documentación de ASF
+> dice que esos productos son *"up sampled from the 30-m version to 12.5 m"*, o sea
+> que los píxeles miden 12,5 m pero el detalle real sigue siendo de 30 m.
+> Copernicus GLO-30 entrega 30 m reales derivados de TanDEM-X: a igual resolución
+> efectiva, es mejor dato y pesa seis veces menos.
 
 ---
 
