@@ -58,9 +58,9 @@ esas dos con conda/mamba y el resto con pip.
 Tres scripts, en este orden:
 
 ```bash
-python src/m1_preparar_dem.py     # baja el DEM, lo une y lo pasa a UTM 19S
-python src/m1_terreno.py          # rellena, calcula flujo, delinea cuencas
-python src/m1_recortar_region.py  # deja solo las cuencas que descargan en Coquimbo
+python src/m1_preparar_dem.py                                       # baja el DEM, lo une y lo pasa a UTM 19S
+python src/m1_terreno.py --umbral-km2 0.15 --area-min-km2 0.4       # rellena, calcula flujo, delinea cuencas
+python src/m1_recortar_region.py                                    # deja solo las que descargan en Coquimbo
 ```
 
 Los dos parámetros que vale la pena mover están en el segundo:
@@ -70,6 +70,13 @@ Los dos parámetros que vale la pena mover están en el segundo:
 | `--umbral-km2` | Área drenada mínima para considerar que hay cauce. Bajarlo densifica la red hacia las quebradas chicas. |
 | `--area-min-km2` | Bajo qué tamaño se descarta una cuenca. |
 
+**Por qué esos valores.** La primera pasada usó `--area-min-km2 2.0` y el resultado
+en M2 fue absurdo: una sola cuenca capaz de generar flujos de detritos en toda la
+región. El filtro estaba descartando justamente las quebradas chicas y empinadas,
+que son las que producen aluviones. Bajándolo a 0,4 km² las cuencas capaces pasan
+de 1 a 38, y el 85% del total queda dentro del rango donde el índice de Melton
+está calibrado.
+
 **Sobre el margen:** la hidrología se corre sobre un área más grande que la región,
 porque hay quebradas cuyas cabeceras nacen fuera del límite administrativo y
 cortarlas daría áreas falsas. El tercer script filtra al final, conservando las
@@ -77,7 +84,9 @@ cuencas completas cuya desembocadura cae dentro de Coquimbo.
 
 ### Resultado de M1
 
-174 cuencas · 39.257 km² · 42.425 tramos de quebrada · 96% de la región cubierta.
+Con la primera pasada (`--area-min-km2 2.0`): 174 cuencas · 39.257 km² ·
+42.425 tramos de quebrada · 96% de la región cubierta. Con los parámetros finos
+de arriba el número de cuencas sube, porque entran las quebradas chicas.
 
 El 4% restante drena hacia Atacama, Valparaíso o Argentina, así que esas cuencas
 le pertenecen a la región vecina.
@@ -95,6 +104,39 @@ La diferencia del Limarí probablemente sea de definición y no un error: la DGA
 agrupa en esa cuenca varias quebradas costeras que hidrológicamente son
 independientes. Sumando la cuenca contigua (1.878 km²) se llega a 11.187 km²,
 cerca del valor oficial. Queda por confirmar en M2, con los nombres a la vista.
+
+---
+
+## Cómo se corre M2
+
+```bash
+python src/m2_susceptibilidad.py
+```
+
+Clasifica cada cuenca según su capacidad de generar flujos de detritos, usando la
+**razón de Melton** — el desnivel dividido por la raíz del área, que mide cuánta
+energía potencial tiene la cuenca por unidad de tamaño:
+
+```
+R = desnivel (km) / √área (km²)
+```
+
+Los umbrales no son inventados: vienen de
+[Wilford et al. (2004)](https://link.springer.com/article/10.1007/s10346-003-0002-0),
+calibrados contra eventos reales.
+
+| Razón de Melton | Tipo de evento |
+|---|---|
+| < 0,30 | Inundación de agua |
+| 0,30 – 0,60 | Crecida de detritos |
+| ≥ 0,60 y cuenca ≤ 2,7 km de largo | **Flujo de detritos** (aluvión) |
+
+El largo entra en la clasificación porque una cuenca empinada pero alargada
+disipa energía en el trayecto y deposita el material antes de la salida.
+
+**Límite conocido:** Melton se calibró en cuencas de 0,1 a 10 km². Las cuencas
+grandes (Elqui, Limarí, Choapa) son cuencas de río, no quebradas de aluvión; el
+script las clasifica igual pero las marca con `melton_aplicable = False`.
 
 ---
 

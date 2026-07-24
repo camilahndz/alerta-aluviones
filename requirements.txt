@@ -11,6 +11,7 @@ pysheds>=0.4
 
 # Numerico y modelado
 numpy>=1.26
+scipy>=1.11
 scikit-learn>=1.4
 
 # Visualizacion
