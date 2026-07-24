@@ -170,16 +170,40 @@ def largo_cuenca_km(cuencas: gpd.GeoDataFrame) -> np.ndarray:
     return np.array(largos)
 
 
-def clasificar(melton: np.ndarray, largo_km: np.ndarray) -> np.ndarray:
-    """Aplica la clasificacion de Wilford: que tipo de evento puede generar."""
-    clase = np.full(len(melton), "inundacion", dtype=object)
-    clase[melton >= MELTON_CRECIDA] = "crecida_detritos"
+def clasificar(melton: np.ndarray, largo_km: np.ndarray):
+    """Aplica dos clasificaciones, y devuelve ambas.
 
+    Por que dos y no una:
+
+        La razon de Melton es robusta y se usa igual en todo el mundo. El
+        criterio de largo maximo, en cambio, sale del estudio original de
+        Wilford en la Columbia Britanica costera -bosque templado lluvioso- y no
+        hay evidencia de que el mismo valor sirva en el norte semiarido de Chile.
+
+        Sobre los datos de Coquimbo ese umbral resulta decisivo: varias de las
+        cuencas mas energeticas de la region quedan descartadas por diferencias
+        de decenas de metros. Elegir un criterio a ciegas seria esconder esa
+        sensibilidad.
+
+        Entonces se calculan las dos y se guardan las dos. M5, al comparar
+        contra el temporal de julio 2026, va a poder decir cual reproduce mejor
+        lo que realmente paso.
+
+    Devuelve (clase_wilford, clase_melton).
+    """
+    # --- Wilford completo: Melton + largo de la cuenca ---
+    wilford = np.full(len(melton), "inundacion", dtype=object)
+    wilford[melton >= MELTON_CRECIDA] = "crecida_detritos"
     # Solo las cuencas empinadas Y cortas pueden mandar el material hasta la
     # salida sin depositarlo en el camino.
-    capaz = (melton >= MELTON_FLUJO) & (largo_km <= LARGO_MAX_FLUJO_KM)
-    clase[capaz] = "flujo_detritos"
-    return clase
+    wilford[(melton >= MELTON_FLUJO) & (largo_km <= LARGO_MAX_FLUJO_KM)] = "flujo_detritos"
+
+    # --- Solo Melton, sin el criterio regional de largo ---
+    solo_melton = np.full(len(melton), "inundacion", dtype=object)
+    solo_melton[melton >= MELTON_CRECIDA] = "crecida_detritos"
+    solo_melton[melton >= MELTON_FLUJO] = "flujo_detritos"
+
+    return wilford, solo_melton
 
 
 def calcular(cuencas: gpd.GeoDataFrame, red: gpd.GeoDataFrame, ruta_dem: Path):
@@ -209,9 +233,11 @@ def calcular(cuencas: gpd.GeoDataFrame, red: gpd.GeoDataFrame, ruta_dem: Path):
         2 * np.sqrt(cuencas["area_km2"] / np.pi) / cuencas["largo_km"]
     )
 
-    cuencas["clase"] = clasificar(
+    wilford, solo_melton = clasificar(
         cuencas["melton"].to_numpy(), cuencas["largo_km"].to_numpy()
     )
+    cuencas["clase"] = wilford
+    cuencas["clase_melton"] = solo_melton
     cuencas["melton_aplicable"] = cuencas["area_km2"] <= AREA_VALIDA_KM2
 
     # Ranking por Melton descendente: las mas energeticas primero.
@@ -308,10 +334,24 @@ def main():
     ruta_png = dir_outputs / "m2_susceptibilidad.png"
     figura(cuencas, ruta_png)
 
-    print("\nClasificacion (Wilford et al., 2004):")
+    print("\nClasificacion, por los dos criterios:")
+    print(f"  {'':<18} {'Wilford':>10} {'solo Melton':>13}")
     for clase in reversed(CLASES):
-        sel = cuencas[cuencas["clase"] == clase]
-        print(f"  {clase:<18} {len(sel):>4} cuencas   {sel['area_km2'].sum():>9,.0f} km2")
+        n_w = (cuencas["clase"] == clase).sum()
+        n_m = (cuencas["clase_melton"] == clase).sum()
+        print(f"  {clase:<18} {n_w:>10} {n_m:>13}")
+
+    # Cuantas cuencas dependen del umbral de largo, que es el parametro heredado
+    # de otra region y por lo tanto el mas fragil de los dos.
+    discrepan = cuencas[cuencas["clase"] != cuencas["clase_melton"]]
+    if not discrepan.empty:
+        print(f"\n  {len(discrepan)} cuencas cambian de clase segun el criterio de largo.")
+        print("  Son las mas energeticas de la region, descartadas solo por ser largas:")
+        cols = ["id_cuenca", "area_km2", "largo_km", "melton"]
+        print(discrepan.nlargest(5, "melton")[cols].to_string(
+            index=False, float_format=lambda v: f"{v:.2f}"))
+        print(f"\n  El umbral de {LARGO_MAX_FLUJO_KM} km viene de un estudio en la Columbia")
+        print("  Britanica. M5 va a decir si sirve para Coquimbo o hay que recalibrarlo.")
 
     en_rango = cuencas["melton_aplicable"].sum()
     print(f"\n  {en_rango} de {len(cuencas)} cuencas estan dentro del rango de "

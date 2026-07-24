@@ -134,6 +134,23 @@ calibrados contra eventos reales.
 El largo entra en la clasificación porque una cuenca empinada pero alargada
 disipa energía en el trayecto y deposita el material antes de la salida.
 
+**Se guardan dos clasificaciones, no una.** La razón de Melton es robusta y de uso
+universal, pero el umbral de largo sale del estudio original en la Columbia
+Británica costera —bosque templado lluvioso— y no hay evidencia de que el mismo
+valor sirva en el norte semiárido de Chile. Sobre los datos de Coquimbo ese
+umbral resulta decisivo: varias de las cuencas más energéticas de la región
+quedan descartadas por diferencias de decenas de metros. Esconder esa
+sensibilidad eligiendo un criterio a ciegas sería deshonesto, así que la capa
+trae las dos columnas:
+
+| Columna | Criterio |
+|---|---|
+| `clase` | Wilford completo: Melton **y** largo de la cuenca |
+| `clase_melton` | Solo la razón de Melton |
+
+M5, al comparar contra el temporal de julio 2026, va a decir cuál de las dos
+reproduce mejor lo que realmente pasó.
+
 **Límite conocido:** Melton se calibró en cuencas de 0,1 a 10 km². Las cuencas
 grandes (Elqui, Limarí, Choapa) son cuencas de río, no quebradas de aluvión; el
 script las clasifica igual pero las marca con `melton_aplicable = False`.
