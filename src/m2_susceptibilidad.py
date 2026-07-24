@@ -67,6 +67,7 @@ from scipy import ndimage
 from shapely.geometry import Point
 
 matplotlib.use("Agg")
+import matplotlib.patches as mpatches  # noqa: E402
 import matplotlib.pyplot as plt  # noqa: E402
 
 RAIZ = Path(__file__).resolve().parent.parent
@@ -232,14 +233,22 @@ def figura(cuencas: gpd.GeoDataFrame, ruta_png: Path):
     ax2 = fig.add_subplot(2, 2, 2)
     ax3 = fig.add_subplot(2, 2, 4)
 
+    # La leyenda se arma con parches propios: geopandas no siempre propaga el
+    # argumento `label` al dibujar poligonos, y la leyenda sale vacia.
+    marcas = []
     for clase, color in colores.items():
         sel = cuencas[cuencas["clase"] == clase]
-        if not sel.empty:
-            sel.plot(ax=ax1, color=color, edgecolor="black", linewidth=0.3,
-                     label=f"{clase} ({len(sel)})")
+        if sel.empty:
+            continue
+        sel.plot(ax=ax1, color=color, edgecolor="black", linewidth=0.3)
+        marcas.append(
+            mpatches.Patch(facecolor=color, edgecolor="black", linewidth=0.3,
+                           label=f"{clase} ({len(sel)})")
+        )
+
     ax1.set_title("Susceptibilidad a flujos de detritos\n(clasificacion de Wilford)",
                   fontsize=12)
-    ax1.legend(loc="upper right", fontsize=9)
+    ax1.legend(handles=marcas, loc="upper right", fontsize=9)
     ax1.set_xticks([])
     ax1.set_yticks([])
 
