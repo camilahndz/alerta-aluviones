@@ -129,11 +129,17 @@ def estadisticas_por_cuenca(cuencas: gpd.GeoDataFrame, ruta_dem: Path):
     # Esas celdas se sacan del promedio en vez de contaminarlo.
     etiquetas_pend = np.where(np.isfinite(pendiente), etiquetas, 0)
     pend_media = np.array(ndimage.mean(pendiente, etiquetas_pend, ids), dtype="float64")
+
+    # El percentil 90 de la pendiente: que tan empinado es el sector mas
+    # inclinado de la cuenca, ignorando el 10% mas extremo para no quedarse con
+    # un pixel raro. Va por labeled_comprehension y no por un ciclo, porque un
+    # ciclo tendria que recorrer el raster completo una vez por cuenca: con 434
+    # cuencas sobre 160 millones de pixeles eso son horas de calculo.
     pend_p90 = np.array(
-        [
-            np.nanpercentile(pendiente[etiquetas_pend == i], 90) if np.any(etiquetas_pend == i) else np.nan
-            for i in ids
-        ],
+        ndimage.labeled_comprehension(
+            pendiente, etiquetas_pend, ids,
+            lambda valores: np.percentile(valores, 90), "float64", np.nan,
+        ),
         dtype="float64",
     )
 
