@@ -240,6 +240,16 @@ def calcular(cuencas: gpd.GeoDataFrame, red: gpd.GeoDataFrame, ruta_dem: Path):
     cuencas["clase_melton"] = solo_melton
     cuencas["melton_aplicable"] = cuencas["area_km2"] <= AREA_VALIDA_KM2
 
+    # Las cuencas cortadas por el borde del DEM no se pueden clasificar: les
+    # falta parte del area, y como Melton es H/raiz(A), un area truncada infla
+    # el indice. Dejarlas clasificadas produciria cuencas "criticas" que son
+    # puro artefacto del recorte. Se marcan con una clase propia para que se
+    # vean en el mapa y para que M3 no las tome como quebradas reales.
+    if "toca_borde" in cuencas.columns:
+        borde = cuencas["toca_borde"].fillna(False).astype(bool)
+        cuencas.loc[borde, "clase"] = "borde_truncado"
+        cuencas.loc[borde, "clase_melton"] = "borde_truncado"
+
     # Ranking por Melton descendente: las mas energeticas primero.
     cuencas = cuencas.sort_values("melton", ascending=False).reset_index(drop=True)
     cuencas.insert(0, "ranking", cuencas.index + 1)
@@ -349,6 +359,11 @@ def main():
     dir_outputs.mkdir(parents=True, exist_ok=True)
     ruta_png = dir_outputs / "m2_susceptibilidad.png"
     figura(cuencas, ruta_png)
+
+    n_borde = int((cuencas["clase"] == "borde_truncado").sum())
+    if n_borde:
+        print(f"\n{n_borde} cuencas excluidas por tocar el borde del DEM "
+              "(area truncada infla Melton)")
 
     print("\nClasificacion, por los dos criterios:")
     print(f"  {'':<18} {'Wilford':>10} {'solo Melton':>13}")

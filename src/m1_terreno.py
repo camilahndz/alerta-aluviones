@@ -427,6 +427,20 @@ def delinear_cuencas(grid, fdir, acc, umbral_celdas, area_min_km2, crs, m2_pixel
         if n_pixeles == 0:
             continue
 
+        # Una cuenca que llega al borde del rectangulo del DEM esta cortada: le
+        # falta el pedazo que quedo fuera del recorte. Eso importa mucho mas de
+        # lo que parece, porque M2 calcula la razon de Melton como H/raiz(A):
+        # con el area truncada el indice sube, y la cuenca aparece como capaz de
+        # generar un flujo de detritos sin serlo.
+        #
+        # Se mira el borde del raster original, que en la grilla con anillo son
+        # las filas y columnas 1 y -2. El mar no cuenta como borde: ahi la
+        # cuenca termina de verdad, en su desembocadura.
+        toca_borde = bool(
+            mascara[1, :].any() or mascara[-2, :].any()
+            or mascara[:, 1].any() or mascara[:, -2].any()
+        )
+
         # Recortamos al rectangulo que contiene la cuenca antes de vectorizar:
         # sin esto, cada cuenca obliga a recorrer el raster completo.
         filas_ocupadas, cols_ocupadas = np.where(mascara)
@@ -456,6 +470,7 @@ def delinear_cuencas(grid, fdir, acc, umbral_celdas, area_min_km2, crs, m2_pixel
             "salida_y": y_salida,
             "pixeles": n_pixeles,
             "area_km2": n_pixeles * m2_pixel / 1e6,
+            "toca_borde": toca_borde,
         })
 
     if reintentos:
@@ -483,6 +498,10 @@ def delinear_cuencas(grid, fdir, acc, umbral_celdas, area_min_km2, crs, m2_pixel
 
     print(f"  {len(gdf)} cuencas delineadas ({gdf['area_km2'].sum():.1f} km2 en total)")
     print(f"  la mayor: {gdf['area_km2'].iloc[0]:.1f} km2")
+
+    n_borde = int(gdf["toca_borde"].sum())
+    if n_borde:
+        print(f"  {n_borde} tocan el borde del DEM: area truncada, M2 las excluye")
     return gdf
 
 
