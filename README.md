@@ -2,25 +2,23 @@
 
 Modelo de riesgo de activación de quebradas para la Región de Coquimbo, Chile.
 Predice qué quebradas se activan ante una lluvia dada y qué rutas y zonas urbanas
-quedan expuestas. Validado contra el temporal de julio 2026 (el peor en ~40 años).
-
-> Proyecto personal · Ingeniería Civil Industrial · UCN Coquimbo
+quedan expuestas. Validado contra el temporal de julio 2026 (el peor en aproximadamente 40 años).
 
 ---
 
 ## Qué hace
 
-1. **Susceptibilidad** — mapea qué quebradas son propensas a generar flujos de detritos,
+1. **Susceptibilidad**: mapea qué quebradas son propensas a generar flujos de detritos,
    usando el modelo de elevación (pendiente, acumulación de flujo, geología).
-2. **Gatillo** — calibra el umbral de lluvia (intensidad × duración) sobre el cual
+2. **Gatillo**: calibra el umbral de lluvia (intensidad × duración) sobre el cual
    cada quebrada se activa.
-3. **Exposición** — cruza las trayectorias de flujo con la red vial y las zonas
+3. **Exposición**: cruza las trayectorias de flujo con la red vial y las zonas
    pobladas para identificar cortes de ruta y población en riesgo.
-4. **Validación** — compara la predicción contra lo que ocurrió en julio 2026.
+4. **Validación**: compara la predicción contra lo que ocurrió en julio 2026.
 
 ---
 
-## Estructura del repo
+## Estructura del repositorio
 
 ```
 alerta-aluviones/
@@ -35,7 +33,7 @@ alerta-aluviones/
 └── outputs/          # mapas y resultados finales
 ```
 
-Regla: si borro todo `data/processed/` y `outputs/`, tengo que poder reconstruirlo
+Regla: si se borra todo `data/processed/` y `outputs/`, se debe poder reconstruirlo
 corriendo el código sobre `data/raw/`. Los datos pesados no van a git (ver `.gitignore`).
 
 ---
@@ -71,8 +69,8 @@ Los dos parámetros que vale la pena mover están en el segundo:
 | `--area-min-km2` | Bajo qué tamaño se descarta una cuenca. |
 
 **Por qué esos valores.** La primera pasada usó `--area-min-km2 2.0` y el resultado
-en M2 fue absurdo: una sola cuenca capaz de generar flujos de detritos en toda la
-región. El filtro estaba descartando justamente las quebradas chicas y empinadas,
+en M2 fue erróneo, pues una sola cuenca capaz de generar flujos de detritos en toda la
+región. El filtro estaba descartando justamente las quebradas pequeñas y empinadas,
 que son las que producen aluviones. Bajándolo a 0,4 km² aparecen 18 cuencas
 capaces, y la mayor parte del inventario queda dentro del rango de tamaño donde
 el índice de Melton está calibrado.
@@ -126,7 +124,7 @@ python src/m2_susceptibilidad.py
 ```
 
 Clasifica cada cuenca según su capacidad de generar flujos de detritos, usando la
-**razón de Melton** — el desnivel dividido por la raíz del área, que mide cuánta
+**razón de Melton**, el desnivel dividido por la raíz del área, que mide cuánta
 energía potencial tiene la cuenca por unidad de tamaño:
 
 ```
