@@ -235,12 +235,9 @@ QGIS para visualización, Google Earth Engine para lo satelital.
 
 ---
 
-## Prompts de arranque para Claude Code
+## Documentación adicional
 
-> M0 — "Crea la estructura de carpetas de este README, un .gitignore de Python que
-> excluya data/raw/ y data/processed/, y un requirements.txt con rasterio, geopandas,
-> scikit-learn, numpy, matplotlib. Inicializa git y haz el primer commit."
-
-> M1 — "Tengo un DEM en data/raw/dem.tif. Escribe un script en src/ que lo cargue,
-> rellene sumideros, calcule dirección y acumulación de flujo, y delinee las cuencas.
-> Guarda los resultados en data/processed/. Explícame en comentarios qué hace cada paso."
+[`docs/contexto.md`](docs/contexto.md) — alcance del proyecto, las dos mitades
+del modelo (susceptibilidad y gatillo), criterios de selección de las fuentes de
+datos, convenciones del repositorio y los puntos donde este tipo de modelo suele
+fallar.

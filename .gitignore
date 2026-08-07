@@ -81,15 +81,22 @@ htmlcov/
 *.qgz~
 *.qgd
 
-# --- Editores / SO ---
-.claude/
+# --- Configuracion local de herramientas de desarrollo ---
+# Ajustes propios de cada maquina y de cada editor: no forman parte del
+# proyecto y no deben viajar en el repositorio.
 .vscode/
 .idea/
+.claude/
+.cursor/
 *.swp
+*~
+
+# --- SO ---
 Thumbs.db
 ehthumbs.db
 Desktop.ini
 $RECYCLE.BIN/
+.DS_Store
 
 # --- Secretos / credenciales ---
 .env
