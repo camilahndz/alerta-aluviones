@@ -2,19 +2,21 @@
 
 Modelo de riesgo de activación de quebradas para la Región de Coquimbo, Chile.
 Predice qué quebradas se activan ante una lluvia dada y qué rutas y zonas urbanas
-quedan expuestas. Validado contra el temporal de julio 2026 (el peor en aproximadamente 40 años).
+quedan expuestas. Se valida contra el temporal de julio de 2026, el peor en unos
+cuarenta años.
 
 ---
 
 ## Qué hace
 
-1. **Susceptibilidad**: mapea qué quebradas son propensas a generar flujos de detritos,
-   usando el modelo de elevación (pendiente, acumulación de flujo, geología).
+1. **Susceptibilidad**: mapea qué quebradas son propensas a generar flujos de
+   detritos, usando el modelo de elevación (pendiente, acumulación de flujo,
+   geología).
 2. **Gatillo**: calibra el umbral de lluvia (intensidad × duración) sobre el cual
    cada quebrada se activa.
 3. **Exposición**: cruza las trayectorias de flujo con la red vial y las zonas
    pobladas para identificar cortes de ruta y población en riesgo.
-4. **Validación**: compara la predicción contra lo que ocurrió en julio 2026.
+4. **Validación**: compara la predicción contra lo que ocurrió en julio de 2026.
 
 ---
 
@@ -28,13 +30,15 @@ alerta-aluviones/
 ├── data/
 │   ├── raw/          # datos originales, NO se modifican ni se suben a git
 │   └── processed/    # datos derivados (generados por el código)
+├── docs/             # documentación técnica
 ├── notebooks/        # exploración y pruebas
 ├── src/              # código ordenado y reutilizable
 └── outputs/          # mapas y resultados finales
 ```
 
-Regla: si se borra todo `data/processed/` y `outputs/`, se debe poder reconstruirlo
-corriendo el código sobre `data/raw/`. Los datos pesados no van a git (ver `.gitignore`).
+Regla: si se borra todo `data/processed/` y `outputs/`, se debe poder
+reconstruirlo corriendo el código sobre `data/raw/`. Los datos pesados no van a
+git (ver `.gitignore`).
 
 ---
 
@@ -46,8 +50,8 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-`rasterio` y `geopandas` dependen de GDAL/PROJ. Si pip falla en Windows, instalar
-esas dos con conda/mamba y el resto con pip.
+`rasterio` y `geopandas` dependen de GDAL/PROJ. Si pip falla en Windows, conviene
+instalar esas dos con conda o mamba y el resto con pip.
 
 ---
 
@@ -56,53 +60,43 @@ esas dos con conda/mamba y el resto con pip.
 Tres scripts, en este orden:
 
 ```bash
-python src/m1_preparar_dem.py                                       # baja el DEM, lo une y lo pasa a UTM 19S
-python src/m1_terreno.py --umbral-km2 0.15 --area-min-km2 0.4       # rellena, calcula flujo, delinea cuencas
-python src/m1_recortar_region.py                                    # deja solo las que descargan en Coquimbo
+python src/m1_preparar_dem.py                                   # baja el DEM, lo une y lo pasa a UTM 19S
+python src/m1_terreno.py --umbral-km2 0.15 --area-min-km2 0.4   # rellena, calcula flujo, delinea cuencas
+python src/m1_recortar_region.py                                # deja solo las que descargan en Coquimbo
 ```
 
-Los dos parámetros que vale la pena mover están en el segundo:
+Los dos parámetros que vale la pena mover están en el segundo. `--umbral-km2`
+fija el área drenada mínima para considerar que hay cauce: bajarlo densifica la
+red hacia las quebradas chicas. `--area-min-km2` fija bajo qué tamaño se descarta
+una cuenca.
 
-| Parámetro | Qué controla |
-|---|---|
-| `--umbral-km2` | Área drenada mínima para considerar que hay cauce. Bajarlo densifica la red hacia las quebradas chicas. |
-| `--area-min-km2` | Bajo qué tamaño se descarta una cuenca. |
+Sobre esos valores. La primera pasada usó `--area-min-km2 2.0` y en M2 apareció
+una sola cuenca capaz de generar flujos de detritos en toda la región, lo que no
+tiene sentido para Coquimbo. El filtro estaba botando justamente las quebradas
+chicas y empinadas, que son las que producen aluviones. Con 0,4 km² aparecen 18
+cuencas capaces, y la mayor parte del inventario queda dentro del rango de tamaño
+donde el índice de Melton está calibrado.
 
-**Por qué esos valores.** La primera pasada usó `--area-min-km2 2.0` y el resultado
-en M2 fue erróneo, pues una sola cuenca capaz de generar flujos de detritos en toda la
-región. El filtro estaba descartando justamente las quebradas pequeñas y empinadas,
-que son las que producen aluviones. Bajándolo a 0,4 km² aparecen 18 cuencas
-capaces, y la mayor parte del inventario queda dentro del rango de tamaño donde
-el índice de Melton está calibrado.
-
-**Sobre el margen:** la hidrología se corre sobre un área más grande que la región,
-porque hay quebradas cuyas cabeceras nacen fuera del límite administrativo y
-cortarlas daría áreas falsas. El tercer script filtra al final, conservando las
-cuencas completas cuya desembocadura cae dentro de Coquimbo.
+La hidrología se corre sobre un área mayor que la región. Hay quebradas cuyas
+cabeceras nacen fuera del límite administrativo, y cortarlas daría áreas falsas.
+El tercer script filtra al final y conserva las cuencas completas cuya
+desembocadura cae dentro de Coquimbo.
 
 ### Resultado de M1
 
-Corrida sobre la región completa con los parámetros de arriba
-(`--umbral-km2 0.15 --area-min-km2 0.4`):
+Con los parámetros de arriba se delinean 1.147 cuencas sobre el área con margen,
+de las cuales 434 descargan dentro de la región. Suman 39.487 km² y 134.306
+tramos de quebrada, y cubren el 96% de la superficie regional. El 4% restante
+drena hacia Atacama, Valparaíso o Argentina, así que esas cuencas le pertenecen a
+la región vecina.
 
-| | |
-|---|---|
-| Cuencas delineadas (con el margen) | 1.147 |
-| Cuencas que descargan en Coquimbo | **434** |
-| Superficie drenada por esas cuencas | 39.487 km² |
-| Tramos de quebrada dentro de ellas | 134.306 |
-| Cobertura de la región | **96%** |
+La pasada anterior, con `--area-min-km2 2.0`, daba 174 cuencas. La superficie
+drenada casi no cambia entre una y otra (39.257 contra 39.487 km²) porque las que
+entran son pequeñas; lo que cambia es la resolución del inventario, y eso es lo
+que M2 necesita.
 
-El 4% restante drena hacia Atacama, Valparaíso o Argentina, así que esas cuencas
-le pertenecen a la región vecina.
-
-La pasada anterior, con `--area-min-km2 2.0`, daba 174 cuencas: el filtro grueso
-se comía las quebradas chicas. La superficie drenada apenas cambia (39.257 →
-39.487 km²) porque las que entran son pequeñas; lo que cambia es la resolución
-del inventario, y eso es justo lo que M2 necesita.
-
-Contraste contra las áreas oficiales de la DGA, como control de que la
-delineación reproduce la hidrología real:
+Como control de que la delineación reproduce la hidrología real, se comparan las
+tres cuencas mayores contra las áreas oficiales de la DGA:
 
 | Cuenca | Delineada | Oficial DGA | Desvío |
 |---|---|---|---|
@@ -110,10 +104,10 @@ delineación reproduce la hidrología real:
 | Elqui | 9.410,7 km² | ~9.657 km² | 2,5% |
 | Limarí | 9.309,0 km² | ~11.800 km² | 21% |
 
-La diferencia del Limarí probablemente sea de definición y no un error: la DGA
+La diferencia del Limarí probablemente sea de definición y no un error. La DGA
 agrupa en esa cuenca varias quebradas costeras que hidrológicamente son
-independientes. Sumando la cuenca contigua (1.878 km²) se llega a 11.187 km²,
-cerca del valor oficial. Queda por confirmar en M2, con los nombres a la vista.
+independientes; sumando la cuenca contigua (1.878 km²) se llega a 11.187 km²,
+cerca del valor oficial. Queda por confirmar cuando estén los nombres a la vista.
 
 ---
 
@@ -123,87 +117,75 @@ cerca del valor oficial. Queda por confirmar en M2, con los nombres a la vista.
 python src/m2_susceptibilidad.py
 ```
 
-Clasifica cada cuenca según su capacidad de generar flujos de detritos, usando la
-**razón de Melton**, el desnivel dividido por la raíz del área, que mide cuánta
+Clasifica cada cuenca según su capacidad de generar flujos de detritos con la
+razón de Melton, que es el desnivel dividido por la raíz del área y mide cuánta
 energía potencial tiene la cuenca por unidad de tamaño:
 
 ```
 R = desnivel (km) / √área (km²)
 ```
 
-Los umbrales no son inventados: vienen de
+Los umbrales vienen de
 [Wilford et al. (2004)](https://link.springer.com/article/10.1007/s10346-003-0002-0),
-calibrados contra eventos reales.
+calibrados contra eventos reales:
 
 | Razón de Melton | Tipo de evento |
 |---|---|
 | < 0,30 | Inundación de agua |
-| 0,30 – 0,60 | Crecida de detritos |
+| 0,30 a 0,60 | Crecida de detritos |
 | ≥ 0,60 y cuenca ≤ 2,7 km de largo | **Flujo de detritos** (aluvión) |
 
 El largo entra en la clasificación porque una cuenca empinada pero alargada
 disipa energía en el trayecto y deposita el material antes de la salida.
 
-**Se guardan dos clasificaciones, no una.** La razón de Melton es robusta y de uso
-universal, pero el umbral de largo sale del estudio original en la Columbia
-Británica costera —bosque templado lluvioso— y no hay evidencia de que el mismo
-valor sirva en el norte semiárido de Chile. Sobre los datos de Coquimbo ese
-umbral resulta decisivo: varias de las cuencas más energéticas de la región
-quedan descartadas por diferencias de decenas de metros. Esconder esa
-sensibilidad eligiendo un criterio a ciegas sería deshonesto, así que la capa
-trae las dos columnas:
+La capa guarda dos clasificaciones. La razón de Melton se usa igual en todo el
+mundo, pero el umbral de largo sale del estudio original en la Columbia Británica
+costera, de clima templado lluvioso, y no hay evidencia de que ese valor sirva en
+el norte semiárido de Chile. Sobre los datos de Coquimbo el umbral resulta
+decisivo: varias de las cuencas más energéticas de la región quedan descartadas
+por diferencias de decenas de metros. Elegir un criterio a ciegas escondería esa
+sensibilidad, así que la columna `clase` aplica Wilford completo (Melton más
+largo) y `clase_melton` aplica solo la razón de Melton. Al comparar contra el
+temporal de julio de 2026, M5 va a decir cuál de las dos reproduce mejor lo que
+pasó.
 
-| Columna | Criterio |
-|---|---|
-| `clase` | Wilford completo: Melton **y** largo de la cuenca |
-| `clase_melton` | Solo la razón de Melton |
-
-M5, al comparar contra el temporal de julio 2026, va a decir cuál de las dos
-reproduce mejor lo que realmente pasó.
-
-**Límite conocido:** Melton se calibró en cuencas de 0,1 a 10 km². Las cuencas
-grandes (Elqui, Limarí, Choapa) son cuencas de río, no quebradas de aluvión; el
-script las clasifica igual pero las marca con `melton_aplicable = False`.
+Un límite conocido: Melton se calibró en cuencas de 0,1 a 10 km². Las cuencas
+grandes (Elqui, Limarí, Choapa) son cuencas de río, no quebradas de aluvión. El
+script las clasifica igual, pero las marca con `melton_aplicable = False`.
 
 ### Resultado de M2
 
-Las 434 cuencas de la región, por el criterio de Wilford completo:
+De las 434 cuencas de la región, por el criterio de Wilford completo, 18 quedan
+como flujo de detritos, 138 como crecida de detritos y 278 como inundación. La
+razón de Melton máxima es 1,05 y la pendiente media máxima, 24°.
 
-| Clase | Cuencas |
-|---|---|
-| Flujo de detritos | **18** |
-| Crecida de detritos | 138 |
-| Inundación | 278 |
-
-Razón de Melton máxima: 1,05. Pendiente media máxima: 24°.
-
-El desglose de la columna `clase_melton` sobre la región completa queda
-pendiente: la última corrida regional es anterior a que el script guardara las
-dos clasificaciones.
+Queda pendiente el desglose de la columna `clase_melton` sobre la región
+completa: la última corrida regional es anterior a que el script guardara las dos
+clasificaciones.
 
 Las 18 cuencas críticas miden entre 0,4 y 3 km², así que a escala regional son
-invisibles: el mapa las marca con un círculo en la desembocadura, que es además
-el punto que le importa a M3 — por ahí es por donde el material sale hacia rutas
-y poblados.
+invisibles. El mapa las marca con un círculo en la desembocadura, que es además
+el punto que le importa a M3: por ahí sale el material hacia rutas y poblados.
 
-**La diferencia entre las dos columnas no es ruido.** Las cuencas más energéticas
-de toda la región quedan descartadas por el criterio de largo, algunas por
-decenas de metros sobre el umbral. Ese umbral es el parámetro heredado de otra
-región y es lo primero que M5 debería recalibrar.
+La diferencia entre las dos columnas importa. Las cuencas más energéticas de toda
+la región quedan descartadas por el criterio de largo, algunas por decenas de
+metros sobre el umbral. Ese umbral es el parámetro heredado de otra región y es
+lo primero que M5 debería recalibrar.
 
 ---
 
-## Hoja de ruta (milestones)
+## Hoja de ruta
 
 - [x] **M0 — Andamiaje**: repo, estructura, README, primer commit.
 - [x] **M1 — Terreno**: DEM descargado; cuencas y red de quebradas delineadas.
 - [x] **M2 — Susceptibilidad**: mapa de quebradas rankeadas por peligro (razón de Melton).
 - [ ] **M3 — Exposición**: cruce con red vial y zonas urbanas → puntos de corte.
 - [ ] **M4 — Gatillo de lluvia**: umbral intensidad-duración calibrado.
-- [ ] **M5 — Validación**: comparación contra julio 2026 + métricas.
-- [ ] **M6 — Entrega**: mapa/visor final y documentación.
+- [ ] **M5 — Validación**: comparación contra julio de 2026 y métricas.
+- [ ] **M6 — Entrega**: mapa o visor final y documentación.
 
-M0–M3 = versión mínima mostrable (v0). M4–M5 = calibración y validación (v1).
+M0 a M3 forman la versión mínima mostrable (v0). M4 y M5 son calibración y
+validación (v1).
 
 ---
 
@@ -218,26 +200,27 @@ M0–M3 = versión mínima mostrable (v0). M4–M5 = calibración y validación 
 | Red vial y urbana | OpenStreetMap | Libre |
 | Validación satelital | Sentinel-1 / Sentinel-2 (Copernicus) | Libre (registro) |
 
-> **Sobre el DEM:** el README original apuntaba a ALOS PALSAR "12,5 m". Ese producto
-> se descartó: los RTC de alta resolución se generan desde NED13 (solo EE.UU.) o
-> desde SRTM 30 m, y para Chile aplica el segundo caso. La documentación de ASF
-> dice que esos productos son *"up sampled from the 30-m version to 12.5 m"*, o sea
-> que los píxeles miden 12,5 m pero el detalle real sigue siendo de 30 m.
-> Copernicus GLO-30 entrega 30 m reales derivados de TanDEM-X: a igual resolución
-> efectiva, es mejor dato y pesa seis veces menos.
+Sobre el DEM: la primera versión de este README apuntaba a ALOS PALSAR de
+"12,5 m". Ese producto se descartó. Los RTC de alta resolución se generan desde
+NED13, que solo cubre Estados Unidos, o desde SRTM de 30 m, y para Chile aplica
+el segundo caso. La documentación de ASF dice que esos productos vienen
+remuestreados hacia arriba desde la versión de 30 m, o sea que los píxeles miden
+12,5 m pero el detalle real sigue siendo de 30 m. Copernicus GLO-30 entrega 30 m
+reales derivados de TanDEM-X: a igual resolución efectiva es mejor dato y pesa
+seis veces menos.
 
 ---
 
 ## Stack
 
-Python (rasterio, geopandas, scikit-learn), GRASS GIS / pysheds para hidrología,
-QGIS para visualización, Google Earth Engine para lo satelital.
+Python (rasterio, geopandas, scikit-learn), GRASS GIS o pysheds para hidrología,
+QGIS para visualización y Google Earth Engine para lo satelital.
 
 ---
 
 ## Documentación adicional
 
-[`docs/contexto.md`](docs/contexto.md) — alcance del proyecto, las dos mitades
-del modelo (susceptibilidad y gatillo), criterios de selección de las fuentes de
-datos, convenciones del repositorio y los puntos donde este tipo de modelo suele
-fallar.
+[`docs/contexto.md`](docs/contexto.md) reúne el alcance del proyecto, las dos
+mitades del modelo (susceptibilidad y gatillo), los criterios con que se
+eligieron las fuentes de datos, las convenciones del repositorio y los puntos
+donde este tipo de modelo suele fallar.
