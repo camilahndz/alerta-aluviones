@@ -14,5 +14,12 @@ numpy>=1.26
 scipy>=1.11
 scikit-learn>=1.4
 
+# Red vial y urbana (descarga desde OpenStreetMap)
+# El pin >=2.0 no es cosmetico: osmnx cambio la API entre 1.x y 2.x. En 2.x el
+# bounding box se pasa como bbox=(oeste, sur, este, norte) y las geometrias se
+# bajan con features_from_*; en 1.x era geometries_from_* y otro orden. El
+# codigo de M3 esta escrito contra 2.x.
+osmnx>=2.0
+
 # Visualizacion
 matplotlib>=3.8
