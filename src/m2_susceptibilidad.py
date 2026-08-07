@@ -272,6 +272,22 @@ def figura(cuencas: gpd.GeoDataFrame, ruta_png: Path):
                            label=f"{clase} ({len(sel)})")
         )
 
+    # Las cuencas capaces de generar flujos de detritos miden entre 0,4 y 3 km2
+    # sobre una region de 40.000: a escala regional son invisibles. Se marcan con
+    # un circulo en la desembocadura, que es ademas el punto que importa para M3,
+    # porque es por ahi por donde el material sale hacia rutas y poblados.
+    criticas = cuencas[cuencas["clase"] == "flujo_detritos"]
+    if not criticas.empty:
+        ax1.scatter(criticas["salida_x"], criticas["salida_y"],
+                    s=90, facecolor="none", edgecolor="#b2182b",
+                    linewidth=1.6, zorder=5)
+        marcas.append(
+            plt.Line2D([], [], marker="o", linestyle="none", markersize=9,
+                       markerfacecolor="none", markeredgecolor="#b2182b",
+                       markeredgewidth=1.6,
+                       label=f"salida de cuenca critica ({len(criticas)})")
+        )
+
     ax1.set_title("Susceptibilidad a flujos de detritos\n(clasificacion de Wilford)",
                   fontsize=12)
     ax1.legend(handles=marcas, loc="upper right", fontsize=9)

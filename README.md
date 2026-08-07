@@ -73,9 +73,9 @@ Los dos parámetros que vale la pena mover están en el segundo:
 **Por qué esos valores.** La primera pasada usó `--area-min-km2 2.0` y el resultado
 en M2 fue absurdo: una sola cuenca capaz de generar flujos de detritos en toda la
 región. El filtro estaba descartando justamente las quebradas chicas y empinadas,
-que son las que producen aluviones. Bajándolo a 0,4 km² las cuencas capaces pasan
-de 1 a 38, y el 85% del total queda dentro del rango donde el índice de Melton
-está calibrado.
+que son las que producen aluviones. Bajándolo a 0,4 km² aparecen 18 cuencas
+capaces, y la mayor parte del inventario queda dentro del rango de tamaño donde
+el índice de Melton está calibrado.
 
 **Sobre el margen:** la hidrología se corre sobre un área más grande que la región,
 porque hay quebradas cuyas cabeceras nacen fuera del límite administrativo y
@@ -84,12 +84,24 @@ cuencas completas cuya desembocadura cae dentro de Coquimbo.
 
 ### Resultado de M1
 
-Con la primera pasada (`--area-min-km2 2.0`): 174 cuencas · 39.257 km² ·
-42.425 tramos de quebrada · 96% de la región cubierta. Con los parámetros finos
-de arriba el número de cuencas sube, porque entran las quebradas chicas.
+Corrida sobre la región completa con los parámetros de arriba
+(`--umbral-km2 0.15 --area-min-km2 0.4`):
+
+| | |
+|---|---|
+| Cuencas delineadas (con el margen) | 1.147 |
+| Cuencas que descargan en Coquimbo | **434** |
+| Superficie drenada por esas cuencas | 39.487 km² |
+| Tramos de quebrada dentro de ellas | 134.306 |
+| Cobertura de la región | **96%** |
 
 El 4% restante drena hacia Atacama, Valparaíso o Argentina, así que esas cuencas
 le pertenecen a la región vecina.
+
+La pasada anterior, con `--area-min-km2 2.0`, daba 174 cuencas: el filtro grueso
+se comía las quebradas chicas. La superficie drenada apenas cambia (39.257 →
+39.487 km²) porque las que entran son pequeñas; lo que cambia es la resolución
+del inventario, y eso es justo lo que M2 necesita.
 
 Contraste contra las áreas oficiales de la DGA, como control de que la
 delineación reproduce la hidrología real:
@@ -155,13 +167,39 @@ reproduce mejor lo que realmente pasó.
 grandes (Elqui, Limarí, Choapa) son cuencas de río, no quebradas de aluvión; el
 script las clasifica igual pero las marca con `melton_aplicable = False`.
 
+### Resultado de M2
+
+Las 434 cuencas de la región, por el criterio de Wilford completo:
+
+| Clase | Cuencas |
+|---|---|
+| Flujo de detritos | **18** |
+| Crecida de detritos | 138 |
+| Inundación | 278 |
+
+Razón de Melton máxima: 1,05. Pendiente media máxima: 24°.
+
+El desglose de la columna `clase_melton` sobre la región completa queda
+pendiente: la última corrida regional es anterior a que el script guardara las
+dos clasificaciones.
+
+Las 18 cuencas críticas miden entre 0,4 y 3 km², así que a escala regional son
+invisibles: el mapa las marca con un círculo en la desembocadura, que es además
+el punto que le importa a M3 — por ahí es por donde el material sale hacia rutas
+y poblados.
+
+**La diferencia entre las dos columnas no es ruido.** Las cuencas más energéticas
+de toda la región quedan descartadas por el criterio de largo, algunas por
+decenas de metros sobre el umbral. Ese umbral es el parámetro heredado de otra
+región y es lo primero que M5 debería recalibrar.
+
 ---
 
 ## Hoja de ruta (milestones)
 
 - [x] **M0 — Andamiaje**: repo, estructura, README, primer commit.
 - [x] **M1 — Terreno**: DEM descargado; cuencas y red de quebradas delineadas.
-- [ ] **M2 — Susceptibilidad**: mapa de quebradas rankeadas por peligro (heurístico).
+- [x] **M2 — Susceptibilidad**: mapa de quebradas rankeadas por peligro (razón de Melton).
 - [ ] **M3 — Exposición**: cruce con red vial y zonas urbanas → puntos de corte.
 - [ ] **M4 — Gatillo de lluvia**: umbral intensidad-duración calibrado.
 - [ ] **M5 — Validación**: comparación contra julio 2026 + métricas.

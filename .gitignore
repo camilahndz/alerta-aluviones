@@ -82,6 +82,7 @@ htmlcov/
 *.qgd
 
 # --- Editores / SO ---
+.claude/
 .vscode/
 .idea/
 *.swp
