@@ -1,0 +1,2054 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>alerta-aluviones</title>
+<style>
+
+:root{
+  --bg:#F7FAFB; --paper:#FFFFFF; --ink:#1C1F24; --ink-soft:#4A4E55; --muted:#807C77;
+  --line:#DFE7EC; --line-soft:#EDF2F5;
+  --accent:#25597F; --accent-2:#8A5A2B; --accent-soft:#E4EFF6; --accent-line:#B3CFE0;
+  --code-bg:#F6FAFC; --mark:#FDF3D3;
+  --sidebar:#ECF2F6;
+  --shadow:0 1px 2px rgba(28,31,36,.04), 0 8px 24px rgba(28,31,36,.05);
+}
+html[data-theme="dark"]{
+  --bg:#14161A; --paper:#1A1D22; --ink:#E8E5E0; --ink-soft:#B9B4AD; --muted:#8B857D;
+  --line:#2C3037; --line-soft:#23272D;
+  --accent:#77B6DC; --accent-2:#D9A469; --accent-soft:#161F27; --accent-line:#2C4457;
+  --code-bg:#15181C; --mark:#3A3320;
+  --sidebar:#111317;
+  --shadow:0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.25);
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth; scroll-padding-top:24px}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Inter",system-ui,"Helvetica Neue",Arial,sans-serif;
+  font-size:16.5px; line-height:1.72; -webkit-font-smoothing:antialiased;
+}
+#progress{position:fixed;top:0;left:0;height:2px;background:var(--accent);width:0;z-index:200;transition:width .1s linear}
+#sidebar{
+  position:fixed;top:0;left:0;bottom:0;width:310px;background:var(--sidebar);
+  border-right:1px solid var(--line);display:flex;flex-direction:column;z-index:100;
+}
+.side-top{padding:22px 22px 14px;border-bottom:1px solid var(--line)}
+.side-title{font-family:ui-serif,Georgia,"Iowan Old Style","Times New Roman",serif;
+  font-size:19px;font-weight:600;letter-spacing:-.01em;margin:0 0 3px;color:var(--ink)}
+.side-sub{font-size:12px;color:var(--muted);letter-spacing:.03em;text-transform:uppercase;margin:0}
+#filter{
+  width:100%;margin-top:14px;padding:8px 11px;border:1px solid var(--line);border-radius:8px;
+  background:var(--paper);color:var(--ink);font-size:13.5px;font-family:inherit;
+}
+#filter:focus{outline:none;border-color:var(--accent-line);box-shadow:0 0 0 3px var(--accent-soft)}
+#nav{flex:1;overflow-y:auto;padding:12px 10px 40px}
+#nav::-webkit-scrollbar{width:8px}
+#nav::-webkit-scrollbar-thumb{background:var(--line);border-radius:4px}
+.nav-item{
+  display:flex;gap:10px;align-items:baseline;padding:7px 12px;border-radius:8px;
+  text-decoration:none;color:var(--ink-soft);font-size:14.2px;line-height:1.35;
+}
+.nav-item .n{font-variant-numeric:tabular-nums;font-size:11.5px;color:var(--muted);
+  font-weight:600;letter-spacing:.04em;min-width:17px}
+.nav-item:hover{background:var(--line-soft);color:var(--ink)}
+.nav-group.active > .nav-item{background:var(--accent-soft);color:var(--accent);font-weight:600}
+.nav-group.active > .nav-item .n{color:var(--accent)}
+.nav-subs{display:none;margin:2px 0 8px 30px;border-left:1px solid var(--line);padding-left:12px}
+.nav-group.active .nav-subs{display:block}
+.sub{display:block;padding:4px 6px;font-size:12.8px;color:var(--muted);text-decoration:none;
+  border-radius:6px;line-height:1.4}
+.sub:hover{color:var(--accent);background:var(--line-soft)}
+.sub.here{color:var(--accent);font-weight:600}
+.side-foot{padding:12px 22px;border-top:1px solid var(--line);display:flex;
+  justify-content:space-between;align-items:center;font-size:12px;color:var(--muted)}
+#theme{background:none;border:1px solid var(--line);border-radius:7px;padding:5px 10px;
+  cursor:pointer;font-size:12px;color:var(--ink-soft);font-family:inherit}
+#theme:hover{border-color:var(--accent-line);color:var(--accent)}
+main{margin-left:310px;padding:0 0 120px}
+#cover{max-width:790px;margin:0 auto;padding:96px 40px 64px}
+#cover .eyebrow{font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);
+  font-weight:700;margin:0 0 18px}
+#cover h1{font-family:ui-serif,Georgia,"Iowan Old Style",serif;font-size:52px;line-height:1.08;
+  letter-spacing:-.025em;margin:0 0 18px;font-weight:600}
+#cover .lede{font-size:19px;line-height:1.6;color:var(--ink-soft);margin:0 0 34px;max-width:620px}
+.meta-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(128px,1fr));gap:1px;
+  background:var(--line);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.meta-cell{background:var(--paper);padding:16px 18px}
+.meta-cell .k{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);
+  margin:0 0 5px;font-weight:600}
+.meta-cell .v{font-size:21px;font-family:ui-serif,Georgia,serif;color:var(--ink);margin:0;
+  font-variant-numeric:tabular-nums}
+.chapter{padding:64px 0 8px;border-top:1px solid var(--line)}
+.chapter:first-of-type{border-top:none}
+.chapter-head{max-width:790px;margin:0 auto 6px;padding:0 40px;display:flex;gap:14px;align-items:center}
+.chapter-num{font-family:ui-serif,Georgia,serif;font-size:13px;font-weight:700;color:#fff;
+  background:var(--accent);width:30px;height:30px;border-radius:50%;display:flex;
+  align-items:center;justify-content:center;letter-spacing:.02em;flex:none}
+.chapter-kicker{font-size:12px;letter-spacing:.11em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.chapter > *:not(.chapter-head):not(section){max-width:790px;margin-left:auto;margin-right:auto;
+  padding-left:40px;padding-right:40px}
+h1,h2,h3,h4{font-family:ui-serif,Georgia,"Iowan Old Style","Times New Roman",serif;
+  letter-spacing:-.018em;color:var(--ink);scroll-margin-top:20px}
+.chapter h1{font-size:38px;line-height:1.16;margin:8px auto 26px;font-weight:600}
+.chapter h2{font-size:27px;line-height:1.25;margin:52px auto 16px;font-weight:600;
+  padding-bottom:9px;border-bottom:1px solid var(--line)}
+.chapter h3{font-size:20.5px;line-height:1.3;margin:36px auto 12px;font-weight:600}
+.chapter h4{font-size:16.5px;margin:26px auto 10px;font-weight:700;color:var(--accent-2);
+  font-family:inherit;letter-spacing:0}
+p{margin:0 auto 17px}
+a{color:var(--accent);text-decoration:none;border-bottom:1px solid var(--accent-line)}
+a:hover{border-bottom-color:var(--accent)}
+strong{font-weight:650;color:var(--ink)}
+ul,ol{margin:0 auto 18px;padding-left:0}
+.chapter ul,.chapter ol{padding-left:64px}
+li{margin-bottom:7px;padding-left:3px}
+li::marker{color:var(--muted)}
+hr{border:none;border-top:1px solid var(--line);margin:38px auto;max-width:790px}
+code{font-family:ui-monospace,"SF Mono","Cascadia Code","JetBrains Mono",Consolas,monospace;
+  font-size:.855em;background:var(--accent-soft);color:var(--accent);padding:.13em .38em;
+  border-radius:5px;word-break:break-word}
+pre{background:var(--code-bg);border:1px solid var(--line);border-radius:11px;
+  padding:17px 19px;overflow-x:auto;margin:0 auto 22px;line-height:1.6;box-shadow:var(--shadow)}
+pre code{background:none;color:var(--ink);padding:0;font-size:13.4px;border-radius:0}
+.chapter pre{max-width:790px}
+.hl{background:none!important;border:none;padding:0}
+.chapter > .hl{max-width:790px;margin:0 auto 22px;padding-left:40px;padding-right:40px}
+.hl > pre{margin:0;max-width:none}
+pre::-webkit-scrollbar{height:8px}
+pre::-webkit-scrollbar-thumb{background:var(--line);border-radius:4px}
+.tablewrap{overflow-x:auto;margin:0 auto 24px;max-width:790px;padding:0 40px}
+table{border-collapse:collapse;width:100%;font-size:14.6px;background:var(--paper);
+  border:1px solid var(--line);border-radius:11px;overflow:hidden;box-shadow:var(--shadow)}
+th{background:var(--line-soft);text-align:left;padding:11px 14px;font-weight:650;font-size:12.6px;
+  letter-spacing:.045em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--line)}
+td{padding:11px 14px;border-bottom:1px solid var(--line-soft);vertical-align:top;line-height:1.55}
+tr:last-child td{border-bottom:none}
+tbody tr:hover{background:var(--line-soft)}
+td code,th code{font-size:.86em}
+blockquote{margin:0 auto 24px;padding:15px 20px;background:var(--paper);
+  border-left:3px solid var(--accent);border-radius:0 11px 11px 0;color:var(--ink-soft);
+  box-shadow:var(--shadow);max-width:790px}
+blockquote p:last-child{margin-bottom:0}
+blockquote strong{color:var(--accent)}
+#top{position:fixed;right:26px;bottom:26px;width:42px;height:42px;border-radius:50%;
+  background:var(--paper);border:1px solid var(--line);color:var(--ink-soft);cursor:pointer;
+  display:none;align-items:center;justify-content:center;font-size:17px;box-shadow:var(--shadow);z-index:90}
+#top.show{display:flex}
+#top:hover{color:var(--accent);border-color:var(--accent-line)}
+#burger{display:none;position:fixed;top:14px;left:14px;z-index:150;width:40px;height:40px;
+  border-radius:9px;background:var(--paper);border:1px solid var(--line);color:var(--ink);
+  font-size:17px;cursor:pointer;box-shadow:var(--shadow)}
+@media(max-width:1080px){
+  #sidebar{transform:translateX(-100%);transition:transform .22s ease}
+  #sidebar.open{transform:none}
+  #burger{display:block}
+  main{margin-left:0}
+  #cover{padding-top:76px}
+  #cover h1{font-size:38px}
+  .chapter h1{font-size:30px}
+  .wrap,.chapter > *:not(.chapter-head):not(section),.tablewrap,.chapter-head{padding-left:22px;padding-right:22px}
+  .chapter ul,.chapter ol{padding-left:44px}
+}
+/* resaltado de sintaxis, sobrio */
+.hl .k,.hl .kn,.hl .kd,.hl .kc{color:var(--accent-2);font-weight:600}
+.hl .s,.hl .s1,.hl .s2,.hl .sd,.hl .sb{color:var(--accent)}
+.hl .c,.hl .c1,.hl .cm,.hl .ch{color:var(--muted);font-style:italic}
+.hl .nf,.hl .fm{color:var(--ink);font-weight:600}
+.hl .mi,.hl .mf,.hl .m{color:var(--accent-2)}
+.hl .nb,.hl .bp{color:var(--accent-2)}
+.hl .o,.hl .p{color:var(--ink-soft)}
+
+</style>
+</head>
+<body>
+<div id="progress"></div>
+<button id="burger" aria-label="Menu">&#9776;</button>
+
+<aside id="sidebar">
+  <div class="side-top">
+    <p class="side-title">Recorrido completo</p>
+    <p class="side-sub">Riesgo de quebradas · Región de Coquimbo</p>
+    <input id="filter" type="search" placeholder="Filtrar capitulos..." autocomplete="off">
+  </div>
+  <nav id="nav">
+<div class="nav-group" data-chapter="cap-00"><a class="nav-item" href="#cap-00"><span class="n">00</span><span class="t">Índice</span></a><div class="nav-subs"><a class="sub" href="#c00-una-advertencia-antes-de-empezar">Una advertencia antes de empezar</a><a class="sub" href="#c00-como-leer-esto">Cómo leer esto</a><a class="sub" href="#c00-indice">Índice</a><a class="sub" href="#c00-que-tamano-tiene-esto">Qué tamaño tiene esto</a></div></div>
+<div class="nav-group" data-chapter="cap-01"><a class="nav-item" href="#cap-01"><span class="n">01</span><span class="t">Qué es el proyecto</span></a><div class="nav-subs"><a class="sub" href="#c01-el-problema-sin-codigo">El problema, sin código</a><a class="sub" href="#c01-las-dos-mitades-del-modelo">Las dos mitades del modelo</a><a class="sub" href="#c01-los-seis-hitos">Los seis hitos</a><a class="sub" href="#c01-por-que-el-temporal-es-la-pieza-que-hace-valioso-al-proyecto">Por qué el temporal es la pieza que hace valioso al proyecto</a><a class="sub" href="#c01-que-no-es-el-proyecto">Qué NO es el proyecto</a><a class="sub" href="#c01-como-se-lo-explicarias-a-alguien-en-60-segundos">Cómo se lo explicarías a alguien en 60 segundos</a></div></div>
+<div class="nav-group" data-chapter="cap-02"><a class="nav-item" href="#cap-02"><span class="n">02</span><span class="t">Conceptos base</span></a><div class="nav-subs"><a class="sub" href="#c02-1-dem-el-terreno-como-una-grilla-de-numeros">1. DEM: el terreno como una grilla de números</a><a class="sub" href="#c02-2-raster-y-vector">2. Raster y vector</a><a class="sub" href="#c02-3-sistema-de-coordenadas">3. Sistema de coordenadas</a><a class="sub" href="#c02-4-cuenca-quebrada-desembocadura">4. Cuenca, quebrada, desembocadura</a><a class="sub" href="#c02-5-aluvion-y-flujo-de-detritos">5. Aluvión y flujo de detritos</a><a class="sub" href="#c02-6-las-librerias">6. Las librerías</a><a class="sub" href="#c02-como-se-lo-explicarias-a-alguien-en-60-segundos">Cómo se lo explicarías a alguien en 60 segundos</a></div></div>
+<div class="nav-group" data-chapter="cap-03"><a class="nav-item" href="#cap-03"><span class="n">03</span><span class="t">Estructura del repositorio</span></a><div class="nav-subs"><a class="sub" href="#c03-el-arbol">El árbol</a><a class="sub" href="#c03-la-regla-que-gobierna-las-carpetas-de-datos">La regla que gobierna las carpetas de datos</a><a class="sub" href="#c03-por-que-m1-m2-m3">Por qué M1, M2, M3</a><a class="sub" href="#c03-el-parche-de-cuatro-lineas">El parche de cuatro líneas</a><a class="sub" href="#c03-como-se-lo-explicarias-a-alguien-en-60-segundos">Cómo se lo explicarías a alguien en 60 segundos</a></div></div>
+<div class="nav-group" data-chapter="cap-04"><a class="nav-item" href="#cap-04"><span class="n">04</span><span class="t">Conseguir el terreno</span></a><div class="nav-subs"><a class="sub" href="#c04-1-la-decision-del-dem">1. La decisión del DEM</a><a class="sub" href="#c04-2-los-tres-pasos-del-script">2. Los tres pasos del script</a><a class="sub" href="#c04-3-verificar-antes-de-continuar">3. Verificar antes de continuar</a><a class="sub" href="#c04-4-la-descarga-en-paralelo">4. La descarga en paralelo</a><a class="sub" href="#c04-como-se-lo-explicarias-a-alguien-en-60-segundos">Cómo se lo explicarías a alguien en 60 segundos</a></div></div>
+<div class="nav-group" data-chapter="cap-05"><a class="nav-item" href="#cap-05"><span class="n">05</span><span class="t">De alturas a quebradas</span></a><div class="nav-subs"><a class="sub" href="#c05-1-acondicionar-estropear-el-dem-a-proposito">1. Acondicionar: estropear el DEM a propósito</a><a class="sub" href="#c05-2-direccion-de-flujo-la-regla-d8">2. Dirección de flujo: la regla D8</a><a class="sub" href="#c05-3-acumulacion-el-numero-que-dibuja-las-quebradas">3. Acumulación: el número que dibuja las quebradas</a><a class="sub" href="#c05-4-el-umbral-que-decide-que-es-una-quebrada">4. El umbral que decide qué es una quebrada</a><a class="sub" href="#c05-5-delinear-las-cuencas">5. Delinear las cuencas</a><a class="sub" href="#c05-6-la-figura-de-control">6. La figura de control</a><a class="sub" href="#c05-como-se-lo-explicarias-a-alguien-en-60-segundos">Cómo se lo explicarías a alguien en 60 segundos</a></div></div>
+<div class="nav-group" data-chapter="cap-06"><a class="nav-item" href="#cap-06"><span class="n">06</span><span class="t">Quedarse con Coquimbo</span></a><div class="nav-subs"><a class="sub" href="#c06-1-el-agua-no-respeta-los-limites-politicos">1. El agua no respeta los límites políticos</a><a class="sub" href="#c06-2-el-criterio-de-pertenencia">2. El criterio de pertenencia</a><a class="sub" href="#c06-3-el-limite-regional-se-descarga">3. El límite regional se descarga</a><a class="sub" href="#c06-como-se-lo-explicarias-a-alguien-en-60-segundos">Cómo se lo explicarías a alguien en 60 segundos</a></div></div>
+<div class="nav-group" data-chapter="cap-07"><a class="nav-item" href="#cap-07"><span class="n">07</span><span class="t">Qué cuencas pueden generar un aluvión</span></a><div class="nav-subs"><a class="sub" href="#c07-1-por-que-no-inventar-pesos">1. Por qué no inventar pesos</a><a class="sub" href="#c07-2-la-razon-de-melton">2. La razón de Melton</a><a class="sub" href="#c07-3-los-umbrales-de-wilford">3. Los umbrales de Wilford</a><a class="sub" href="#c07-4-las-dos-clasificaciones">4. Las dos clasificaciones</a><a class="sub" href="#c07-5-el-limite-del-indice-marcado-en-el-dato">5. El límite del índice, marcado en el dato</a><a class="sub" href="#c07-6-los-resultados">6. Los resultados</a><a class="sub" href="#c07-como-se-lo-explicarias-a-alguien-en-60-segundos">Cómo se lo explicarías a alguien en 60 segundos</a></div></div>
+<div class="nav-group" data-chapter="cap-08"><a class="nav-item" href="#cap-08"><span class="n">08</span><span class="t">El parámetro que cambió todo</span></a><div class="nav-subs"><a class="sub" href="#c08-1-el-resultado-absurdo">1. El resultado absurdo</a><a class="sub" href="#c08-2-el-diagnostico">2. El diagnóstico</a><a class="sub" href="#c08-3-la-correccion-y-su-verificacion">3. La corrección y su verificación</a><a class="sub" href="#c08-4-por-que-esto-funciona-en-una-entrevista">4. Por qué esto funciona en una entrevista</a><a class="sub" href="#c08-como-se-lo-explicarias-a-alguien-en-60-segundos">Cómo se lo explicarías a alguien en 60 segundos</a></div></div>
+<div class="nav-group" data-chapter="cap-09"><a class="nav-item" href="#cap-09"><span class="n">09</span><span class="t">Dónde el flujo cruza lo que la gente usa</span></a><div class="nav-subs"><a class="sub" href="#c09-1-lo-que-este-script-no-es">1. Lo que este script NO es</a><a class="sub" href="#c09-2-la-trayectoria-se-traza-hacia-arriba">2. La trayectoria se traza hacia arriba</a><a class="sub" href="#c09-3-la-negativa-a-inventar-un-alcance">3. La negativa a inventar un alcance</a><a class="sub" href="#c09-4-la-priorizacion">4. La priorización</a><a class="sub" href="#c09-5-los-otros-detalles">5. Los otros detalles</a><a class="sub" href="#c09-como-se-lo-explicarias-a-alguien-en-60-segundos">Cómo se lo explicarías a alguien en 60 segundos</a></div></div>
+<div class="nav-group" data-chapter="cap-10"><a class="nav-item" href="#cap-10"><span class="n">10</span><span class="t">El control de calidad</span></a><div class="nav-subs"><a class="sub" href="#c10-1-por-que-esto-importa-mas-que-el-resto">1. Por qué esto importa más que el resto</a><a class="sub" href="#c10-2-la-discrepancia-del-limari">2. La discrepancia del Limarí</a><a class="sub" href="#c10-3-por-que-esto-es-la-mejor-pieza-del-proyecto">3. Por qué esto es la mejor pieza del proyecto</a><a class="sub" href="#c10-como-se-lo-explicarias-a-alguien-en-60-segundos">Cómo se lo explicarías a alguien en 60 segundos</a></div></div>
+<div class="nav-group" data-chapter="cap-11"><a class="nav-item" href="#cap-11"><span class="n">11</span><span class="t">Decisiones y defensa</span></a><div class="nav-subs"><a class="sub" href="#c11-tabla-de-decisiones">Tabla de decisiones</a><a class="sub" href="#c11-preguntas-probables">Preguntas probables</a></div></div>
+<div class="nav-group" data-chapter="cap-12"><a class="nav-item" href="#cap-12"><span class="n">12</span><span class="t">Estado real y cifras</span></a><div class="nav-subs"><a class="sub" href="#c12-1-el-problema-de-las-cifras">1. El problema de las cifras</a><a class="sub" href="#c12-2-el-estado-por-hito">2. El estado por hito</a><a class="sub" href="#c12-3-otras-limitaciones">3. Otras limitaciones</a><a class="sub" href="#c12-4-en-que-orden-conviene-arreglarlo">4. En qué orden conviene arreglarlo</a><a class="sub" href="#c12-5-lo-que-esta-bien-y-no-conviene-minimizar">5. Lo que está bien y no conviene minimizar</a></div></div>
+<div class="nav-group" data-chapter="cap-13"><a class="nav-item" href="#cap-13"><span class="n">13</span><span class="t">Glosario</span></a><div class="nav-subs"><a class="sub" href="#c13-datos-geoespaciales">Datos geoespaciales</a><a class="sub" href="#c13-hidrologia">Hidrología</a><a class="sub" href="#c13-riesgo-y-clasificacion">Riesgo y clasificación</a><a class="sub" href="#c13-instituciones-y-fuentes">Instituciones y fuentes</a><a class="sub" href="#c13-software-y-practica">Software y práctica</a></div></div>
+  </nav>
+  <div class="side-foot">
+    <span>16 de agosto de 2026</span>
+    <button id="theme">Modo oscuro</button>
+  </div>
+</aside>
+
+<main>
+<div id="cover"><p class="eyebrow">Recorrido explicativo</p><h1>alerta-aluviones</h1><p class="lede">En julio de 2026 el peor temporal en cuarenta años dejó a unas 99 mil personas aisladas en Coquimbo, porque las quebradas se activaron y cortaron las rutas. Este modelo responde qué quebradas pueden generar un aluvión y qué rutas quedan expuestas, partiendo de un modelo de elevación satelital. Recorrido completo, con el estado honesto de cada cifra.</p><div class="meta-grid"><div class="meta-cell"><p class="k">Lenguaje</p><p class="v">Python</p></div><div class="meta-cell"><p class="k">Módulos</p><p class="v">6</p></div><div class="meta-cell"><p class="k">Líneas</p><p class="v">~2.450</p></div><div class="meta-cell"><p class="k">Hitos cerrados</p><p class="v">M0–M2</p></div><div class="meta-cell"><p class="k">Validación</p><p class="v">Pendiente</p></div></div></div>
+<section class="chapter" id="cap-00"><div class="chapter-head"><span class="chapter-num">00</span><span class="chapter-kicker">Portada y modo de empleo</span></div><h1 id="recorrido-explicativo-de-alerta-aluviones">Recorrido explicativo de alerta-aluviones</h1>
+<p>Esta es una guía de lectura del repositorio <code>alerta-aluviones</code>, el modelo de
+riesgo de activación de quebradas para la Región de Coquimbo. Está escrita para
+que puedas abrir el proyecto, entender cada decisión y defenderla ante alguien
+que sepa más que tú del tema.</p>
+<p>El documento parte desde cero. No asume que sabes qué es un modelo de elevación,
+ni qué es un sistema de coordenadas, ni qué es una cuenca, ni qué significa
+delinear. Cada término se define en una línea la primera vez que aparece.</p>
+<h2 id="c00-una-advertencia-antes-de-empezar" id="una-advertencia-antes-de-empezar">Una advertencia antes de empezar</h2>
+<p>Este proyecto tiene una particularidad que conviene saber desde la portada:
+<strong>las cifras que aparecen en el README no se pueden reproducir hoy corriendo el
+código en tu computador.</strong> Salieron de una corrida en un servidor remoto, y el
+DEM que tienes en local cubre menos territorio.</p>
+<p>No es un defecto del razonamiento ni de los métodos, que son correctos y están
+bien fundados. Es un desajuste entre lo que el repositorio afirma y lo que el
+repositorio puede demostrar hoy. El capítulo 12 lo trata completo, con las dos
+versiones de cada número, y hasta que eso se resuelva <strong>ninguna de esas cifras
+debería ir a un CV</strong>.</p>
+<p>Todo lo demás del documento —los métodos, las decisiones, el razonamiento— es
+independiente de ese problema y se sostiene solo.</p>
+<h2 id="c00-como-leer-esto" id="como-leer-esto">Cómo leer esto</h2>
+<p>Lo más cómodo es abrir Visual Studio Code con la carpeta <code>alerta-aluviones</code> como
+carpeta de trabajo y tener este documento al lado. Cada vez que aparece una ruta
+como <code>src/m2_susceptibilidad.py</code> se trata de un archivo real.</p>
+<p>Los capítulos van en orden. Los tres primeros no tienen código. Del 04 al 09 se
+recorren los módulos en el orden en que se ejecutan, que es también el orden en
+que el proyecto fue creciendo. El 10 y el 11 son material de entrevista, el 12 es
+el estado honesto del proyecto y el 13 es el glosario.</p>
+<h2 id="c00-indice" id="indice">Índice</h2>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>Capítulo</th>
+<th>De qué trata</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>01</td>
+<td>Qué es el proyecto</td>
+<td>El temporal de julio de 2026 y la pregunta que el modelo intenta responder</td>
+</tr>
+<tr>
+<td>02</td>
+<td>Conceptos base</td>
+<td>DEM, píxel, raster y vector, sistema de coordenadas, cuenca, aluvión</td>
+</tr>
+<tr>
+<td>03</td>
+<td>Estructura del repositorio</td>
+<td>Las cuatro carpetas de datos y la regla que las gobierna</td>
+</tr>
+<tr>
+<td>04</td>
+<td>Conseguir el terreno</td>
+<td><code>m1_preparar_dem.py</code>: por qué se descartó un DEM que parecía mejor</td>
+</tr>
+<tr>
+<td>05</td>
+<td>De alturas a quebradas</td>
+<td><code>m1_terreno.py</code>: relleno, dirección de flujo, acumulación, cuencas</td>
+</tr>
+<tr>
+<td>06</td>
+<td>Quedarse con Coquimbo</td>
+<td><code>m1_recortar_region.py</code>: por qué se procesa de más y se filtra al final</td>
+</tr>
+<tr>
+<td>07</td>
+<td>Qué cuencas pueden generar un aluvión</td>
+<td><code>m2_susceptibilidad.py</code>: la razón de Melton y las dos clasificaciones</td>
+</tr>
+<tr>
+<td>08</td>
+<td>El parámetro que cambió todo</td>
+<td>La historia del <code>--area-min-km2</code>, de 1 cuenca a 18</td>
+</tr>
+<tr>
+<td>09</td>
+<td>Dónde el flujo cruza lo que la gente usa</td>
+<td><code>m3_exposicion.py</code>: cauces, rutas y puntos de corte</td>
+</tr>
+<tr>
+<td>10</td>
+<td>El control de calidad</td>
+<td>La comparación contra las áreas oficiales de la DGA</td>
+</tr>
+<tr>
+<td>11</td>
+<td>Decisiones y defensa</td>
+<td>Cada decisión con su respuesta de 30 segundos</td>
+</tr>
+<tr>
+<td>12</td>
+<td>Estado real y cifras</td>
+<td>Qué está cerrado, qué falta y qué números no se pueden usar todavía</td>
+</tr>
+<tr>
+<td>13</td>
+<td>Glosario</td>
+<td>Todos los términos, en un solo lugar</td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="c00-que-tamano-tiene-esto" id="que-tamano-tiene-esto">Qué tamaño tiene esto</h2>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>Archivo</th>
+<th>Líneas</th>
+<th>De qué se encarga</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>src/m1_preparar_dem.py</code></td>
+<td>323</td>
+<td>Descargar el modelo de elevación, unirlo y reproyectarlo</td>
+</tr>
+<tr>
+<td><code>src/m1_terreno.py</code></td>
+<td>651</td>
+<td>Hidrología: de alturas a red de quebradas y cuencas</td>
+</tr>
+<tr>
+<td><code>src/m1_recortar_region.py</code></td>
+<td>231</td>
+<td>Filtrar las cuencas que descargan en Coquimbo</td>
+</tr>
+<tr>
+<td><code>src/m2_susceptibilidad.py</code></td>
+<td>402</td>
+<td>Clasificar cada cuenca por su capacidad de generar aluviones</td>
+</tr>
+<tr>
+<td><code>src/m3_exposicion.py</code></td>
+<td>825</td>
+<td>Cruzar los cauces con rutas y zonas urbanas</td>
+</tr>
+<tr>
+<td><code>src/compat_pysheds.py</code></td>
+<td>25</td>
+<td>Un parche de cuatro líneas sin el cual nada corre</td>
+</tr>
+</tbody>
+</table></div>
+<p>Son unas 2.450 líneas de Python. Es el proyecto más grande de tu portafolio, y
+también el que tiene el razonamiento más denso por línea.</p></section>
+<section class="chapter" id="cap-01"><div class="chapter-head"><span class="chapter-num">01</span><span class="chapter-kicker">El problema, sin código</span></div><h1 id="01-que-es-el-proyecto">01 — Qué es el proyecto</h1>
+<blockquote>
+<p><strong>Qué vas a entender al terminar este capítulo</strong></p>
+<ul>
+<li>Qué pasó en Coquimbo en julio de 2026 y por qué el proyecto nace de ahí.</li>
+<li>Qué pregunta concreta intenta responder el modelo.</li>
+<li>Las dos mitades del problema, y cuál está construida y cuál no.</li>
+<li>Qué produce hoy y qué no produce todavía.</li>
+</ul>
+</blockquote>
+<h2 id="c01-el-problema-sin-codigo" id="el-problema-sin-codigo">El problema, sin código</h2>
+<p>En julio de 2026 la Región de Coquimbo tuvo el peor temporal en unos cuarenta
+años. Hubo fallecidos, del orden de 99 mil personas quedaron aisladas y se
+registraron más de cuarenta cortes de ruta.</p>
+<p>Ese aislamiento es la clave del proyecto. La gente no quedó aislada porque le
+cayera agua encima, sino porque <strong>las quebradas se activaron y cortaron los
+caminos</strong>. Una quebrada seca durante años se convierte, en unas horas de lluvia
+intensa, en un torrente de barro y piedras que baja por su cauce y arrasa lo que
+cruce por delante. Cuando ese cauce cruza una ruta, la ruta desaparece, y las
+localidades que dependían de ella quedan incomunicadas.</p>
+<p>Chile tiene mapas de dónde están las quebradas y tiene pronósticos de lluvia. Lo
+que no tiene, a escala regional y de acceso libre, es la unión de ambas cosas:
+<strong>dado un pronóstico, qué quebradas se van a activar y qué rutas van a quedar
+cortadas.</strong> Esa es la pregunta del proyecto.</p>
+<h2 id="c01-las-dos-mitades-del-modelo" id="las-dos-mitades-del-modelo">Las dos mitades del modelo</h2>
+<p>Para responderla hacen falta dos cosas distintas, y conviene tenerlas separadas
+porque el proyecto está construido sobre esa separación.</p>
+<p>La <strong>susceptibilidad</strong> responde <em>cuáles quebradas son capaces</em> de generar un
+aluvión. Es una propiedad del terreno: depende de qué tan empinada es la cuenca,
+cuánto desnivel tiene, qué tamaño, qué material hay en el suelo. No cambia de un
+día para otro, así que se calcula una vez.</p>
+<p>El <strong>gatillo</strong> responde <em>cuánta lluvia hace falta</em> para que una quebrada capaz se
+active de verdad. Es un umbral que combina intensidad y duración: no es lo mismo
+que caigan 40 milímetros en dos días que en dos horas.</p>
+<p>Ninguna de las dos sirve sola. Una quebrada capaz sin lluvia suficiente no pasa
+nada, y una lluvia enorme sobre terreno tendido produce inundación de agua limpia
+pero no un aluvión. El riesgo aparece en la intersección.</p>
+<p><strong>Hoy el proyecto tiene construida la susceptibilidad y no tiene el gatillo.</strong> Esa
+es la distinción más importante de todo el documento y la que hay que tener clara
+antes de describir el proyecto a nadie.</p>
+<h2 id="c01-los-seis-hitos" id="los-seis-hitos">Los seis hitos</h2>
+<p>El proyecto está organizado en hitos, y cada uno depende del anterior:</p>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>Hito</th>
+<th>Qué hace</th>
+<th>Estado</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>M0</strong></td>
+<td>Andamiaje: repositorio, estructura, README</td>
+<td>Cerrado</td>
+</tr>
+<tr>
+<td><strong>M1</strong></td>
+<td>Terreno: descargar el DEM, delinear quebradas y cuencas</td>
+<td>Cerrado</td>
+</tr>
+<tr>
+<td><strong>M2</strong></td>
+<td>Susceptibilidad: clasificar cada cuenca por su peligro</td>
+<td>Cerrado</td>
+</tr>
+<tr>
+<td><strong>M3</strong></td>
+<td>Exposición: cruzar los cauces con rutas y zonas urbanas</td>
+<td>Código escrito, sin corrida validada</td>
+</tr>
+<tr>
+<td><strong>M4</strong></td>
+<td>Gatillo de lluvia: el umbral intensidad-duración</td>
+<td>No empezado</td>
+</tr>
+<tr>
+<td><strong>M5</strong></td>
+<td>Validación: comparar contra julio de 2026</td>
+<td>No empezado</td>
+</tr>
+<tr>
+<td><strong>M6</strong></td>
+<td>Entrega: mapa o visor final</td>
+<td>No empezado</td>
+</tr>
+</tbody>
+</table></div>
+<p>M0 a M3 forman la versión mínima mostrable. Con eso el proyecto ya puede decir
+<em>"estas quebradas cortan estas rutas"</em>, que es una frase con sentido para alguien
+que no sabe hidrología. M4 y M5 son lo que convertiría el modelo en algo
+predictivo y comprobado.</p>
+<h2 id="c01-por-que-el-temporal-es-la-pieza-que-hace-valioso-al-proyecto" id="por-que-el-temporal-es-la-pieza-que-hace-valioso-al-proyecto">Por qué el temporal es la pieza que hace valioso al proyecto</h2>
+<p>El evento de julio de 2026 cumple dos funciones a la vez, y esa doble función es
+lo que distingue este proyecto de un ejercicio de curso.</p>
+<p>Es el <strong>origen</strong>: el problema no salió de una lista de ideas sino de algo que
+ocurrió, en la región donde vives, con consecuencias documentadas.</p>
+<p>Y es el <strong>conjunto de validación</strong>: como se sabe qué rutas se cortaron
+realmente, existe una respuesta correcta contra la cual comparar la predicción
+del modelo. La mayoría de los proyectos de portafolio no tiene eso. Un modelo que
+predice algo sin forma de verificar si acertó es una opinión con matemáticas
+encima; uno que se puede contrastar contra un evento real es un modelo.</p>
+<p>Eso es M5, y todavía no está hecho. Pero el dato existe y está identificado, que
+es lo que permite decir en una entrevista que la validación tiene un plan
+concreto y no es una intención.</p>
+<h2 id="c01-que-no-es-el-proyecto" id="que-no-es-el-proyecto">Qué NO es el proyecto</h2>
+<p>Vale la pena cerrar con los límites, porque en una entrevista técnica es donde
+apunta la pregunta difícil.</p>
+<p><strong>No es un modelo de propagación.</strong> El código no calcula hasta dónde llega el
+material ni con qué espesor; eso requiere resolver la física del flujo y está
+explícitamente fuera de alcance. Lo que hace M3 es suponer que el material baja
+por el cauce, que es una hipótesis razonable pero es una hipótesis.</p>
+<p><strong>No predice cuándo.</strong> Sin el gatillo de lluvia, el modelo dice qué quebradas son
+capaces, no cuáles se van a activar mañana.</p>
+<p><strong>No está validado.</strong> M5 no existe, así que no hay ninguna métrica de acierto.</p>
+<p><strong>Los puntos de corte son candidatos, no predicciones.</strong> Cada uno es un lugar
+donde una vía cruza el cauce de una quebrada susceptible. Que ese corte ocurra
+depende del gatillo y del volumen movilizado, que el proyecto no estima.</p>
+<hr />
+<h2 id="c01-como-se-lo-explicarias-a-alguien-en-60-segundos" id="como-se-lo-explicarias-a-alguien-en-60-segundos">Cómo se lo explicarías a alguien en 60 segundos</h2>
+<p>En julio de 2026 el peor temporal en cuarenta años dejó a unas 99 mil personas
+aisladas en la Región de Coquimbo, no por el agua sino porque las quebradas se
+activaron y cortaron más de cuarenta rutas. El modelo responde qué quebradas
+pueden generar un aluvión y qué rutas quedan expuestas. Tiene dos mitades: la
+susceptibilidad, que es una propiedad del terreno y ya está construida, y el
+gatillo de lluvia, que dice cuánta agua hace falta y todavía no. Parto de un
+modelo de elevación satelital, deduzco por dónde escurre el agua, delineo las
+cuencas, y clasifico cada una con un índice publicado y calibrado contra eventos
+reales, no con pesos inventados. Lo que lo hace validable es que el temporal de
+julio es a la vez el origen del proyecto y el conjunto de prueba: sé qué rutas se
+cortaron de verdad, así que hay una respuesta correcta contra la cual comparar.</p></section>
+<section class="chapter" id="cap-02"><div class="chapter-head"><span class="chapter-num">02</span><span class="chapter-kicker">El vocabulario mínimo</span></div><h1 id="02-conceptos-base">02 — Conceptos base</h1>
+<blockquote>
+<p><strong>Qué vas a entender al terminar este capítulo</strong></p>
+<ul>
+<li>Qué es un DEM y qué guarda cada píxel.</li>
+<li>La diferencia entre raster y vector, que organiza todo el proyecto.</li>
+<li>Qué es un sistema de coordenadas y por qué hay que cambiar de uno a otro.</li>
+<li>Qué es una cuenca, una quebrada y un flujo de detritos.</li>
+</ul>
+</blockquote>
+<h2 id="c02-1-dem-el-terreno-como-una-grilla-de-numeros" id="1-dem-el-terreno-como-una-grilla-de-numeros">1. DEM: el terreno como una grilla de números</h2>
+<p><strong>DEM</strong> significa <em>Digital Elevation Model</em>, o sea modelo digital de elevación. Es
+una imagen donde cada píxel, en vez de guardar un color, guarda <strong>la altura del
+terreno en ese punto, en metros sobre el nivel del mar</strong>.</p>
+<p>Un DEM de 30 metros significa que cada píxel cubre un cuadrado de 30 por 30
+metros en el suelo. Toda la Región de Coquimbo, que son unos 40 mil kilómetros
+cuadrados, cabe entonces en una grilla de decenas de millones de píxeles.</p>
+<p>Lo notable, y lo que hace posible el proyecto entero, es que <strong>de esa única capa
+de alturas se puede deducir por dónde escurre el agua</strong>. No hace falta ningún
+dato de ríos: el agua baja, y si sabes la altura de cada punto sabes hacia dónde
+baja. Los capítulos 05 y 09 son enteramente eso.</p>
+<h2 id="c02-2-raster-y-vector" id="2-raster-y-vector">2. Raster y vector</h2>
+<p>Hay dos formas de guardar información geográfica, y el proyecto usa las dos.</p>
+<p>Un <strong>raster</strong> es una grilla de píxeles, como una foto. Sirve para cosas que
+existen en todas partes y varían de forma continua: la altura del terreno, la
+temperatura, la cantidad de agua que pasa por cada punto. El formato que usa el
+proyecto es <strong>GeoTIFF</strong>, que es una imagen TIFF con la información de a qué
+coordenadas del planeta corresponde cada píxel.</p>
+<p>Un <strong>vector</strong> es un conjunto de formas geométricas con atributos: puntos, líneas
+y polígonos. Sirve para cosas que tienen bordes definidos: el contorno de una
+cuenca, el trazado de una ruta, la ubicación de una desembocadura. El formato que
+usa el proyecto es <strong>GeoPackage</strong> o <strong>GeoJSON</strong>.</p>
+<p>La división del trabajo en este proyecto es limpia. Los cálculos hidrológicos se
+hacen sobre rasters, porque el agua escurre píxel a píxel. Los resultados se
+guardan como vectores, porque una cuenca es un polígono y una quebrada es una
+línea. Las librerías reflejan esa división: <code>rasterio</code> para rasters, <code>geopandas</code>
+para vectores.</p>
+<h2 id="c02-3-sistema-de-coordenadas" id="3-sistema-de-coordenadas">3. Sistema de coordenadas</h2>
+<p>Un <strong>sistema de coordenadas de referencia</strong>, abreviado <strong>CRS</strong>, es la regla que
+dice cómo se traduce un punto del planeta a un par de números. Hay muchos, y elegir
+el correcto no es un detalle administrativo.</p>
+<p>El más conocido es <strong>EPSG:4326</strong>, o sea latitud y longitud en grados. Su problema
+para este proyecto es que un grado no mide lo mismo en todas partes: un grado de
+longitud son unos 111 kilómetros en el ecuador y menos de 100 en Coquimbo. Si
+calculas el área de una cuenca en grados, el número no significa nada.</p>
+<p>Por eso el proyecto convierte todo a <strong>EPSG:32719</strong>, que es UTM zona 19 Sur, el
+sistema métrico que corresponde a esta parte de Chile. La frase que usa el
+comentario del código lo resume mejor que cualquier definición: <em>"lo reproyecta a
+UTM 19S, que es donde un metro mide un metro"</em>.</p>
+<p><strong>Reproyectar</strong> es justamente eso: convertir una capa de un sistema a otro. Es lo
+último que hace el primer script, y es lo que permite que todos los cálculos
+posteriores hablen en metros y kilómetros cuadrados de verdad.</p>
+<h2 id="c02-4-cuenca-quebrada-desembocadura" id="4-cuenca-quebrada-desembocadura">4. Cuenca, quebrada, desembocadura</h2>
+<p>Una <strong>cuenca</strong> es todo el territorio cuya agua de lluvia termina saliendo por un
+mismo punto. Si dibujas la línea que separa dos cuencas —la divisoria de aguas—
+la gota que cae de un lado va a un río y la que cae del otro va a otro. La cuenca
+es la unidad natural del análisis, porque es la superficie que alimenta a una
+quebrada determinada.</p>
+<p>Una <strong>quebrada</strong> es un cauce, o sea el fondo del valle por donde el agua se
+concentra y escurre. En el norte de Chile la mayoría están secas casi todo el
+año, lo que las hace fáciles de subestimar.</p>
+<p>La <strong>desembocadura</strong>, que el código llama <em>salida</em>, es el punto por donde el agua
+abandona la cuenca. En este proyecto es el último píxel con terreno antes del mar
+o antes del borde del área analizada, y es un punto importante porque es por ahí
+por donde el material sale hacia rutas y poblados.</p>
+<p><strong>Delinear</strong> una cuenca significa determinar exactamente qué píxeles le
+pertenecen, o sea dibujar su contorno a partir de las alturas.</p>
+<h2 id="c02-5-aluvion-y-flujo-de-detritos" id="5-aluvion-y-flujo-de-detritos">5. Aluvión y flujo de detritos</h2>
+<p>Aquí hay una distinción técnica que el proyecto usa constantemente y que conviene
+tener precisa, porque los tres casos se ven parecidos desde lejos y tienen
+consecuencias muy distintas.</p>
+<p>Una <strong>inundación de agua</strong> es agua más o menos limpia desbordándose. Hace daño,
+pero es agua.</p>
+<p>Una <strong>crecida de detritos</strong> es agua con bastante material arrastrado. Intermedio.</p>
+<p>Un <strong>flujo de detritos</strong> es lo que en Chile se llama <strong>aluvión</strong>: barro, piedras y
+bloques moviéndose como una masa densa, más parecida a hormigón fluyendo que a
+agua. Es lo que destruye puentes y arrasa casas, y es lo que el proyecto quiere
+identificar.</p>
+<p>Lo que determina cuál de los tres ocurre es <strong>la energía de la cuenca</strong>. Una
+cuenca chica y muy empinada le da al agua suficiente energía para arrastrar
+material grueso; una cuenca grande y tendida no, por mucha agua que reciba. El
+capítulo 07 explica cómo se mide esa capacidad con un solo número.</p>
+<h2 id="c02-6-las-librerias" id="6-las-librerias">6. Las librerías</h2>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>Librería</th>
+<th>Para qué</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>rasterio</code></td>
+<td>Leer y escribir rasters georreferenciados</td>
+</tr>
+<tr>
+<td><code>geopandas</code></td>
+<td>Trabajar con capas vectoriales como si fueran tablas</td>
+</tr>
+<tr>
+<td><code>pysheds</code></td>
+<td>La hidrología: relleno, dirección de flujo, acumulación, cuencas</td>
+</tr>
+<tr>
+<td><code>numpy</code> / <code>scipy</code></td>
+<td>Cálculo numérico sobre las grillas</td>
+</tr>
+<tr>
+<td><code>osmnx</code></td>
+<td>Bajar rutas y zonas urbanas desde OpenStreetMap</td>
+</tr>
+<tr>
+<td><code>matplotlib</code></td>
+<td>Las figuras de control</td>
+</tr>
+</tbody>
+</table></div>
+<p>Vale la pena notar que <code>requirements.txt</code> no solo lista las librerías sino que
+explica un pin de versión:</p>
+<div class="hl"><pre><span></span><code># El pin &gt;=2.0 no es cosmetico: osmnx cambio la API entre 1.x y 2.x. En 2.x el
+# bounding box se pasa como bbox=(oeste, sur, este, norte) y las geometrias se
+# bajan con features_from_*; en 1.x era geometries_from_* y otro orden.
+osmnx&gt;=2.0
+</code></pre></div>
+
+<p>Un archivo de dependencias que explica <em>por qué</em> una versión es obligatoria le
+ahorra horas a quien intente correr el proyecto dentro de un año, incluida tú
+misma.</p>
+<hr />
+<h2 id="c02-como-se-lo-explicarias-a-alguien-en-60-segundos" id="como-se-lo-explicarias-a-alguien-en-60-segundos">Cómo se lo explicarías a alguien en 60 segundos</h2>
+<p>Un DEM es una grilla donde cada píxel guarda la altura del terreno, y de esa sola
+capa se puede deducir por dónde escurre el agua, porque el agua baja. Trabajo con
+dos tipos de dato: rasters, que son grillas y sirven para lo que existe en todas
+partes como la altura, y vectores, que son formas con atributos y sirven para lo
+que tiene bordes, como el contorno de una cuenca. Todo lo reproyecto a UTM 19
+Sur, que es el sistema métrico de esta parte de Chile, porque en latitud y
+longitud un grado no mide lo mismo en todas partes y las áreas saldrían mal. La
+unidad de análisis es la cuenca: todo el territorio cuya agua sale por un mismo
+punto. Y lo que busco no es cualquier crecida sino el flujo de detritos, que es
+barro y piedras moviéndose como una masa densa, y eso depende de que la cuenca
+sea chica y empinada.</p></section>
+<section class="chapter" id="cap-03"><div class="chapter-head"><span class="chapter-num">03</span><span class="chapter-kicker">Las carpetas y su regla</span></div><h1 id="03-estructura-del-repositorio">03 — Estructura del repositorio</h1>
+<blockquote>
+<p><strong>Qué vas a entender al terminar este capítulo</strong></p>
+<ul>
+<li>Qué hay en cada carpeta y por qué esa separación es una garantía.</li>
+<li>Por qué los scripts se llaman M1, M2 y M3.</li>
+<li>Qué hace el archivo de cuatro líneas sin el cual nada corre.</li>
+</ul>
+</blockquote>
+<h2 id="c03-el-arbol" id="el-arbol">El árbol</h2>
+<div class="hl"><pre><span></span><code>alerta-aluviones/
+├── README.md
+├── requirements.txt
+├── .gitignore
+├── data/
+│   ├── raw/          ← datos originales, NO se modifican ni se suben a git
+│   └── processed/    ← datos derivados, generados por el código
+├── docs/             ← documentación técnica
+├── notebooks/        ← exploración y pruebas
+├── outputs/          ← mapas y resultados finales
+└── src/
+    ├── compat_pysheds.py
+    ├── m1_preparar_dem.py
+    ├── m1_terreno.py
+    ├── m1_recortar_region.py
+    ├── m2_susceptibilidad.py
+    └── m3_exposicion.py
+</code></pre></div>
+
+<h2 id="c03-la-regla-que-gobierna-las-carpetas-de-datos" id="la-regla-que-gobierna-las-carpetas-de-datos">La regla que gobierna las carpetas de datos</h2>
+<p>El README la enuncia en una frase que vale la pena poder repetir textual:</p>
+<blockquote>
+<p><em>Si se borra todo <code>data/processed/</code> y <code>outputs/</code>, se debe poder reconstruirlo
+corriendo el código sobre <code>data/raw/</code>.</em></p>
+</blockquote>
+<p>Esa regla parece una convención de orden y es en realidad una garantía sobre el
+proyecto: significa que <strong>ningún resultado depende de un paso manual que nadie
+anotó</strong>. Si un resultado se pudiera reconstruir solo recordando que alguien abrió
+QGIS y movió algo a mano, el proyecto no sería reproducible y nadie podría
+verificarlo, empezando por ti misma dentro de seis meses.</p>
+<p>La separación entre <code>raw</code> y <code>processed</code> es la que hace cumplible esa regla.
+<code>raw</code> guarda los datos tal como los entrega la fuente, sin tocar: los tiles de
+Copernicus, el límite regional descargado. <code>processed</code> guarda todo lo que el
+código deriva. La carpeta <code>raw</code> es sagrada y la carpeta <code>processed</code> es
+desechable, y esa asimetría es lo que permite borrar y reconstruir con confianza.</p>
+<p>Los datos pesados no van a git, que es lo correcto porque un DEM regional son
+cientos de megabytes y el historial de Git guarda todas las versiones de todo lo
+que se le mete.</p>
+<h2 id="c03-por-que-m1-m2-m3" id="por-que-m1-m2-m3">Por qué M1, M2, M3</h2>
+<p>Los nombres de los scripts no son decorativos: <strong>cada uno corresponde a un hito
+del plan del proyecto y consume lo que produjo el anterior</strong>.</p>
+<div class="hl"><pre><span></span><code>m1_preparar_dem.py   →  DEM regional en UTM 19S
+        ↓
+m1_terreno.py        →  red de quebradas + cuencas + dirección y acumulación de flujo
+        ↓
+m1_recortar_region.py→  las mismas capas, filtradas a Coquimbo
+        ↓
+m2_susceptibilidad.py→  cada cuenca clasificada por su capacidad de generar aluviones
+        ↓
+m3_exposicion.py     →  trayectorias, cruces con rutas, puntos de corte priorizados
+</code></pre></div>
+
+<p>Como cada script escribe archivos en <code>data/processed/</code> y el siguiente los lee,
+la cadena se puede detener y retomar en cualquier punto. Si quieres cambiar la
+clasificación de M2 no tienes que volver a hacer la hidrología, que es la parte
+que tarda horas. Es lo que en procesamiento de datos se llama un <strong>pipeline por
+etapas con materialización intermedia</strong>, y aquí la ventaja no es teórica: la
+diferencia entre volver a correr M2 y volver a correr todo es de minutos contra
+una tarde.</p>
+<p>Que los tres primeros se llamen todos <code>m1_</code> refleja que el hito M1 resultó tener
+tres partes separables que se descubrieron sobre la marcha, y separarlas en
+archivos distintos en vez de dejar un solo script gigante fue la decisión
+correcta.</p>
+<h2 id="c03-el-parche-de-cuatro-lineas" id="el-parche-de-cuatro-lineas">El parche de cuatro líneas</h2>
+<p><code>src/compat_pysheds.py</code> es el archivo más corto del proyecto y merece un
+comentario porque explica una situación que se repite mucho en el mundo real:</p>
+<div class="hl"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+
+<span class="k">if</span> <span class="ow">not</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">np</span><span class="p">,</span> <span class="s2">&quot;in1d&quot;</span><span class="p">):</span>
+    <span class="n">np</span><span class="o">.</span><span class="n">in1d</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">isin</span>
+</code></pre></div>
+
+<p>El problema es este. La librería <code>pysheds</code>, que hace toda la hidrología, todavía
+llama a una función de numpy llamada <code>np.in1d</code>. Numpy eliminó ese nombre en su
+versión 2.0 y lo reemplazó por <code>np.isin</code>, que hace exactamente lo mismo. En
+consecuencia, con numpy moderno instalado, cualquier llamada a <code>accumulation()</code> o
+<code>catchment()</code> se detiene con un error.</p>
+<p>Las cuatro líneas revisan si el nombre viejo existe y, si no, lo crean apuntando
+al nuevo. A eso se le llama <strong>monkey patching</strong>: modificar una librería desde
+fuera, en tiempo de ejecución, sin tocar su código.</p>
+<p>Lo que hace este archivo defendible en vez de sospechoso es la documentación que
+lleva encima. Su docstring explica que la única diferencia histórica entre ambas
+funciones era la forma del resultado, que <strong>en las nueve llamadas de pysheds la
+entrada ya viene aplanada con <code>.ravel()</code></strong>, y que por lo tanto el comportamiento
+es idéntico. Y cierra diciendo cuándo se puede borrar: cuando pysheds publique
+una versión compatible con numpy 2.</p>
+<p>Ese es el estándar. Un parche de este tipo sin justificación es deuda técnica
+escondida; con la verificación de por qué es seguro y la condición de retiro, es
+una decisión de ingeniería. En una entrevista, poder contar que revisaste las
+nueve llamadas antes de parchear vale mucho más que el parche.</p>
+<hr />
+<h2 id="c03-como-se-lo-explicarias-a-alguien-en-60-segundos" id="como-se-lo-explicarias-a-alguien-en-60-segundos">Cómo se lo explicarías a alguien en 60 segundos</h2>
+<p>La regla del repositorio es que si borro todo lo derivado tengo que poder
+reconstruirlo corriendo el código sobre los datos originales, y eso garantiza que
+ningún resultado dependa de un paso manual que nadie anotó. Los scripts se llaman
+por hito y forman una cadena donde cada uno lee lo que dejó el anterior, así que
+puedo cambiar la clasificación sin repetir la hidrología, que tarda horas. Y hay
+un parche de cuatro líneas porque pysheds llama a una función que numpy eliminó
+en la versión 2; antes de escribirlo revisé las nueve llamadas para confirmar que
+el reemplazo es equivalente, y dejé anotado cuándo se puede borrar.</p></section>
+<section class="chapter" id="cap-04"><div class="chapter-head"><span class="chapter-num">04</span><span class="chapter-kicker">src/m1_preparar_dem.py</span></div><h1 id="04-conseguir-el-terreno">04 — Conseguir el terreno</h1>
+<blockquote>
+<p><strong>Qué vas a entender al terminar este capítulo</strong></p>
+<ul>
+<li>Por qué se descartó un modelo de elevación que parecía cuatro veces mejor.</li>
+<li>Cómo se descarga y se une un DEM regional.</li>
+<li>Por qué el script verifica la cobertura antes de dejar pasar el resultado.</li>
+</ul>
+</blockquote>
+<h2 id="c04-1-la-decision-del-dem" id="1-la-decision-del-dem">1. La decisión del DEM</h2>
+<p>Esta es la decisión mejor documentada del proyecto y la que más dice sobre
+criterio técnico. Está escrita en la cabecera del archivo:</p>
+<blockquote>
+<p><em>Los productos ALOS PALSAR RTC de alta resolución se generan a partir de NED13,
+que solo cubre Estados Unidos, o de SRTM 30 m. Para Chile aplica el segundo
+caso, y la documentación de ASF lo dice explícitamente: esos productos son "up
+sampled from the 30-m version to 12.5 m". O sea, los píxeles miden 12,5 m pero
+el detalle real sigue siendo de 30 m. Interpolar no agrega información: da
+archivos seis veces más pesados con la misma cantidad de terreno adentro.</em></p>
+</blockquote>
+<p>Vale la pena desarmar el razonamiento porque es más sutil de lo que parece.</p>
+<p>Existían dos candidatos. ALOS PALSAR anunciaba <strong>12,5 metros por píxel</strong> y
+Copernicus GLO-30 anuncia <strong>30 metros</strong>. La elección obvia, mirando solo esas dos
+cifras, es el primero: cuatro veces más resolución debería significar cuatro
+veces más detalle.</p>
+<p>La trampa está en la diferencia entre <strong>tamaño de píxel</strong> y <strong>resolución
+efectiva</strong>. El tamaño de píxel es cuánto terreno cubre cada celda. La resolución
+efectiva es cuánto detalle real hay adentro. Y se pueden separar: si tomas una
+imagen de 30 metros y la <strong>remuestreas</strong> —o sea, la agrandas inventando píxeles
+intermedios por interpolación— obtienes píxeles de 12,5 metros que no contienen
+ninguna información que no estuviera antes. El archivo pesa seis veces más y
+muestra lo mismo, un poco más suave.</p>
+<p>Eso es exactamente lo que hacen los productos ALOS PALSAR sobre Chile, y la
+documentación de la agencia que los distribuye lo dice con esas palabras. La
+frase <em>"interpolar no agrega información"</em> es el núcleo del argumento.</p>
+<p>Copernicus GLO-30, en cambio, entrega 30 metros medidos de verdad, derivados de
+TanDEM-X, que es una misión de dos satélites de radar. A igual resolución
+efectiva, es mejor dato y pesa seis veces menos.</p>
+<p>En una entrevista esto funciona muy bien porque tiene la forma de un criterio:
+<strong>rechacé el dato que anunciaba mejor número porque el número anunciado no era el
+número real, y lo verifiqué en la documentación de la fuente.</strong> Casi nadie
+verifica eso.</p>
+<h2 id="c04-2-los-tres-pasos-del-script" id="2-los-tres-pasos-del-script">2. Los tres pasos del script</h2>
+<p>El módulo hace tres cosas, y cada una tiene su función:</p>
+<div class="hl"><pre><span></span><code>1. Descarga los tiles de 1x1 grado que cubren la zona pedida.
+2. Los une en un solo raster continuo.
+3. Lo reproyecta a UTM 19S, que es donde un metro mide un metro.
+</code></pre></div>
+
+<p>Un <strong>tile</strong> es un pedazo rectangular en que se reparte un dato global. Copernicus
+publica el DEM del mundo en cuadros de un grado de lado, así que cubrir Coquimbo
+requiere varios y hay que juntarlos. Al resultado de juntarlos se le llama
+<strong>mosaico</strong>.</p>
+<p>El área que se pide está en una constante:</p>
+<div class="hl"><pre><span></span><code><span class="n">BBOX_COQUIMBO</span> <span class="o">=</span> <span class="p">(</span><span class="o">-</span><span class="mf">72.0</span><span class="p">,</span> <span class="o">-</span><span class="mf">32.5</span><span class="p">,</span> <span class="o">-</span><span class="mf">69.7</span><span class="p">,</span> <span class="o">-</span><span class="mf">29.0</span><span class="p">)</span>
+</code></pre></div>
+
+<p>Un <strong>bounding box</strong> es un rectángulo definido por sus bordes: oeste, sur, este y
+norte. Este es deliberadamente más grande que la región, y el capítulo 06 explica
+por qué.</p>
+<h2 id="c04-3-verificar-antes-de-continuar" id="3-verificar-antes-de-continuar">3. Verificar antes de continuar</h2>
+<p>Hay una función que no calcula nada y que sin embargo es de las más importantes:</p>
+<div class="hl"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">verificar_cobertura</span><span class="p">(</span><span class="n">mosaico</span><span class="p">,</span> <span class="n">limite</span><span class="p">,</span> <span class="n">minimo</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Comprueba que el mosaico cubra la region antes de dejarlo pasar.&quot;&quot;&quot;</span>
+</code></pre></div>
+
+<p>Con <code>COBERTURA_MINIMA = 0.99</code>, el script exige que el mosaico cubra al menos el
+99% de la región antes de seguir.</p>
+<p>El problema que previene es de los peores que hay, porque <strong>no se manifiesta como
+un error</strong>. Si una descarga falla o si un tile no existe, el mosaico queda con un
+hueco. El script siguiente calcularía la hidrología igual, sin quejarse, y
+produciría cuencas cortadas en el borde del hueco. Ese error se propagaría por
+todo el pipeline y aparecería recién al mirar el mapa final, cuando ya es difícil
+saber de dónde vino.</p>
+<p>A este tipo de comprobación se le llama <strong>verificación de precondiciones</strong>:
+comprobar que las suposiciones de un cálculo se cumplen, antes de calcular. Es
+una práctica de ingeniería de datos que rara vez aparece en proyectos de
+portafolio, y es especialmente relevante en este proyecto, porque el capítulo 12
+cuenta que hoy el DEM local <strong>no</strong> cubre toda la región y esa es exactamente la
+condición que esta función existe para detectar.</p>
+<h2 id="c04-4-la-descarga-en-paralelo" id="4-la-descarga-en-paralelo">4. La descarga en paralelo</h2>
+<div class="hl"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">descargar</span><span class="p">(</span><span class="n">bbox</span><span class="p">,</span> <span class="n">carpeta</span><span class="p">,</span> <span class="n">hilos</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Descarga en paralelo todos los tiles del bbox.&quot;&quot;&quot;</span>
+</code></pre></div>
+
+<p>Descargar varios tiles a la vez en lugar de uno tras otro tiene una razón simple:
+bajar un archivo por internet consiste sobre todo en esperar. Mientras el
+programa espera un tile no está usando el procesador para nada, así que puede
+estar esperando varios simultáneamente. A esa forma de paralelismo se le llama
+<strong>concurrencia por entrada y salida</strong>, y es donde los hilos rinden de verdad.</p>
+<p>La función <code>descargar_tile</code> devuelve <code>(nombre, estado)</code> en vez de solo el
+resultado, y ese detalle permite que al final el script informe cuáles se bajaron,
+cuáles ya estaban y cuáles fallaron, en vez de detenerse en el primer problema.</p>
+<hr />
+<h2 id="c04-como-se-lo-explicarias-a-alguien-en-60-segundos" id="como-se-lo-explicarias-a-alguien-en-60-segundos">Cómo se lo explicarías a alguien en 60 segundos</h2>
+<p>El primer script consigue el modelo de elevación. La decisión que hay que
+explicar es por qué descarté ALOS PALSAR, que anunciaba 12,5 metros por píxel,
+frente a Copernicus de 30: los productos de alta resolución de ALOS sobre Chile
+están remuestreados hacia arriba desde una versión de 30 metros, y la
+documentación de la agencia lo dice explícitamente. Los píxeles miden 12,5 pero
+el detalle real sigue siendo de 30, así que el archivo pesa seis veces más sin
+contener nada nuevo. Interpolar no agrega información. El script baja los tiles
+en paralelo, los une en un mosaico, verifica que cubra al menos el 99% de la
+región antes de dejarlo pasar —porque un hueco no da error, da cuencas cortadas
+que solo se notan al final— y lo reproyecta a UTM 19 Sur para que los cálculos
+salgan en metros de verdad.</p></section>
+<section class="chapter" id="cap-05"><div class="chapter-head"><span class="chapter-num">05</span><span class="chapter-kicker">src/m1_terreno.py</span></div><h1 id="05-de-alturas-a-quebradas">05 — De alturas a quebradas</h1>
+<blockquote>
+<p><strong>Qué vas a entender al terminar este capítulo</strong></p>
+<ul>
+<li>Cómo se deduce por dónde escurre el agua a partir de puras alturas.</li>
+<li>Por qué hay que estropear el DEM a propósito antes de usarlo.</li>
+<li>Qué es D8 y qué es la acumulación de flujo.</li>
+<li>Cómo un umbral convierte una grilla de números en una red de quebradas.</li>
+</ul>
+</blockquote>
+<p>Este es el corazón técnico del proyecto: 651 líneas que convierten una grilla de
+alturas en un inventario de quebradas y cuencas. El módulo lo resume en cinco
+pasos, y este capítulo los sigue en orden.</p>
+<h2 id="c05-1-acondicionar-estropear-el-dem-a-proposito" id="1-acondicionar-estropear-el-dem-a-proposito">1. Acondicionar: estropear el DEM a propósito</h2>
+<p>Antes de calcular nada, el DEM hay que arreglarlo, y el docstring de la función
+explica exactamente qué se arregla:</p>
+<div class="hl"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">acondicionar</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span> <span class="n">dem</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Deja el DEM hidrologicamente coherente: que el agua siempre pueda salir.</span>
+
+<span class="sd">    Un DEM crudo tiene defectos que rompen el escurrimiento:</span>
+
+<span class="sd">      - Pozos (pits): un pixel mas bajo que sus 8 vecinos. Casi siempre es ruido</span>
+<span class="sd">        del sensor, no un hoyo real.</span>
+<span class="sd">      - Depresiones: hondonadas de varios pixeles sin salida, donde el agua</span>
+<span class="sd">        quedaria estancada y la red de drenaje se cortaria.</span>
+<span class="sd">      - Planicies (flats): zonas perfectamente horizontales donde no hay un</span>
+<span class="sd">        &quot;abajo&quot; definido y el algoritmo no sabe hacia donde mandar el agua.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">sin_pozos</span> <span class="o">=</span> <span class="n">grid</span><span class="o">.</span><span class="n">fill_pits</span><span class="p">(</span><span class="n">dem</span><span class="p">)</span>
+    <span class="n">sin_depresiones</span> <span class="o">=</span> <span class="n">grid</span><span class="o">.</span><span class="n">fill_depressions</span><span class="p">(</span><span class="n">sin_pozos</span><span class="p">)</span>
+    <span class="n">acondicionado</span> <span class="o">=</span> <span class="n">grid</span><span class="o">.</span><span class="n">resolve_flats</span><span class="p">(</span><span class="n">sin_depresiones</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">acondicionado</span>
+</code></pre></div>
+
+<p>Los tres problemas comparten una consecuencia: <strong>el agua se queda atrapada</strong>. Un
+píxel más bajo que sus ocho vecinos es un sumidero del que el agua no puede
+salir, así que todo el escurrimiento aguas abajo se corta ahí. Una planicie
+perfectamente horizontal no tiene dirección de bajada, así que el algoritmo no
+sabe hacia dónde mandar el agua.</p>
+<p>La respuesta es rellenar los hoyos y darles una inclinación mínima a las
+planicies. Y aquí está la frase que hay que poder decir en una entrevista, porque
+es la que demuestra que entiendes lo que estás haciendo:</p>
+<blockquote>
+<p><em>Es una modificación deliberada del DEM: el objetivo no es que sea más fiel a la
+realidad, sino que el agua escurra de principio a fin sin quedarse pegada.</em></p>
+</blockquote>
+<p>O sea, el DEM acondicionado es <strong>menos fiel al terreno real</strong> que el original. Se
+inventaron alturas que no existen. Y está bien, porque el objetivo del paso no es
+representar el terreno sino permitir que un algoritmo de escurrimiento funcione.</p>
+<p>Confundir esas dos cosas es el error clásico de quien usa una herramienta sin
+entenderla. Distinguirlas explícitamente, y decir que el DEM acondicionado sirve
+para calcular flujo y no para medir alturas, es lo que separa el uso de la
+herramienta de la comprensión del método.</p>
+<h2 id="c05-2-direccion-de-flujo-la-regla-d8" id="2-direccion-de-flujo-la-regla-d8">2. Dirección de flujo: la regla D8</h2>
+<div class="hl"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">direccion_y_acumulacion</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span> <span class="n">dem_acondicionado</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Calcula hacia donde va el agua (D8) y cuanta llega a cada pixel.</span>
+
+<span class="sd">    D8 es la regla mas simple y la mas usada: cada pixel manda toda su agua al</span>
+<span class="sd">    vecino con la mayor pendiente descendente, sin repartir.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">fdir</span> <span class="o">=</span> <span class="n">grid</span><span class="o">.</span><span class="n">flowdir</span><span class="p">(</span><span class="n">dem_acondicionado</span><span class="p">,</span> <span class="n">dirmap</span><span class="o">=</span><span class="n">DIRMAP</span><span class="p">)</span>
+    <span class="n">acc</span> <span class="o">=</span> <span class="n">grid</span><span class="o">.</span><span class="n">accumulation</span><span class="p">(</span><span class="n">fdir</span><span class="p">,</span> <span class="n">dirmap</span><span class="o">=</span><span class="n">DIRMAP</span><span class="p">)</span>
+</code></pre></div>
+
+<p><strong>D8</strong> se llama así por <em>deterministic eight</em>: cada píxel tiene ocho vecinos —los
+cuatro de los lados y los cuatro de las esquinas— y manda <strong>toda</strong> su agua al que
+esté más abajo en relación a la distancia. Sin repartir.</p>
+<p>El resultado es un raster donde cada celda ya no guarda una altura sino un
+<strong>código de dirección</strong>, uno de ocho valores que indica hacia qué vecino drena.
+Los códigos están en una constante:</p>
+<div class="hl"><pre><span></span><code><span class="n">DIRMAP</span> <span class="o">=</span> <span class="p">(</span><span class="mi">64</span><span class="p">,</span> <span class="mi">128</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">8</span><span class="p">,</span> <span class="mi">16</span><span class="p">,</span> <span class="mi">32</span><span class="p">)</span>
+</code></pre></div>
+
+<p>Son potencias de dos, que es la convención estándar en hidrología digital. Se
+eligieron así porque permiten combinar direcciones con operaciones de bits, y
+porque es lo que esperan las demás herramientas del área.</p>
+<p>Vale la pena tener la limitación identificada. D8 es la regla más simple y por eso
+la más usada, pero manda toda el agua a un solo vecino, y en laderas anchas el
+agua real se reparte en abanico. Existen algoritmos que reparten
+proporcionalmente entre varios vecinos y son más realistas en esas zonas. Para
+identificar el fondo de las quebradas, que es lo que este proyecto necesita, D8
+funciona bien, porque justamente en un cauce el agua sí se concentra en una sola
+dirección.</p>
+<h2 id="c05-3-acumulacion-el-numero-que-dibuja-las-quebradas" id="3-acumulacion-el-numero-que-dibuja-las-quebradas">3. Acumulación: el número que dibuja las quebradas</h2>
+<p>Este es el concepto central del capítulo, y el docstring lo dice mejor que
+cualquier paráfrasis:</p>
+<blockquote>
+<p><em>La acumulación cuenta, para cada píxel, cuántos píxeles de más arriba terminan
+drenando por ahí. Es el número clave del script: los valores altos dibujan
+exactamente el fondo de las quebradas, porque el agua se concentra en los
+cauces.</em></p>
+</blockquote>
+<p>Un píxel en la cima de un cerro tiene acumulación cero o casi: nadie drena hacia
+él. Un píxel en el fondo de un valle tiene acumulación enorme, porque recibe el
+agua de toda la ladera. Si pintas el raster de acumulación con los valores altos
+en oscuro, <strong>aparece dibujado el mapa de la red de drenaje</strong>, sin haberle dado al
+programa ningún dato de ríos.</p>
+<p>Es probablemente lo más elegante del proyecto: la red hidrográfica emerge de la
+sola geometría del terreno.</p>
+<h2 id="c05-4-el-umbral-que-decide-que-es-una-quebrada" id="4-el-umbral-que-decide-que-es-una-quebrada">4. El umbral que decide qué es una quebrada</h2>
+<p>La acumulación es un número continuo, y en algún punto hay que decidir a partir
+de qué valor un píxel cuenta como cauce. Esa decisión es el parámetro
+<code>--umbral-km2</code>, que por defecto vale 0,15.</p>
+<p>Significa: un píxel es parte de una quebrada si al menos 0,15 kilómetros
+cuadrados de terreno drenan por él. Un valor más bajo densifica la red hacia las
+quebradas chicas; uno más alto deja solo los cauces principales.</p>
+<p>Que sea un argumento de línea de comandos y no un número escondido en el código
+importa, porque es un parámetro con el que hay que experimentar y su valor
+correcto depende de la región. El capítulo 08 cuenta lo que pasó cuando el otro
+parámetro del script estaba mal elegido.</p>
+<h2 id="c05-5-delinear-las-cuencas" id="5-delinear-las-cuencas">5. Delinear las cuencas</h2>
+<p>Con la dirección de flujo, delinear una cuenca es conceptualmente simple: eliges
+un punto y preguntas qué píxeles terminan drenando hacia él, siguiendo las
+flechas hacia atrás. Eso hace <code>mascara_cuenca</code>.</p>
+<p>Los puntos de partida son las <strong>desembocaduras</strong>, que <code>puntos_de_salida</code> encuentra
+como los píxeles de alta acumulación por donde el agua abandona el terreno. El
+argumento <code>separacion_px</code> evita que dos desembocaduras casi pegadas produzcan dos
+cuencas casi idénticas.</p>
+<p>Hay además una función que revela que esto se enfrentó a datos reales:</p>
+<div class="hl"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">vecinos_aguas_arriba</span><span class="p">(</span><span class="n">fdir_arr</span><span class="p">,</span> <span class="n">acc_arr</span><span class="p">,</span> <span class="n">fila</span><span class="p">,</span> <span class="n">col</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Devuelve los vecinos que drenan hacia (fila, col), el mas caudaloso primero.</span>
+
+<span class="sd">    Se usa como plan B cuando la delineacion falla justo en la boca de la quebrada.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+</code></pre></div>
+
+<p>Ese <em>plan B</em> es un detalle honesto: a veces la delineación falla exactamente en el
+píxel de la desembocadura, por efectos de borde, y entonces se retrocede un paso
+hacia el vecino que trae más agua y se intenta desde ahí. Nadie escribe una
+función así diseñando; se escribe cuando el mapa sale con huecos y hay que
+averiguar por qué.</p>
+<h2 id="c05-6-la-figura-de-control" id="6-la-figura-de-control">6. La figura de control</h2>
+<p>El script termina generando un mapa:</p>
+<div class="hl"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">figura_control</span><span class="p">(</span><span class="n">dem</span><span class="p">,</span> <span class="n">acc</span><span class="p">,</span> <span class="n">red</span><span class="p">,</span> <span class="n">cuencas</span><span class="p">,</span> <span class="n">grid</span><span class="p">,</span> <span class="n">ruta_png</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Mapa rapido para revisar a ojo que el resultado tenga sentido.&quot;&quot;&quot;</span>
+</code></pre></div>
+
+<p>En análisis geoespacial esto no es un adorno. Un error de coordenadas o una
+delineación mal hecha producen números perfectamente plausibles en una tabla y un
+mapa evidentemente absurdo: cuencas en el mar, la red de drenaje corriendo cerro
+arriba, la región desplazada cien kilómetros. <strong>El ojo detecta en un segundo
+errores que ninguna verificación numérica atraparía.</strong></p>
+<p>Que exista una figura de control en cada uno de los cuatro scripts es una
+práctica de trabajo, y en una entrevista se puede nombrar como tal: el pipeline
+produce una imagen revisable en cada etapa, no solo al final.</p>
+<hr />
+<h2 id="c05-como-se-lo-explicarias-a-alguien-en-60-segundos" id="como-se-lo-explicarias-a-alguien-en-60-segundos">Cómo se lo explicarías a alguien en 60 segundos</h2>
+<p>Este script deduce por dónde escurre el agua a partir de puras alturas. Primero
+acondiciona el DEM rellenando pozos y depresiones e inclinando las planicies, y
+eso lo vuelve deliberadamente menos fiel al terreno real: el objetivo no es
+representar bien el paisaje sino que el agua pueda escurrir de principio a fin
+sin quedar atrapada. Después aplica D8, que hace que cada píxel mande toda su
+agua al vecino más bajo, y con eso calcula la acumulación: cuántos píxeles de más
+arriba drenan por cada punto. Ese número es el que dibuja las quebradas, porque el
+agua se concentra en los cauces; la red hidrográfica emerge de la pura geometría,
+sin darle ningún dato de ríos. Un umbral de área drenada decide qué cuenta como
+cauce, y desde cada desembocadura se sigue el flujo hacia atrás para delinear la
+cuenca completa.</p></section>
+<section class="chapter" id="cap-06"><div class="chapter-head"><span class="chapter-num">06</span><span class="chapter-kicker">src/m1_recortar_region.py</span></div><h1 id="06-quedarse-con-coquimbo">06 — Quedarse con Coquimbo</h1>
+<blockquote>
+<p><strong>Qué vas a entender al terminar este capítulo</strong></p>
+<ul>
+<li>Por qué se procesa más territorio del necesario y se filtra al final.</li>
+<li>Cuál es el criterio para decir que una cuenca es de Coquimbo.</li>
+</ul>
+</blockquote>
+<p>Este script es el más corto de los cuatro y contiene una de las decisiones más
+fáciles de defender del proyecto.</p>
+<h2 id="c06-1-el-agua-no-respeta-los-limites-politicos" id="1-el-agua-no-respeta-los-limites-politicos">1. El agua no respeta los límites políticos</h2>
+<p>El docstring lo dice directo:</p>
+<blockquote>
+<p><em>La hidrología se corre sobre un área más grande que la región, con medio grado
+de margen por lado. No es desprolijidad: hay quebradas cuyas cabeceras nacen
+fuera del límite administrativo, y si cortáramos el DEM justo en la frontera
+esas cuencas quedarían mochas y sus áreas saldrían mal. El agua no respeta los
+límites políticos.</em></p>
+</blockquote>
+<p>El razonamiento es este. Una cuenca es una unidad natural definida por el
+terreno, y la frontera de una región es una línea administrativa dibujada por
+personas. Las dos no coinciden. Hay quebradas que descargan en Coquimbo pero
+cuyas cabeceras están en Atacama o en Argentina.</p>
+<p>Si el DEM se cortara justo en el límite regional, esas cuencas aparecerían
+truncadas: el algoritmo delinearía solo la parte que quedó dentro y calcularía un
+área menor que la real. Y como el área entra directamente en el índice del
+capítulo 07 —dividida bajo una raíz cuadrada—, un área subestimada produce un
+índice sobreestimado, o sea que esas cuencas se clasificarían como más peligrosas
+de lo que son.</p>
+<p>O sea que un recorte hecho en el momento equivocado <strong>no produce un dato faltante
+sino un dato incorrecto</strong>, que es bastante peor, porque un dato faltante se nota y
+un dato incorrecto se usa.</p>
+<p>Por eso el <code>BBOX_COQUIMBO</code> del capítulo 04 es medio grado más grande que la
+región por cada lado, se calcula la hidrología completa sobre esa área con
+margen, y recién al final se filtra.</p>
+<h2 id="c06-2-el-criterio-de-pertenencia" id="2-el-criterio-de-pertenencia">2. El criterio de pertenencia</h2>
+<div class="hl"><pre><span></span><code>Una cuenca es de Coquimbo si su desembocadura cae dentro de la región.
+</code></pre></div>
+
+<p>O sea, si el agua descarga acá. La cuenca conserva su geometría completa aunque
+sus cabeceras estén en otra región, porque hidrológicamente esa quebrada es una
+sola y su área drenada es la que es.</p>
+<p>Es un criterio nítido y binario, y esa nitidez es su virtud. Las alternativas son
+peores: quedarse con las cuencas totalmente contenidas en la región descartaría
+justo las transfronterizas, y quedarse con las que intersectan produciría cuencas
+que le pertenecen a Atacama.</p>
+<p>El criterio elegido, además, corresponde a la pregunta del proyecto. Lo que
+importa es dónde sale el material, porque ahí es donde están las rutas que se
+cortan.</p>
+<p>Del filtro salen dos números que conviene tener juntos: de las 1.147 cuencas
+delineadas sobre el área con margen, 434 descargan dentro de la región. El 4% de
+la superficie regional que queda fuera drena hacia Atacama, Valparaíso o
+Argentina, así que esas cuencas le pertenecen a la región vecina.</p>
+<blockquote>
+<p>Estas cifras vienen del README y de una corrida en servidor remoto. Ver el
+capítulo 12 antes de citarlas.</p>
+</blockquote>
+<h2 id="c06-3-el-limite-regional-se-descarga" id="3-el-limite-regional-se-descarga">3. El límite regional se descarga</h2>
+<div class="hl"><pre><span></span><code><span class="n">URL_REGIONES</span> <span class="o">=</span> <span class="s2">&quot;https://github.com/wmgeolab/geoBoundaries/raw/9469f09/releaseData/CHL/ADM1/...&quot;</span>
+</code></pre></div>
+
+<p>El límite no está guardado como un archivo dentro del repositorio: se descarga de
+geoBoundaries, un proyecto que publica límites administrativos de todos los
+países. Y el detalle que importa es que <strong>la URL incluye un identificador de
+commit fijo</strong>, ese <code>9469f09</code>.</p>
+<p>Si apuntara a la rama principal, el archivo podría cambiar en cualquier momento y
+la misma corrida daría resultados distintos en fechas distintas, sin que nadie se
+enterara. Fijar la versión hace que el dato sea siempre el mismo. A eso se le
+llama <strong>anclar una dependencia de datos</strong>, y es la misma idea que fijar la versión
+de una librería, aplicada a los datos en vez del código.</p>
+<p>Es un detalle chico y es exactamente el tipo de cosa que un revisor con
+experiencia nota, porque revela que entiendes que los datos externos también son
+dependencias.</p>
+<hr />
+<h2 id="c06-como-se-lo-explicarias-a-alguien-en-60-segundos" id="como-se-lo-explicarias-a-alguien-en-60-segundos">Cómo se lo explicarías a alguien en 60 segundos</h2>
+<p>Corro la hidrología sobre un área medio grado más grande que la región y filtro
+al final, porque hay quebradas que descargan en Coquimbo pero nacen en Atacama o
+en Argentina, y cortar el DEM en la frontera las dejaría truncadas con un área
+menor que la real. Eso no daría un dato faltante sino un dato incorrecto: el área
+entra bajo una raíz cuadrada en el índice de peligro, así que subestimarla haría
+que esas cuencas parecieran más peligrosas de lo que son. El criterio de
+pertenencia es que la desembocadura caiga dentro de la región, o sea que el agua
+descargue acá, y la cuenca conserva su geometría completa. El límite lo bajo de
+geoBoundaries con la URL anclada a un commit fijo, para que el dato no cambie
+bajo mis pies entre dos corridas.</p></section>
+<section class="chapter" id="cap-07"><div class="chapter-head"><span class="chapter-num">07</span><span class="chapter-kicker">src/m2_susceptibilidad.py</span></div><h1 id="07-que-cuencas-pueden-generar-un-aluvion">07 — Qué cuencas pueden generar un aluvión</h1>
+<blockquote>
+<p><strong>Qué vas a entender al terminar este capítulo</strong></p>
+<ul>
+<li>Por qué el proyecto no inventó una fórmula con pesos.</li>
+<li>Qué es la razón de Melton y qué mide exactamente.</li>
+<li>Por qué se guardan dos clasificaciones en vez de elegir una.</li>
+<li>Qué límite tiene el índice y cómo el código lo marca.</li>
+</ul>
+</blockquote>
+<p>Este es el capítulo con el razonamiento más fuerte del proyecto, y el que más
+conviene tener preparado para una entrevista.</p>
+<h2 id="c07-1-por-que-no-inventar-pesos" id="1-por-que-no-inventar-pesos">1. Por qué no inventar pesos</h2>
+<p>El docstring del módulo empieza con una tentación y su rechazo:</p>
+<blockquote>
+<p><em>Lo fácil sería armar una fórmula tipo "pendiente × 0,4 + desnivel × 0,3 + ..."
+y elegir los números a ojo. El problema es que nadie puede decir si esos pesos
+son correctos, ni siquiera una misma.</em></p>
+</blockquote>
+<p>Ese párrafo es la mejor frase del repositorio. Describe con precisión el error más
+común en proyectos de modelamiento de riesgo: construir un índice ponderado con
+coeficientes elegidos por intuición, presentarlo con decimales y mapas de colores,
+y que el resultado se vea científico sin serlo.</p>
+<p>El problema de fondo es que <strong>una fórmula con pesos inventados no se puede
+falsear</strong>. Si alguien pregunta por qué la pendiente pesa 0,4 y no 0,35, no hay
+respuesta posible, y por lo tanto tampoco hay forma de que el modelo esté
+equivocado, lo cual suena bien y es exactamente lo contrario de lo que uno quiere.</p>
+<p>La alternativa que elige el proyecto es usar un índice publicado, con umbrales
+calibrados contra eventos reales y sin parámetros libres.</p>
+<h2 id="c07-2-la-razon-de-melton" id="2-la-razon-de-melton">2. La razón de Melton</h2>
+<div class="hl"><pre><span></span><code>R = desnivel (km) / √área (km²)
+</code></pre></div>
+
+<p>El desnivel es la diferencia entre el punto más alto y la salida de la cuenca. El
+área es la superficie de la cuenca. Como el desnivel va en kilómetros y el área en
+kilómetros cuadrados, la raíz deja las unidades canceladas y el resultado es un
+número puro, sin unidad.</p>
+<p>Lo que mide, según el docstring, es <strong>cuánta energía potencial tiene la cuenca por
+unidad de tamaño</strong>. La intuición física es directa: una cuenca chica con mucho
+desnivel concentra la caída del agua en poco espacio, así que el agua llega abajo
+con mucha energía y arrastra piedras. Una cuenca grande con el mismo desnivel
+reparte esa caída en mucha superficie, el agua llega más tranquila y solo produce
+inundación.</p>
+<p>Que la fórmula sea <strong>una sola cuenta, sin parámetros libres</strong>, es su virtud
+principal. No hay nada que ajustar, así que no hay nada que sesgar.</p>
+<h2 id="c07-3-los-umbrales-de-wilford" id="3-los-umbrales-de-wilford">3. Los umbrales de Wilford</h2>
+<p>Los tres cortes no los eligió el proyecto: vienen de Wilford et al. (2004),
+publicado en la revista <em>Landslides</em>, calibrados contra eventos reales.</p>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>Razón de Melton</th>
+<th>Tipo de evento</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>&lt; 0,30</td>
+<td>Inundación de agua</td>
+</tr>
+<tr>
+<td>0,30 a 0,60</td>
+<td>Crecida de detritos</td>
+</tr>
+<tr>
+<td>≥ 0,60 y cuenca ≤ 2,7 km de largo</td>
+<td><strong>Flujo de detritos</strong> (aluvión)</td>
+</tr>
+<tr>
+<td>≥ 0,60 y cuenca más larga</td>
+<td>Crecida de detritos</td>
+</tr>
+</tbody>
+</table></div>
+<p>El largo entra en la clasificación por una razón física que el código explica:
+<em>"una cuenca empinada pero alargada disipa energía en el trayecto: el material se
+va depositando antes de llegar a la salida"</em>. O sea que no basta con tener energía;
+hay que tenerla cerca de la salida.</p>
+<p>El largo se mide de una forma concreta:</p>
+<div class="hl"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">largo_cuenca_km</span><span class="p">(</span><span class="n">cuencas</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Largo de la cuenca: distancia en linea recta de la salida al punto mas lejano.</span>
+
+<span class="sd">    Es la definicion que usa Wilford para su clasificacion. Se mide contra el</span>
+<span class="sd">    borde de la cuenca, que es donde estan las cabeceras.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+</code></pre></div>
+
+<p>Ese comentario —<em>"es la definición que usa Wilford"</em>— es importante. Hay varias
+formas razonables de medir el largo de una cuenca, y elegir una distinta de la
+del estudio original invalidaría los umbrales, porque estarían calibrados sobre
+otra magnitud. Usar la misma definición es lo que hace que los números publicados
+sigan aplicando.</p>
+<h2 id="c07-4-las-dos-clasificaciones" id="4-las-dos-clasificaciones">4. Las dos clasificaciones</h2>
+<p>Aquí está la decisión más madura del proyecto:</p>
+<div class="hl"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">clasificar</span><span class="p">(</span><span class="n">melton</span><span class="p">,</span> <span class="n">largo_km</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Aplica dos clasificaciones, y devuelve ambas.</span>
+
+<span class="sd">    La razon de Melton es robusta y se usa igual en todo el mundo. El criterio de</span>
+<span class="sd">    largo maximo, en cambio, sale del estudio original de Wilford en la Columbia</span>
+<span class="sd">    Britanica costera -bosque templado lluvioso- y no hay evidencia de que el</span>
+<span class="sd">    mismo valor sirva en el norte semiarido de Chile.</span>
+
+<span class="sd">    Sobre los datos de Coquimbo ese umbral resulta decisivo: varias de las cuencas</span>
+<span class="sd">    mas energeticas de la region quedan descartadas por diferencias de decenas de</span>
+<span class="sd">    metros. Elegir un criterio a ciegas seria esconder esa sensibilidad.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">wilford</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">full</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">melton</span><span class="p">),</span> <span class="s2">&quot;inundacion&quot;</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">object</span><span class="p">)</span>
+    <span class="n">wilford</span><span class="p">[</span><span class="n">melton</span> <span class="o">&gt;=</span> <span class="n">MELTON_CRECIDA</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;crecida_detritos&quot;</span>
+    <span class="n">wilford</span><span class="p">[(</span><span class="n">melton</span> <span class="o">&gt;=</span> <span class="n">MELTON_FLUJO</span><span class="p">)</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">largo_km</span> <span class="o">&lt;=</span> <span class="n">LARGO_MAX_FLUJO_KM</span><span class="p">)]</span> <span class="o">=</span> <span class="s2">&quot;flujo_detritos&quot;</span>
+
+    <span class="n">solo_melton</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">full</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">melton</span><span class="p">),</span> <span class="s2">&quot;inundacion&quot;</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">object</span><span class="p">)</span>
+    <span class="n">solo_melton</span><span class="p">[</span><span class="n">melton</span> <span class="o">&gt;=</span> <span class="n">MELTON_CRECIDA</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;crecida_detritos&quot;</span>
+    <span class="n">solo_melton</span><span class="p">[</span><span class="n">melton</span> <span class="o">&gt;=</span> <span class="n">MELTON_FLUJO</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;flujo_detritos&quot;</span>
+
+    <span class="k">return</span> <span class="n">wilford</span><span class="p">,</span> <span class="n">solo_melton</span>
+</code></pre></div>
+
+<p>El problema es concreto. La razón de Melton es geometría pura y no depende del
+clima ni de la vegetación, así que se puede trasladar entre regiones con
+confianza. El umbral de 2,7 kilómetros de largo, en cambio, sale de un estudio
+hecho en la Columbia Británica costera, que es bosque templado lluvioso, y
+Coquimbo es semiárido. La forma en que la vegetación y la humedad afectan al
+transporte de material es completamente distinta, así que no hay razón para
+suponer que el mismo número aplique.</p>
+<p>Y sobre estos datos el umbral <strong>es decisivo</strong>: varias de las cuencas más
+energéticas de la región quedan a un lado o al otro por diferencias de decenas de
+metros. O sea que la elección de ese parámetro heredado cambia sustancialmente la
+respuesta.</p>
+<p>Frente a eso hay tres caminos. Aplicar Wilford completo y no mencionarlo esconde
+la sensibilidad. Aplicar solo Melton y no mencionarlo la esconde igual, en la
+otra dirección. <strong>Calcular ambas, guardar ambas y dejar que la validación decida</strong>
+es el camino que elige el proyecto, y es el correcto.</p>
+<p>La frase del docstring —<em>"elegir un criterio a ciegas sería esconder esa
+sensibilidad"</em>— es material de entrevista directo, porque muestra que identificaste
+un parámetro heredado de otro contexto, mediste cuánto importa, y decidiste no
+resolverlo por decreto sino diferirlo hasta tener con qué compararlo. Eso es
+exactamente lo que hace alguien que ha trabajado con modelos.</p>
+<h2 id="c07-5-el-limite-del-indice-marcado-en-el-dato" id="5-el-limite-del-indice-marcado-en-el-dato">5. El límite del índice, marcado en el dato</h2>
+<div class="hl"><pre><span></span><code><span class="n">AREA_VALIDA_KM2</span> <span class="o">=</span> <span class="mf">10.0</span>
+</code></pre></div>
+
+<p>Melton se calibró sobre cuencas de 0,1 a 10 kilómetros cuadrados. Las cuencas
+grandes —Elqui, Limarí, Choapa— son cuencas de río, no quebradas de aluvión, y
+aplicarles el índice no significa lo mismo.</p>
+<p>Lo que hace el script es notable: <strong>las clasifica igual, pero las marca con
+<code>melton_aplicable = False</code></strong>.</p>
+<p>Las dos alternativas eran peores. Excluirlas dejaría huecos sin explicación en el
+mapa, y alguien podría interpretar la ausencia como bajo riesgo. Clasificarlas sin
+marcar dejaría números que se leerían como si significaran lo mismo que los demás.</p>
+<p>Marcarlas conserva el dato y transmite la advertencia junto a él. Es un principio
+general que vale la pena poder enunciar: <strong>la incertidumbre viaja mejor pegada al
+dato que en una nota al pie</strong>.</p>
+<h2 id="c07-6-los-resultados" id="6-los-resultados">6. Los resultados</h2>
+<p>De las 434 cuencas de la región, por el criterio de Wilford completo:</p>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>Clase</th>
+<th>Cuencas</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Flujo de detritos (aluvión)</td>
+<td>18</td>
+</tr>
+<tr>
+<td>Crecida de detritos</td>
+<td>138</td>
+</tr>
+<tr>
+<td>Inundación</td>
+<td>278</td>
+</tr>
+</tbody>
+</table></div>
+<p>La razón de Melton máxima es 1,05 y la pendiente media máxima 24°. Las 18 cuencas
+críticas miden entre 0,4 y 3 km², o sea que a escala regional son prácticamente
+invisibles: por eso el mapa las marca con un círculo en la desembocadura, que es
+además el punto que le importa a M3.</p>
+<p>Queda pendiente el desglose de la columna <code>clase_melton</code> sobre la región completa,
+porque la última corrida regional es anterior a que el script guardara las dos
+clasificaciones. Es una de las cosas que hay que rehacer.</p>
+<blockquote>
+<p>Todas estas cifras vienen de una corrida en servidor remoto. Ver el capítulo 12.</p>
+</blockquote>
+<hr />
+<h2 id="c07-como-se-lo-explicarias-a-alguien-en-60-segundos" id="como-se-lo-explicarias-a-alguien-en-60-segundos">Cómo se lo explicarías a alguien en 60 segundos</h2>
+<p>Podría haber armado una fórmula ponderada con pesos elegidos a ojo, pero nadie
+puede decir si esos pesos son correctos, ni siquiera yo, y un modelo que no se
+puede falsear no sirve. Usé la razón de Melton, que es desnivel dividido por raíz
+del área y mide la energía potencial de la cuenca por unidad de tamaño, con los
+umbrales de Wilford calibrados contra eventos reales. Es una sola cuenta sin
+parámetros libres. Guardo dos clasificaciones a propósito: Melton es geometría y
+se traslada bien entre regiones, pero el umbral de largo sale de un estudio en la
+Columbia Británica lluviosa y Coquimbo es semiárido, y sobre estos datos ese
+umbral resulta decisivo, con cuencas que quedan dentro o fuera por decenas de
+metros. Elegir uno a ciegas escondería esa sensibilidad, así que calculo las dos y
+la validación contra el temporal de julio dirá cuál reproduce mejor lo que pasó. Y
+las cuencas grandes quedan marcadas como fuera del rango donde el índice está
+calibrado, en vez de excluirlas.</p></section>
+<section class="chapter" id="cap-08"><div class="chapter-head"><span class="chapter-num">08</span><span class="chapter-kicker">La mejor anécdota técnica</span></div><h1 id="08-el-parametro-que-cambio-todo">08 — El parámetro que cambió todo</h1>
+<blockquote>
+<p><strong>Qué vas a entender al terminar este capítulo</strong></p>
+<ul>
+<li>Cómo un parámetro mal elegido produjo un resultado absurdo.</li>
+<li>Cómo se diagnosticó la causa.</li>
+<li>Por qué la corrección se puede verificar con un número.</li>
+</ul>
+</blockquote>
+<p>Este capítulo es corto y es el que más conviene tener memorizado. Tiene la
+estructura exacta de lo que un entrevistador quiere escuchar: un resultado
+absurdo, una hipótesis sobre la causa, una corrección, y una verificación.</p>
+<h2 id="c08-1-el-resultado-absurdo" id="1-el-resultado-absurdo">1. El resultado absurdo</h2>
+<p>La primera pasada de M1 se corrió con <code>--area-min-km2 2.0</code>, o sea descartando toda
+cuenca menor a 2 kilómetros cuadrados. Con esa configuración se delinearon 174
+cuencas.</p>
+<p>Al correr M2 sobre ese inventario, apareció <strong>una sola cuenca capaz de generar
+flujos de detritos en toda la Región de Coquimbo</strong>.</p>
+<p>Ese resultado no es plausible y hay que poder decir por qué, porque el valor de
+esta historia está en haberlo notado. Coquimbo es una región con historial
+documentado de aluviones, con un temporal reciente que aisló a decenas de miles
+de personas cortando rutas por activación de quebradas. Un modelo que dice que
+hay una sola quebrada capaz en toda la región está contradiciendo un hecho
+conocido.</p>
+<p>El punto general: <strong>el modelo no da error cuando está mal, da un número</strong>. La
+única defensa es tener suficiente conocimiento del terreno como para reconocer
+cuándo un número es imposible.</p>
+<h2 id="c08-2-el-diagnostico" id="2-el-diagnostico">2. El diagnóstico</h2>
+<p>La hipótesis fue que el filtro estaba eliminando exactamente el objeto de estudio,
+y sale del capítulo 07. Un flujo de detritos requiere razón de Melton alta, o sea
+mucho desnivel dividido por raíz del área. Como el área está en el denominador,
+<strong>las cuencas chicas son las que pueden tener Melton alto</strong>. Una cuenca grande
+necesitaría un desnivel imposible para alcanzar el mismo índice.</p>
+<p>O sea que las cuencas capaces de generar aluviones son, casi por definición,
+cuencas chicas y empinadas. Y el filtro de 2 km² estaba botando justamente esas.</p>
+<p>El README lo dice en una frase: <em>"El filtro estaba botando justamente las
+quebradas chicas y empinadas, que son las que producen aluviones."</em></p>
+<p>Hay una segunda parte del diagnóstico que refuerza la corrección. Melton está
+calibrado para cuencas de 0,1 a 10 km², así que un filtro en 2 km² dejaba fuera
+buena parte del rango donde el índice tiene validez. Con 0,4 km², la mayor parte
+del inventario queda dentro de ese rango.</p>
+<h2 id="c08-3-la-correccion-y-su-verificacion" id="3-la-correccion-y-su-verificacion">3. La corrección y su verificación</h2>
+<p>Bajar el parámetro de 2,0 a 0,4 km² produjo esto:</p>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>Métrica</th>
+<th>Con 2,0 km²</th>
+<th>Con 0,4 km²</th>
+<th>Cambio</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Cuencas delineadas</td>
+<td>174</td>
+<td>434</td>
+<td>×2,5</td>
+</tr>
+<tr>
+<td>Cuencas de flujo de detritos</td>
+<td>1</td>
+<td>18</td>
+<td>×18</td>
+</tr>
+<tr>
+<td>Superficie drenada total</td>
+<td>39.257 km²</td>
+<td>39.487 km²</td>
+<td>+0,6%</td>
+</tr>
+</tbody>
+</table></div>
+<p>La tercera fila es la que convierte esto en una verificación en vez de un
+resultado sin más. Si la superficie total hubiera crecido mucho, significaría que
+el cambio estaba incorporando territorio nuevo, y no habría forma de saber si las
+cuencas nuevas eran reales o artefactos del algoritmo. Como la superficie
+prácticamente no se movió, <strong>el territorio es el mismo y lo que cambió es la
+resolución con que está descrito</strong>: las mismas cuencas grandes de antes, ahora
+subdivididas en sus quebradas componentes.</p>
+<p>El README lo dice así: <em>"la superficie drenada casi no cambia porque las que entran
+son pequeñas; lo que cambia es la resolución del inventario, y eso es lo que M2
+necesita"</em>.</p>
+<h2 id="c08-4-por-que-esto-funciona-en-una-entrevista" id="4-por-que-esto-funciona-en-una-entrevista">4. Por qué esto funciona en una entrevista</h2>
+<p>La estructura completa es la que se busca en un candidato:</p>
+<ol>
+<li><strong>Un resultado que no cuadraba</strong> con lo que se sabe del terreno, notado en vez
+   de aceptado.</li>
+<li><strong>Una hipótesis derivada del método</strong>, no adivinada: como el área está en el
+   denominador del índice, las cuencas capaces son chicas, y el filtro las estaba
+   botando.</li>
+<li><strong>Una corrección con su justificación adicional</strong>: 0,4 km² además deja el
+   inventario dentro del rango donde Melton está calibrado.</li>
+<li><strong>Una verificación independiente</strong>: la superficie casi constante prueba que lo
+   que cambió fue la resolución y no el territorio.</li>
+<li><strong>La decisión documentada</strong> en el README, donde alguien más puede revisarla.</li>
+</ol>
+<p>Y hay una lección general que se puede enunciar en una frase, que es lo que suele
+quedar: <strong>un parámetro de filtrado elegido antes de conocer la escala del
+fenómeno puede eliminar el fenómeno</strong>.</p>
+<hr />
+<h2 id="c08-como-se-lo-explicarias-a-alguien-en-60-segundos" id="como-se-lo-explicarias-a-alguien-en-60-segundos">Cómo se lo explicarías a alguien en 60 segundos</h2>
+<p>La primera corrida con área mínima de 2 km² dio una sola cuenca capaz de generar
+aluviones en toda la región, y eso no puede ser: Coquimbo tiene historial de
+aluviones y un temporal reciente que cortó cuarenta rutas por activación de
+quebradas. La hipótesis salió del propio índice: como el área va en el
+denominador, las cuencas capaces son chicas y empinadas, así que el filtro estaba
+botando exactamente lo que buscaba. Bajé el umbral a 0,4, que además deja el
+inventario dentro del rango donde Melton está calibrado, y las cuencas capaces
+pasaron de 1 a 18. Lo que confirma que el cambio es correcto es que la superficie
+drenada total casi no se movió, de 39.257 a 39.487 km²: el territorio es el mismo,
+lo que cambió es la resolución del inventario.</p></section>
+<section class="chapter" id="cap-09"><div class="chapter-head"><span class="chapter-num">09</span><span class="chapter-kicker">src/m3_exposicion.py</span></div><h1 id="09-donde-el-flujo-cruza-lo-que-la-gente-usa">09 — Dónde el flujo cruza lo que la gente usa</h1>
+<blockquote>
+<p><strong>Qué vas a entender al terminar este capítulo</strong></p>
+<ul>
+<li>Por qué la trayectoria se traza hacia arriba y no hacia abajo.</li>
+<li>Por qué el proyecto se negó a poner un parámetro de alcance.</li>
+<li>Cómo se priorizan los cortes y por qué la prioridad no es el peligro.</li>
+</ul>
+</blockquote>
+<p>M1 dijo dónde están las quebradas y M2 dijo cuáles pueden generar un flujo. M3
+responde la pregunta que le importa a alguien que no sabe hidrología: <strong>qué rutas
+se cortan y qué localidades quedan en el camino</strong>. Son 825 líneas, el archivo más
+largo del proyecto.</p>
+<h2 id="c09-1-lo-que-este-script-no-es" id="1-lo-que-este-script-no-es">1. Lo que este script NO es</h2>
+<p>El docstring dedica una sección entera a eso, y conviene leerla antes que nada:</p>
+<blockquote>
+<p><em>No es un modelo de propagación (runout). Un runout de verdad resuelve la
+reología del flujo —viscosidad, fricción, volumen movilizado— y devuelve hasta
+dónde llega el material y con qué espesor. Eso es Nivel 3 (RAMMS, FLO-2D) y
+está explícitamente fuera de alcance.</em></p>
+<p><em>Lo que hace este script es un </em><em>proxy geométrico</em><em>: supone que el material baja
+por el cauce principal de la cuenca, que es por donde va el agua. Es una
+hipótesis razonable —los flujos de detritos son encauzados hasta que llegan al
+abanico— pero es una hipótesis, no un cálculo.</em></p>
+</blockquote>
+<p>Un <strong>proxy</strong> es un sustituto medible de algo que no se puede medir directamente.
+Aquí, en vez de calcular la física del flujo, se usa la geometría del cauce como
+aproximación de por dónde va a bajar el material.</p>
+<p>La consecuencia se enuncia explícitamente: cada punto de corte es un
+<strong>candidato</strong>, no una predicción. Es un lugar donde una vía cruza el cauce de una
+quebrada susceptible, y que ese corte ocurra depende del gatillo de lluvia y del
+volumen movilizado, que el proyecto no estima.</p>
+<p>Declarar el alcance con esta precisión, y nombrar las herramientas que sí harían
+el cálculo completo, es lo que impide que el resultado se lea como algo que no es.</p>
+<h2 id="c09-2-la-trayectoria-se-traza-hacia-arriba" id="2-la-trayectoria-se-traza-hacia-arriba">2. La trayectoria se traza hacia arriba</h2>
+<div class="hl"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">cauce_principal</span><span class="p">(</span><span class="n">fdir</span><span class="p">,</span> <span class="n">acc</span><span class="p">,</span> <span class="n">fila</span><span class="p">,</span> <span class="n">col</span><span class="p">,</span> <span class="n">transform</span><span class="p">,</span> <span class="n">min_celdas</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Traza el cauce principal caminando aguas ARRIBA desde la desembocadura.</span>
+
+<span class="sd">    Por que aguas arriba y no aguas abajo: la desembocadura es, por definicion,</span>
+<span class="sd">    el ultimo punto con terreno antes del mar o del borde. Aguas abajo de ahi no</span>
+<span class="sd">    queda nada que recorrer. La trayectoria del flujo es el camino que baja desde</span>
+<span class="sd">    la cabecera hasta esa boca, y se reconstruye al reves.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+</code></pre></div>
+
+<p>Suena al revés y no lo es, y el docstring anticipa esa confusión, que es
+exactamente lo que hay que hacer cuando una decisión parece contraintuitiva.</p>
+<p>El método es: parado en una celda, mirar cuál de sus ocho vecinos drena hacia
+ella, y avanzar al que trae más agua. Repitiendo eso desde la boca se recorre la
+rama principal hasta la cabecera, dejando fuera los afluentes chicos, porque en
+cada bifurcación se sigue siempre el brazo con más acumulación.</p>
+<p>Hay dos detalles del código que merecen mención. El conjunto <code>visitadas</code> está
+comentado como <em>"protección contra ciclos en zonas planas rellenadas"</em>: en las
+planicies que el capítulo 05 inclinó artificialmente pueden aparecer
+configuraciones donde el recorrido volvería sobre sus pasos, y sin esa protección
+el bucle no terminaría nunca. Y el corte por <code>min_celdas</code> detiene el trazado
+cuando el cauce ya no concentra agua, porque <em>"por encima de ese punto hay ladera,
+no quebrada"</em>.</p>
+<p>Al final la línea se invierte para quedar en sentido cabecera → boca, que es el
+sentido en que viaja el flujo. Es un detalle de presentación con una razón: quien
+abra la capa en un programa de mapas ve la geometría orientada como el fenómeno.</p>
+<h2 id="c09-3-la-negativa-a-inventar-un-alcance" id="3-la-negativa-a-inventar-un-alcance">3. La negativa a inventar un alcance</h2>
+<p>Esta es la decisión más íntegra del archivo:</p>
+<blockquote>
+<p><em>Exponer un "alcance de runout" en kilómetros habría sido inventar un número: el
+alcance real depende del volumen movilizado, que este proyecto no estima. En vez
+de eso el único parámetro espacial es el ancho del corredor alrededor del cauce
+(45 m por defecto), y su justificación es puramente geométrica: el cauce se
+trazó sobre una grilla de 30 m, así que su posición tiene una incertidumbre del
+orden de píxel y medio.</em></p>
+<p><em>Es tolerancia de posición, no distancia de propagación. Si alguien lo lee como
+lo segundo, está leyendo mal el modelo.</em></p>
+</blockquote>
+<p>Vale la pena notar cuánto se resiste aquí. Habría sido facilísimo poner un
+parámetro llamado <code>alcance_km = 2.0</code>, y el resultado se vería más completo y más
+impresionante. El proyecto se niega porque ese número no tendría fundamento.</p>
+<p>El parámetro que sí existe tiene una justificación aritmética verificable: 45
+metros son un píxel y medio de una grilla de 30 metros. Es la tolerancia
+necesaria para que el desajuste entre dónde el DEM cree que está el cauce y dónde
+OpenStreetMap cree que está la ruta no haga perder cruces reales.</p>
+<p>Y la última frase —<em>"si alguien lo lee como lo segundo, está leyendo mal el
+modelo"</em>— es una advertencia contra el malentendido más probable, escrita en el
+lugar donde alguien la va a leer.</p>
+<h2 id="c09-4-la-priorizacion" id="4-la-priorizacion">4. La priorización</h2>
+<div class="hl"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">priorizar</span><span class="p">(</span><span class="n">puntos</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Ordena los cortes combinando peligro de la cuenca con importancia de la via.</span>
+
+<span class="sd">    El criterio: ordenar solo por susceptibilidad respondería &quot;que quebrada es mas</span>
+<span class="sd">    peligrosa&quot;, que es la pregunta de M2 y ya esta contestada. La pregunta de M3</span>
+<span class="sd">    es otra: **cual de estos cortes tiene peores consecuencias**. Y ahi una cuenca</span>
+<span class="sd">    de clase media que corta la Ruta 5 pesa mas que una de clase alta que corta</span>
+<span class="sd">    una huella, porque la troncal aisla a mucha mas gente.</span>
+
+<span class="sd">    prioridad = 0,5 x peligro_de_la_cuenca + 0,5 x importancia_de_la_via</span>
+
+<span class="sd">    Ninguno de los pesos esta calibrado: son juicios explicitos, puestos arriba</span>
+<span class="sd">    como constantes para poder discutirlos y moverlos.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+</code></pre></div>
+
+<p>El razonamiento distingue dos preguntas que se confunden con facilidad. <em>Qué
+quebrada es más peligrosa</em> es una propiedad del terreno y la contestó M2. <em>Qué
+corte tiene peores consecuencias</em> depende también de qué hay al otro lado, y esa
+es la pregunta de M3. Una quebrada mediana que corta la Ruta 5 deja aislada a
+mucha más gente que una quebrada muy peligrosa que corta un camino de tierra sin
+casas.</p>
+<p>Los pesos están en constantes al principio del archivo:</p>
+<div class="hl"><pre><span></span><code><span class="n">PESO_VIA</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;motorway&quot;</span><span class="p">:</span> <span class="mf">1.0</span><span class="p">,</span> <span class="s2">&quot;trunk&quot;</span><span class="p">:</span> <span class="mf">1.0</span><span class="p">,</span> <span class="s2">&quot;primary&quot;</span><span class="p">:</span> <span class="mf">0.85</span><span class="p">,</span> <span class="s2">&quot;secondary&quot;</span><span class="p">:</span> <span class="mf">0.6</span><span class="p">,</span>
+            <span class="s2">&quot;tertiary&quot;</span><span class="p">:</span> <span class="mf">0.45</span><span class="p">,</span> <span class="s2">&quot;unclassified&quot;</span><span class="p">:</span> <span class="mf">0.3</span><span class="p">,</span> <span class="o">...</span><span class="p">}</span>
+<span class="n">PESO_CLASE</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;flujo_detritos&quot;</span><span class="p">:</span> <span class="mf">1.0</span><span class="p">,</span> <span class="s2">&quot;crecida_detritos&quot;</span><span class="p">:</span> <span class="mf">0.55</span><span class="p">}</span>
+</code></pre></div>
+
+<p>Y aquí conviene notar la coherencia con el capítulo 07, porque es lo que hace
+defendible esta decisión. En M2 el proyecto <strong>se negó</strong> a inventar pesos, y aquí
+los inventa. La diferencia está en la frase del docstring: <em>"ninguno de los pesos
+está calibrado: son juicios explícitos, puestos arriba como constantes para poder
+discutirlos y moverlos"</em>.</p>
+<p>O sea: en M2 existía un índice publicado y calibrado, así que inventar habría sido
+peor que usar lo que ya estaba validado. Aquí no existe ninguna calibración
+publicada sobre qué importancia relativa tiene una ruta troncal frente a una
+secundaria, porque eso depende de decisiones sociales y no de física. Ante eso hay
+dos opciones: no priorizar nada, o poner un juicio y declararlo como juicio. El
+proyecto elige la segunda y lo dice.</p>
+<p>Esa distinción —usar lo calibrado cuando existe, declarar el juicio cuando no— es
+el argumento que hay que tener listo si alguien pregunta por la aparente
+contradicción.</p>
+<h2 id="c09-5-los-otros-detalles" id="5-los-otros-detalles">5. Los otros detalles</h2>
+<p><code>descargar_osm</code> baja las rutas y las zonas urbanas de OpenStreetMap <strong>con caché en
+disco</strong>, porque el área es grande y bajarla en cada corrida sería lento y
+descortés con un servicio gratuito. Además parte el área en cuadros, porque una
+consulta demasiado grande falla.</p>
+<p><code>verificar_solape</code> comprueba que las trayectorias y las vías ocupen el mismo
+pedazo de mundo antes de cruzarlas. Es la misma familia de verificación que la
+cobertura del capítulo 04: si dos capas están en sistemas de coordenadas
+distintos, la intersección da cero cruces sin ningún error, y cero cruces se ve
+igual que "no hay cortes".</p>
+<p><code>_fusionar_cercanos</code> colapsa puntos de la misma cuenca y la misma vía que caen casi
+encima. Sin eso, una ruta que serpentea junto a un cauce produciría veinte cruces
+donde en la práctica hay uno.</p>
+<p><code>alcance_urbano</code> marca aparte qué trayectorias entran en zona poblada y en cuál,
+que es la otra mitad de la pregunta: no solo qué rutas se cortan sino qué
+localidades quedan en el camino.</p>
+<hr />
+<h2 id="c09-como-se-lo-explicarias-a-alguien-en-60-segundos" id="como-se-lo-explicarias-a-alguien-en-60-segundos">Cómo se lo explicarías a alguien en 60 segundos</h2>
+<p>M3 cruza los cauces de las quebradas susceptibles con la red vial de
+OpenStreetMap y devuelve puntos de corte candidatos. Trazo la trayectoria
+caminando aguas arriba desde la desembocadura, porque aguas abajo de la boca no
+queda terreno; en cada paso avanzo al vecino que trae más agua y así sigo la rama
+principal. Deliberadamente no hay parámetro de alcance: el alcance real depende
+del volumen movilizado, que no estimo, así que ponerlo sería inventar un número. El
+único parámetro espacial es un corredor de 45 metros, que es píxel y medio de una
+grilla de 30 y absorbe el desajuste entre el DEM y el trazado de las rutas: es
+tolerancia de posición, no distancia de propagación. Y priorizo combinando peligro
+de la cuenca con importancia de la vía, porque la pregunta de M3 no es qué
+quebrada es más peligrosa sino qué corte tiene peores consecuencias; esos pesos no
+están calibrados y los dejo declarados como juicios en constantes al principio del
+archivo.</p></section>
+<section class="chapter" id="cap-10"><div class="chapter-head"><span class="chapter-num">10</span><span class="chapter-kicker">La comparación contra la DGA</span></div><h1 id="10-el-control-de-calidad">10 — El control de calidad</h1>
+<blockquote>
+<p><strong>Qué vas a entender al terminar este capítulo</strong></p>
+<ul>
+<li>Por qué comparar contra un tercero es lo que distingue este proyecto.</li>
+<li>Qué dio la comparación y cómo se interpreta la discrepancia.</li>
+</ul>
+</blockquote>
+<h2 id="c10-1-por-que-esto-importa-mas-que-el-resto" id="1-por-que-esto-importa-mas-que-el-resto">1. Por qué esto importa más que el resto</h2>
+<p>Un proyecto de portafolio típico produce un resultado y lo muestra. Nadie puede
+saber si está bien, porque no hay nada contra qué compararlo, y en la práctica el
+lector tiene que confiar.</p>
+<p>Este proyecto hace algo distinto: toma las tres cuencas mayores que delineó y
+compara sus áreas contra <strong>las áreas oficiales de la Dirección General de Aguas</strong>,
+que es el organismo del Estado chileno que las publica.</p>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>Cuenca</th>
+<th>Delineada</th>
+<th>Oficial DGA</th>
+<th>Desvío</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Choapa</td>
+<td>7.620,6 km²</td>
+<td>~7.650 km²</td>
+<td>0,4%</td>
+</tr>
+<tr>
+<td>Elqui</td>
+<td>9.410,7 km²</td>
+<td>~9.657 km²</td>
+<td>2,5%</td>
+</tr>
+<tr>
+<td>Limarí</td>
+<td>9.309,0 km²</td>
+<td>~11.800 km²</td>
+<td>21%</td>
+</tr>
+</tbody>
+</table></div>
+<p>Los dos primeros son un resultado fuerte. Un desvío de 0,4% sobre una cuenca de
+7.600 km² significa que el algoritmo reprodujo con precisión una hidrología que un
+organismo estatal midió por su cuenta. <strong>Es una verificación externa e
+independiente</strong>, y es lo que permite decir que el método funciona sin pedirle a
+nadie que confíe.</p>
+<p>En una entrevista esto se puede plantear en una frase: <em>un externo puede intentar
+refutar mi resultado con datos oficiales, y aun así cuadra.</em></p>
+<h2 id="c10-2-la-discrepancia-del-limari" id="2-la-discrepancia-del-limari">2. La discrepancia del Limarí</h2>
+<p>El 21% del Limarí es la parte más interesante de la tabla, porque el proyecto no
+lo esconde ni lo justifica a la ligera. El README propone una explicación y la
+somete a una prueba aritmética:</p>
+<blockquote>
+<p><em>La diferencia del Limarí probablemente sea de definición y no un error. La DGA
+agrupa en esa cuenca varias quebradas costeras que hidrológicamente son
+independientes; sumando la cuenca contigua (1.878 km²) se llega a 11.187 km²,
+cerca del valor oficial. Queda por confirmar cuando estén los nombres a la
+vista.</em></p>
+</blockquote>
+<p>La estructura de ese párrafo es lo que vale. Hay una <strong>hipótesis</strong> —es una
+diferencia de criterio, no un error de cálculo—, una <strong>verificación numérica</strong>
+—sumando la cuenca contigua se llega a 11.187 contra 11.800 oficiales, que ya está
+en el rango de los otros dos desvíos—, y una <strong>condición de cierre</strong> explícita: hay
+que confirmarlo cuando se puedan ver los nombres.</p>
+<p>Lo que hace este párrafo distinto de una excusa es que la hipótesis es
+comprobable y que la comprobación se hizo. Decir "seguro es una diferencia de
+definición" sin sumar nada sería justificar; sumar y mostrar que el número
+resultante cuadra es diagnosticar.</p>
+<p>Y termina con una honestidad que conviene conservar: <em>queda por confirmar</em>. No se
+declara resuelto.</p>
+<h2 id="c10-3-por-que-esto-es-la-mejor-pieza-del-proyecto" id="3-por-que-esto-es-la-mejor-pieza-del-proyecto">3. Por qué esto es la mejor pieza del proyecto</h2>
+<p>El capítulo 12 va a decir que las cifras del README no son reproducibles hoy, y
+eso incluye a estas. Pero la <strong>práctica</strong> que este capítulo describe es
+independiente de esos números y es lo que hay que conservar: cuando produzcas un
+resultado, busca un tercero que haya medido lo mismo por su cuenta y compárate
+contra él.</p>
+<p>Casi ningún proyecto de portafolio lo hace, en parte porque da miedo: si el
+resultado no cuadra, se nota. Precisamente por eso, cuando cuadra, vale mucho.</p>
+<hr />
+<h2 id="c10-como-se-lo-explicarias-a-alguien-en-60-segundos" id="como-se-lo-explicarias-a-alguien-en-60-segundos">Cómo se lo explicarías a alguien en 60 segundos</h2>
+<p>Comparé las áreas de las tres cuencas mayores que delineé contra las que publica
+la Dirección General de Aguas, que las midió por su cuenta. Choapa dio 0,4% de
+desvío y Elqui 2,5%, o sea que el método reproduce una hidrología medida por un
+organismo estatal. El Limarí dio 21% y lo investigué en vez de dejarlo pasar: la
+DGA agrupa ahí varias quebradas costeras que hidrológicamente son independientes,
+y sumando la cuenca contigua llego a 11.187 km² contra 11.800 oficiales, o sea
+dentro del rango de los otros dos. Lo dejé anotado como probable diferencia de
+definición pendiente de confirmar cuando tenga los nombres a la vista. Lo
+importante del ejercicio es que un externo puede intentar refutar mi resultado
+con datos oficiales.</p></section>
+<section class="chapter" id="cap-11"><div class="chapter-head"><span class="chapter-num">11</span><span class="chapter-kicker">Preparación para entrevista</span></div><h1 id="11-decisiones-y-defensa">11 — Decisiones y defensa</h1>
+<h2 id="c11-tabla-de-decisiones" id="tabla-de-decisiones">Tabla de decisiones</h2>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>Decisión</th>
+<th>Alternativa descartada</th>
+<th>Por qué</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Copernicus GLO-30</td>
+<td>ALOS PALSAR "12,5 m"</td>
+<td>Los productos ALOS sobre Chile están remuestreados desde 30 m; interpolar no agrega información</td>
+</tr>
+<tr>
+<td>Reproyectar a UTM 19S</td>
+<td>Trabajar en latitud/longitud</td>
+<td>En grados las áreas no significan nada; en UTM un metro mide un metro</td>
+</tr>
+<tr>
+<td>Acondicionar el DEM</td>
+<td>Usarlo crudo</td>
+<td>Sin rellenar hoyos el agua queda atrapada y la red de drenaje se corta</td>
+</tr>
+<tr>
+<td>D8</td>
+<td>Algoritmos de flujo repartido</td>
+<td>Es el estándar y basta para identificar cauces, donde el agua sí se concentra</td>
+</tr>
+<tr>
+<td>Procesar con margen y filtrar al final</td>
+<td>Cortar el DEM en el límite regional</td>
+<td>Cortar da cuencas truncadas con área subestimada, o sea un dato incorrecto, no faltante</td>
+</tr>
+<tr>
+<td>Cuenca de Coquimbo = desembocadura en Coquimbo</td>
+<td>Cuencas contenidas, o cuencas que intersectan</td>
+<td>Criterio nítido y alineado con la pregunta: importa dónde sale el material</td>
+</tr>
+<tr>
+<td>Razón de Melton</td>
+<td>Fórmula ponderada con pesos propios</td>
+<td>Un índice publicado y calibrado se puede falsear; unos pesos a ojo, no</td>
+</tr>
+<tr>
+<td>Guardar dos clasificaciones</td>
+<td>Elegir una</td>
+<td>El umbral de largo viene de otra región y resulta decisivo; elegir a ciegas escondería la sensibilidad</td>
+</tr>
+<tr>
+<td>Marcar cuencas grandes en vez de excluirlas</td>
+<td>Sacarlas del resultado</td>
+<td>Un hueco sin explicación se lee como bajo riesgo; la advertencia viaja mejor pegada al dato</td>
+</tr>
+<tr>
+<td><code>--area-min-km2 0.4</code></td>
+<td>2,0</td>
+<td>Con 2,0 aparecía una sola cuenca capaz en toda la región: el filtro botaba el objeto de estudio</td>
+</tr>
+<tr>
+<td>Sin parámetro de alcance</td>
+<td><code>alcance_km = 2.0</code></td>
+<td>El alcance depende del volumen movilizado, que el proyecto no estima</td>
+</tr>
+<tr>
+<td>Corredor de 45 m</td>
+<td>Un radio elegido a ojo</td>
+<td>Es píxel y medio de una grilla de 30 m: tolerancia de posición con justificación aritmética</td>
+</tr>
+<tr>
+<td>Pesos declarados en M3</td>
+<td>No priorizar, o presentarlos como calibrados</td>
+<td>No existe calibración publicada; el juicio se declara como juicio en constantes visibles</td>
+</tr>
+<tr>
+<td>URL de límites anclada a un commit</td>
+<td>Apuntar a la rama principal</td>
+<td>Un dato externo que cambia hace que la misma corrida dé resultados distintos</td>
+</tr>
+<tr>
+<td>Parche de numpy documentado</td>
+<td>Fijar numpy &lt; 2, o parchear sin explicar</td>
+<td>Se verificaron las nueve llamadas y quedó escrita la condición de retiro</td>
+</tr>
+<tr>
+<td>Figura de control en cada script</td>
+<td>Solo tablas</td>
+<td>Un error de coordenadas da números plausibles y un mapa evidentemente absurdo</td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="c11-preguntas-probables" id="preguntas-probables">Preguntas probables</h2>
+<p><strong>¿Por qué no usaste machine learning?</strong></p>
+<p>Porque no hay con qué entrenarlo. Un modelo supervisado necesita ejemplos
+etiquetados —quebradas que se activaron y quebradas que no— y ese inventario no
+existe para Coquimbo en forma sistemática. Además, con pocos eventos el modelo
+memorizaría en vez de generalizar. La razón de Melton está calibrada contra
+eventos reales publicados y no requiere entrenamiento. Si M5 produce un inventario
+de activaciones de julio de 2026, ahí sí habría con qué entrenar o al menos
+recalibrar los umbrales, y sería el paso natural.</p>
+<p><strong>¿Qué tan confiable es esto?</strong></p>
+<p>No está validado, y hay que decirlo así. M5 es exactamente el hito que produciría
+una métrica de acierto y no está hecho. Lo que sí hay es una verificación
+intermedia: las áreas de las tres cuencas mayores cuadran con las oficiales de la
+DGA con desvíos de 0,4% y 2,5%, lo que dice que la delineación reproduce la
+hidrología real. Eso valida el terreno, no la predicción de riesgo.</p>
+<p><strong>¿De dónde salen los umbrales?</strong></p>
+<p>De Wilford et al. (2004), publicado en <em>Landslides</em>, calibrado contra eventos
+reales. No los elegí yo, y esa es la razón de haberlos usado. El único que
+cuestiono es el de largo máximo, porque viene de la Columbia Británica costera y
+Coquimbo es semiárido; por eso guardo las dos clasificaciones y dejo que la
+validación decida.</p>
+<p><strong>¿Qué harías con más tiempo?</strong></p>
+<p>Cerrar M3 con una corrida completa y revisada, y después M5, porque sin validación
+el modelo es una hipótesis bien construida. En paralelo, rehacer M1 y M2 en local
+para que las cifras del README sean reproducibles, que hoy no lo son.</p>
+<p><strong>¿Esto sirve para algo o es un ejercicio?</strong></p>
+<p>Sirve como capa de priorización, que es distinto de un sistema de alerta. Alguien
+que tenga que decidir dónde poner sensores de lluvia, o qué rutas revisar primero
+después de un temporal, tiene aquí una lista ordenada de puntos donde una vía cruza
+el cauce de una quebrada susceptible. No dice cuándo va a pasar ni con qué
+probabilidad, y eso hay que decirlo antes de que lo pregunten.</p></section>
+<section class="chapter" id="cap-12"><div class="chapter-head"><span class="chapter-num">12</span><span class="chapter-kicker">Lo que hay que decir antes</span></div><h1 id="12-estado-real-y-cifras">12 — Estado real y cifras</h1>
+<blockquote>
+<p><strong>Qué vas a entender al terminar este capítulo</strong></p>
+<ul>
+<li>Qué cifras del proyecto no se pueden usar todavía, y por qué.</li>
+<li>Qué está cerrado de verdad y qué está escrito pero no verificado.</li>
+<li>En qué orden conviene arreglarlo.</li>
+</ul>
+</blockquote>
+<p>Este capítulo es el más incómodo y el más importante. Todo lo anterior describe
+métodos y decisiones que se sostienen solos. Esto describe el desfase entre lo que
+el repositorio afirma y lo que puede demostrar hoy.</p>
+<h2 id="c12-1-el-problema-de-las-cifras" id="1-el-problema-de-las-cifras">1. El problema de las cifras</h2>
+<p>El README reporta 434 cuencas que descargan en la región y 39.487 km² de
+superficie drenada. Se detectó el 7 de agosto de 2026 que <strong>el repositorio no
+puede reproducir esos números corriendo en local</strong>, por dos motivos:</p>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th></th>
+<th>README</th>
+<th>Local (<code>data/processed/</code>)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Cuencas en la región</td>
+<td>434</td>
+<td>360</td>
+</tr>
+<tr>
+<td>Superficie drenada</td>
+<td>39.487 km²</td>
+<td>16.187 km²</td>
+</tr>
+</tbody>
+</table></div>
+<p>La causa está identificada: <strong>el DEM local cubre solo de latitud −29 a −31</strong>, o sea
+que le falta el tercio sur de la Región de Coquimbo. Las cifras del README salieron
+de una corrida en un servidor remoto, con el DEM completo.</p>
+<p>La diferencia de superficie es enorme —16.187 contra 39.487 km², o sea que falta
+casi el 60%— y eso significa que no es un desajuste menor sino una corrida sobre
+un territorio distinto.</p>
+<p><strong>Consecuencia práctica: ninguna cifra de este proyecto debería ir a un CV ni
+citarse en una entrevista hasta que M1 y M2 se vuelvan a correr en local con el
+DEM completo.</strong></p>
+<p>Conviene tener presente por qué esto importa tanto en este proyecto en
+particular. El valor del trabajo está justamente en que los números son
+verificables: el control contra la DGA, la superficie que casi no cambia entre las
+dos corridas del capítulo 08, los conteos por clase. Si alguien pide reproducir
+uno de esos números y no se puede, se desploma la credibilidad de todo el resto,
+que sí está bien.</p>
+<p>También vale la pena notar que <strong>esto es exactamente lo que la función
+<code>verificar_cobertura</code> del capítulo 04 existe para detectar</strong>. Con
+<code>COBERTURA_MINIMA = 0.99</code>, un DEM al que le falta el tercio sur debería haber
+detenido el proceso. Averiguar por qué no lo detuvo es parte del arreglo.</p>
+<h2 id="c12-2-el-estado-por-hito" id="2-el-estado-por-hito">2. El estado por hito</h2>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+<th>Hito</th>
+<th>Estado real</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>M0 — Andamiaje</td>
+<td>Cerrado</td>
+</tr>
+<tr>
+<td>M1 — Terreno</td>
+<td>Cerrado en remoto; <strong>pendiente de re-correr en local</strong></td>
+</tr>
+<tr>
+<td>M2 — Susceptibilidad</td>
+<td>Cerrado en remoto; <strong>pendiente de re-correr en local</strong></td>
+</tr>
+<tr>
+<td>M3 — Exposición</td>
+<td>Código escrito y comentado; sin corrida completa validada</td>
+</tr>
+<tr>
+<td>M4 — Gatillo de lluvia</td>
+<td>No empezado</td>
+</tr>
+<tr>
+<td>M5 — Validación</td>
+<td>No empezado</td>
+</tr>
+<tr>
+<td>M6 — Entrega</td>
+<td>No empezado</td>
+</tr>
+</tbody>
+</table></div>
+<p>Al 7 de agosto de 2026 el repositorio tenía 12 commits, con M0, M1 y M2 cerrados.
+<code>osmnx</code>, que M3 necesita, aparece en <code>requirements.txt</code> con su pin explicado.</p>
+<p>Hay además un pendiente concreto de M2: <strong>el desglose de la columna
+<code>clase_melton</code> sobre la región completa no está medido</strong>, porque la última corrida
+regional es anterior a que el script guardara las dos clasificaciones. O sea que
+hoy existe el conteo de Wilford completo (18, 138, 278) pero no el de solo Melton,
+que es justamente la comparación que el capítulo 07 plantea como interesante.</p>
+<h2 id="c12-3-otras-limitaciones" id="3-otras-limitaciones">3. Otras limitaciones</h2>
+<p><strong>El repositorio está en una cuenta antigua.</strong> El remoto apunta a <code>k1000lala</code> y
+está privado; hay que migrarlo a <code>camilahndz</code> antes de enlazarlo en un portafolio.</p>
+<p><strong>M3 no tiene corrida validada.</strong> El código está escrito con el razonamiento más
+cuidadoso del proyecto, pero una cosa es que el código exista y otra que haya
+corrido de punta a punta sobre los datos reales y que alguien haya mirado el mapa
+resultante. Hasta que eso ocurra, M3 se describe como escrito, no como cerrado.</p>
+<p><strong>No hay pruebas automatizadas.</strong> El proyecto se apoya en figuras de control, que
+son buenas para detectar errores groseros y no sirven para detectar una regresión
+sutil. Funciones como <code>largo_cuenca_km</code> o <code>clasificar</code> son puras y fáciles de
+probar, y un puñado de pruebas cubriría los casos de frontera de los umbrales.</p>
+<p><strong>Sin gatillo no hay predicción.</strong> Es la limitación de fondo y ya está en el
+capítulo 01: el modelo dice qué quebradas son capaces, no cuáles se activan
+mañana.</p>
+<h2 id="c12-4-en-que-orden-conviene-arreglarlo" id="4-en-que-orden-conviene-arreglarlo">4. En qué orden conviene arreglarlo</h2>
+<ol>
+<li><strong>Conseguir el DEM completo y re-correr M1 y M2 en local.</strong> Todo lo demás
+   depende de esto, porque hasta entonces no hay cifras citables.</li>
+<li><strong>Averiguar por qué <code>verificar_cobertura</code> no detuvo la corrida</strong> con un DEM
+   incompleto. Es una comprobación que existe y falló en su único trabajo.</li>
+<li><strong>Actualizar el README con las cifras reproducibles</strong>, y guardar la corrida de
+   referencia.</li>
+<li><strong>Cerrar M3</strong> con una corrida completa y su figura revisada. Eso completa la v0
+   y permite la frase "estas quebradas cortan estas rutas".</li>
+<li><strong>Migrar el repositorio</strong> a la cuenta actual.</li>
+<li><strong>Agregar pruebas</strong> a las funciones puras de M2.</li>
+</ol>
+<h2 id="c12-5-lo-que-esta-bien-y-no-conviene-minimizar" id="5-lo-que-esta-bien-y-no-conviene-minimizar">5. Lo que está bien y no conviene minimizar</h2>
+<p>El problema de las cifras es de ejecución y no de método, y esa distinción hay que
+hacerla porque es real.</p>
+<p>El razonamiento del proyecto es de un nivel poco común: rechazar un DEM que
+anunciaba mejor resolución tras verificar la documentación de la fuente, negarse a
+inventar pesos donde existe un índice calibrado, guardar dos clasificaciones en
+vez de esconder la sensibilidad de un parámetro heredado, negarse a exponer un
+alcance de propagación que no se puede fundamentar, y declarar como juicio lo que
+es juicio. Cada una de esas decisiones está escrita en el código, con su
+alternativa y su motivo.</p>
+<p>El diagnóstico del <code>--area-min-km2</code> es una historia técnica completa y verificable.
+El control contra la DGA es una verificación externa que casi ningún proyecto de
+portafolio tiene. Y el hábito de dejar el porqué escrito en el docstring es lo que
+hizo posible que este documento se escribiera leyendo el código.</p>
+<p>Nada de eso se pierde por tener que re-correr M1. Solo hay que re-correrlo antes
+de citar los números.</p></section>
+<section class="chapter" id="cap-13"><div class="chapter-head"><span class="chapter-num">13</span><span class="chapter-kicker">Todos los términos</span></div><h1 id="13-glosario">13 — Glosario</h1>
+<h2 id="c13-datos-geoespaciales" id="datos-geoespaciales">Datos geoespaciales</h2>
+<p><strong>DEM</strong> — <em>Digital Elevation Model</em>. Grilla donde cada píxel guarda la altura del
+terreno en metros.</p>
+<p><strong>Raster</strong> — Dato geográfico en forma de grilla de píxeles. Sirve para lo que
+existe en todas partes y varía de forma continua.</p>
+<p><strong>Vector</strong> — Dato geográfico en forma de puntos, líneas o polígonos con atributos.
+Sirve para lo que tiene bordes definidos.</p>
+<p><strong>GeoTIFF</strong> — Formato de raster que incluye a qué coordenadas corresponde cada
+píxel.</p>
+<p><strong>GeoPackage / GeoJSON</strong> — Formatos de capa vectorial.</p>
+<p><strong>CRS</strong> — <em>Coordinate Reference System</em>. La regla que traduce un punto del planeta
+a un par de números.</p>
+<p><strong>EPSG:4326</strong> — Latitud y longitud en grados. Un grado no mide lo mismo en todas
+partes.</p>
+<p><strong>EPSG:32719</strong> — UTM zona 19 Sur, el sistema métrico de esta parte de Chile. Donde
+un metro mide un metro.</p>
+<p><strong>Reproyectar</strong> — Convertir una capa de un sistema de coordenadas a otro.</p>
+<p><strong>Tile</strong> — Pedazo rectangular en que se reparte un dato global. Copernicus publica
+el DEM en cuadros de 1×1 grado.</p>
+<p><strong>Mosaico</strong> — El raster continuo que resulta de unir varios tiles.</p>
+<p><strong>Bounding box</strong> — Rectángulo definido por sus bordes oeste, sur, este y norte.</p>
+<p><strong>Remuestrear</strong> — Cambiar el tamaño de píxel de un raster. Hacia arriba, inventa
+píxeles por interpolación sin agregar información.</p>
+<p><strong>Resolución efectiva</strong> — Cuánto detalle real contiene un dato, que puede ser
+distinto del tamaño de píxel.</p>
+<h2 id="c13-hidrologia" id="hidrologia">Hidrología</h2>
+<p><strong>Cuenca</strong> — Todo el territorio cuya agua termina saliendo por un mismo punto.</p>
+<p><strong>Quebrada</strong> — Cauce, el fondo del valle por donde el agua se concentra.</p>
+<p><strong>Desembocadura / salida</strong> — El punto por donde el agua abandona la cuenca.</p>
+<p><strong>Delinear</strong> — Determinar qué píxeles pertenecen a una cuenca a partir de las
+alturas.</p>
+<p><strong>Divisoria de aguas</strong> — La línea que separa dos cuencas.</p>
+<p><strong>Acondicionar</strong> — Rellenar pozos y depresiones e inclinar planicies para que el
+agua pueda escurrir. Vuelve el DEM menos fiel al terreno a propósito.</p>
+<p><strong>Pozo</strong> (<em>pit</em>) — Un píxel más bajo que sus ocho vecinos. Casi siempre ruido del
+sensor.</p>
+<p><strong>Depresión</strong> — Hondonada de varios píxeles sin salida.</p>
+<p><strong>Planicie</strong> (<em>flat</em>) — Zona horizontal sin dirección de bajada definida.</p>
+<p><strong>D8</strong> — Regla de escurrimiento donde cada píxel manda toda su agua al vecino con
+mayor pendiente descendente.</p>
+<p><strong>Dirección de flujo</strong> — Raster donde cada celda guarda hacia qué vecino drena.</p>
+<p><strong>Acumulación de flujo</strong> — Cuántos píxeles de más arriba drenan por cada punto.
+Los valores altos dibujan las quebradas.</p>
+<p><strong>Umbral de área drenada</strong> — El valor de acumulación a partir del cual un píxel
+cuenta como cauce. Aquí <code>--umbral-km2</code>.</p>
+<h2 id="c13-riesgo-y-clasificacion" id="riesgo-y-clasificacion">Riesgo y clasificación</h2>
+<p><strong>Inundación de agua</strong> — Agua más o menos limpia desbordándose.</p>
+<p><strong>Crecida de detritos</strong> — Agua con bastante material arrastrado.</p>
+<p><strong>Flujo de detritos / aluvión</strong> — Barro, piedras y bloques moviéndose como una
+masa densa. Lo que el proyecto quiere identificar.</p>
+<p><strong>Susceptibilidad</strong> — Qué quebradas son capaces de generar un flujo. Propiedad del
+terreno.</p>
+<p><strong>Gatillo</strong> — Cuánta lluvia hace falta para activar una quebrada capaz. No
+construido.</p>
+<p><strong>Razón de Melton</strong> — Desnivel dividido por raíz del área. Mide la energía
+potencial de la cuenca por unidad de tamaño. Adimensional.</p>
+<p><strong>Wilford et al. (2004)</strong> — El estudio de donde salen los umbrales, publicado en
+<em>Landslides</em>, calibrado contra eventos reales.</p>
+<p><strong>Runout</strong> — Modelo de propagación que calcula hasta dónde llega el material.
+Fuera de alcance de este proyecto.</p>
+<p><strong>Proxy</strong> — Sustituto medible de algo que no se puede medir directamente. Aquí, la
+geometría del cauce en lugar de la física del flujo.</p>
+<p><strong>Corredor</strong> — Ancho alrededor del cauce, 45 m. Tolerancia de posición, no
+distancia de propagación.</p>
+<p><strong>Punto de corte</strong> — Lugar donde una vía cruza el cauce de una quebrada
+susceptible. Es un candidato, no una predicción.</p>
+<h2 id="c13-instituciones-y-fuentes" id="instituciones-y-fuentes">Instituciones y fuentes</h2>
+<p><strong>DGA</strong> — Dirección General de Aguas. Publica las áreas oficiales de las cuencas
+de Chile.</p>
+<p><strong>SERNAGEOMIN</strong> — Servicio Nacional de Geología y Minería.</p>
+<p><strong>Copernicus GLO-30</strong> — El DEM elegido. 30 m reales, derivados de TanDEM-X.</p>
+<p><strong>TanDEM-X</strong> — Misión de dos satélites de radar de la que deriva el DEM.</p>
+<p><strong>ALOS PALSAR</strong> — El DEM descartado. Sus productos de "12,5 m" sobre Chile están
+remuestreados desde 30 m.</p>
+<p><strong>OpenStreetMap</strong> — De donde salen la red vial y las zonas urbanas.</p>
+<p><strong>geoBoundaries</strong> — De donde sale el límite regional, con la URL anclada a un
+commit fijo.</p>
+<h2 id="c13-software-y-practica" id="software-y-practica">Software y práctica</h2>
+<p><strong>pysheds</strong> — La librería que hace la hidrología.</p>
+<p><strong>rasterio</strong> / <strong>geopandas</strong> — Rasters y vectores respectivamente.</p>
+<p><strong>osmnx</strong> — Descarga de OpenStreetMap. Pin <code>&gt;=2.0</code> porque la API cambió.</p>
+<p><strong>Monkey patching</strong> — Modificar una librería desde fuera en tiempo de ejecución.
+Lo que hace <code>compat_pysheds.py</code>.</p>
+<p><strong>Verificación de precondiciones</strong> — Comprobar que las suposiciones de un cálculo
+se cumplen antes de calcular. Aquí, la cobertura del DEM.</p>
+<p><strong>Pipeline por etapas</strong> — Cadena donde cada script escribe archivos que el
+siguiente lee, y que se puede retomar en cualquier punto.</p>
+<p><strong>Figura de control</strong> — Mapa generado para revisar a ojo que el resultado tenga
+sentido. El ojo detecta errores que ninguna verificación numérica atraparía.</p></section>
+</main>
+
+<button id="top" aria-label="Volver arriba">&#8593;</button>
+
+<script>
+const nav=document.getElementById('nav');
+const groups=[...document.querySelectorAll('.nav-group')];
+const chapters=[...document.querySelectorAll('.chapter')];
+const subs=[...document.querySelectorAll('.sub')];
+const heads=[...document.querySelectorAll('.chapter h2[id]')];
+
+function onScroll(){
+  const y=window.scrollY, h=document.body.scrollHeight-innerHeight;
+  document.getElementById('progress').style.width=(h>0?y/h*100:0)+'%';
+  document.getElementById('top').classList.toggle('show', y>700);
+  let cur=chapters[0];
+  for(const c of chapters){ if(c.getBoundingClientRect().top<=140) cur=c; }
+  groups.forEach(g=>{
+    const on = g.dataset.chapter===cur.id;
+    if(g.classList.contains('active')!==on) g.classList.toggle('active',on);
+  });
+  let ch=null;
+  for(const s of heads){ if(s.getBoundingClientRect().top<=150) ch=s; }
+  subs.forEach(s=>s.classList.toggle('here', ch && s.getAttribute('href')==='#'+ch.id));
+  const act=document.querySelector('.nav-group.active');
+  if(act){
+    const r=act.getBoundingClientRect(), nr=nav.getBoundingClientRect();
+    if(r.top<nr.top+8||r.bottom>nr.bottom-8) act.scrollIntoView({block:'nearest'});
+  }
+}
+addEventListener('scroll',onScroll,{passive:true}); onScroll();
+
+document.getElementById('filter').addEventListener('input',e=>{
+  const q=e.target.value.toLowerCase().trim();
+  groups.forEach(g=>{
+    const txt=g.textContent.toLowerCase();
+    g.style.display=(!q||txt.includes(q))?'':'none';
+  });
+});
+document.getElementById('top').onclick=()=>scrollTo({top:0,behavior:'smooth'});
+document.getElementById('burger').onclick=()=>document.getElementById('sidebar').classList.toggle('open');
+nav.addEventListener('click',e=>{ if(e.target.closest('a')&&innerWidth<=1080)
+  document.getElementById('sidebar').classList.remove('open'); });
+
+const root=document.documentElement, tb=document.getElementById('theme');
+tb.onclick=()=>{
+  const d=root.getAttribute('data-theme')==='dark';
+  root.setAttribute('data-theme', d?'light':'dark');
+  tb.textContent = d?'Modo oscuro':'Modo claro';
+};
+</script>
+</body>
+</html>

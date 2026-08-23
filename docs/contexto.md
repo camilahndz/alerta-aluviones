@@ -58,9 +58,9 @@ observados.
 | Hito | Contenido | Estado |
 |---|---|---|
 | **M0** | Andamiaje: repo, estructura, README, .gitignore, primer commit | Cerrado |
-| **M1** | Terreno: DEM, relleno de sumideros, dirección y acumulación de flujo, cuencas y red de quebradas | Cerrado |
-| **M2** | Susceptibilidad: variables de terreno + quebradas rankeadas (razón de Melton) | Cerrado |
-| **M3** | Exposición: cruce de trayectorias con red vial (OSM) y zonas urbanas | En curso — pendiente corrida regional completa |
+| **M1** | Terreno: DEM, relleno de sumideros, dirección y acumulación de flujo, cuencas y red de quebradas | Cerrado y reproducible en local (corrida 2026-08-23) |
+| **M2** | Susceptibilidad: variables de terreno + quebradas rankeadas (razón de Melton) | Cerrado y reproducible en local (corrida 2026-08-23) |
+| **M3** | Exposición: cruce de trayectorias con red vial (OSM) y zonas urbanas | Cerrado — 422 puntos de corte (corrida 2026-08-23) |
 | **M4** | Gatillo: umbral I-D calibrado con eventos observados (incl. julio 2026) | No iniciado |
 | **M5** | Validación: matriz de confusión vs. lo ocurrido; precisión, recall, AUC ROC | No iniciado |
 | **M6** | Entrega: mapa/visor final + documentación | No iniciado |
@@ -83,7 +83,12 @@ M0–M3 = v0 mostrable. M4–M5 = v1 (calibración y validación).
   orográfica en los Andes:** hay que corregir sesgo contra estaciones antes de
   usarlo.
 - **Geología / peligro:** SERNAGEOMIN.
-- **Red vial y urbana:** OpenStreetMap (osmnx).
+- **Red vial y urbana:** OpenStreetMap. Se usa el extracto de Chile de
+  Geofabrik (`chile-latest-free.gpkg.zip`, se baja del navegador y lo lee
+  geopandas), **no la API de Overpass**. Overpass limita a 2 consultas
+  simultáneas por IP y M3 necesita ~48, así que la descarga no completa; y
+  además responde con el mapa del instante, lo que hace que ninguna corrida sea
+  reproducible. El extracto tiene fecha.
 - **Validación satelital:** Sentinel-1 (SAR, ve a través de nubes) y Sentinel-2
   (óptico) vía Copernicus Data Space o Google Earth Engine.
 
@@ -120,5 +125,14 @@ Hidrología: pysheds o richdem (o GRASS GIS si se requiere `r.watershed` /
   disco produce cifras que se ven plausibles pero cubren una fracción del
   territorio. Además, las cuencas cortadas por el borde del raster quedan con el
   área truncada, y como la razón de Melton es H/√A, eso **infla** el índice y
-  fabrica cuencas críticas falsas. Por eso el pipeline verifica cobertura antes
-  de calcular y marca las cuencas de borde.
+  fabrica cuencas críticas falsas. Pasó de verdad en agosto de 2026 y está medido:
+  sobre el DEM truncado el Melton máximo daba 1,504 contra 1,009 del completo, y
+  las cuencas de flujo de detritos salían 38 contra 21. Por eso `src/cobertura.py`
+  verifica cobertura al inicio de los cinco scripts que leen un DEM, y aborta bajo
+  el 99%.
+
+- **Que la unidad de análisis no coincida con el fenómeno.** M1 corta cuencas solo
+  donde el terreno termina, o sea en la costa, así que las quebradas interiores
+  quedan absorbidas en las cuencas de río y nunca se evalúan por separado. Cuatro
+  cuencas concentran el 83% de la superficie drenada y las cuatro son de clase
+  inundación. El índice funciona; lo que falla es a qué objetos se lo aplica.

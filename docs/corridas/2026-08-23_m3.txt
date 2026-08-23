@@ -1,0 +1,358 @@
+===========================================================================
+Corrida de referencia M3 - 23 de agosto de 2026 (segundo intento)
+===========================================================================
+
+Sobre la salida de M1/M2 de docs/corridas/2026-08-23_m1_m2.txt
+(444 cuencas, 39.523 km2, DEM verificado al 100% de cobertura).
+
+El primer intento quedo en 2026-08-23_m3_FALLIDA.txt: Overpass estaba
+saturado y la descarga de OSM se cayo en silencio. Ver ahi el diagnostico.
+
+Comando: python src/m3_exposicion.py   (sin --permitir-cobertura-parcial)
+   inicio: 2026-08-23 12:13:44
+===========================================================================
+Cobertura del DEM sobre la region: 100.0%
+Cuencas susceptibles: 167 de 444
+  crecida_detritos: 146 · flujo_detritos: 21
+
+Trazando cauces principales...
+  el cauce se corta bajo 0.15 km2 drenados (166 celdas)
+  167 trayectorias trazadas de 167 cuencas
+  largo del cauce: mediana 1.80 km, maximo 6.27 km
+Bajando OSM en 12 cuadros de 0.5x0.5 grados (solo los que tienen trayectorias cerca)...
+  [  1/12]   3018 vias     27 poligonos urbanos
+      zonas urbanas del cuadro 2/12 (np.float64(-72.0), np.float64(-32.0), np.float64(-71.5), np.float64(-31.5)): ConnectTimeout, reintento 1/3 en 30s...
+      zonas urbanas del cuadro 2/12 (np.float64(-72.0), np.float64(-32.0), np.float64(-71.5), np.float64(-31.5)): ConnectTimeout, reintento 2/3 en 60s...
+      zonas urbanas del cuadro 2/12 (np.float64(-72.0), np.float64(-32.0), np.float64(-71.5), np.float64(-31.5)): ConnectTimeout, reintento 3/3 en 90s...
+
+Overpass fallo 4 veces seguidas en zonas urbanas del cuadro 2/12 (np.float64(-72.0), np.float64(-32.0), np.float64(-71.5), np.float64(-31.5)):
+    ConnectTimeout: HTTPSConnectionPool(host='overpass-api.de', port=443): Max retries exceeded with url: /api/interpreter (Caused by ConnectTimeoutError(<HTTPSConnection(host='overpass-api.de', port=443) at 0x1f4da648ce0>, 'Connection to overpass-api.de timed out. (connect timeout=180)'))
+
+La corrida se detiene a proposito. Seguir produciria una red
+vial incompleta, y los puntos de corte que salen de una red
+incompleta se ven exactamente igual que los buenos: aparecen
+solo donde si hubo descarga.
+
+Overpass es un servicio publico y se satura. Reintenta en un
+rato; los cuadros ya bajados quedan en cache y no se repiten.
+   fin: 2026-08-23 12:23:51
+
+===========================================================================
+TERCER INTENTO (el segundo aborto por ConnectTimeout de Overpass, arriba).
+Comprobado antes de relanzar: overpass-api.de conecta en 1,1 s, o sea que
+el rechazo era transitorio, por limite de peticiones por IP.
+   inicio: 2026-08-23 12:24:55
+===========================================================================
+Cobertura del DEM sobre la region: 100.0%
+Cuencas susceptibles: 167 de 444
+  crecida_detritos: 146 · flujo_detritos: 21
+
+Trazando cauces principales...
+  el cauce se corta bajo 0.15 km2 drenados (166 celdas)
+  167 trayectorias trazadas de 167 cuencas
+  largo del cauce: mediana 1.80 km, maximo 6.27 km
+Bajando OSM en 12 cuadros de 0.5x0.5 grados (solo los que tienen trayectorias cerca)...
+  [  1/12]   3018 vias     27 poligonos urbanos
+      zonas urbanas del cuadro 2/12 (np.float64(-72.0), np.float64(-32.0), np.float64(-71.5), np.float64(-31.5)): ConnectTimeout, reintento 1/3 en 30s...
+      zonas urbanas del cuadro 2/12 (np.float64(-72.0), np.float64(-32.0), np.float64(-71.5), np.float64(-31.5)): ConnectTimeout, reintento 2/3 en 60s...
+      zonas urbanas del cuadro 2/12 (np.float64(-72.0), np.float64(-32.0), np.float64(-71.5), np.float64(-31.5)): ConnectTimeout, reintento 3/3 en 90s...
+
+Overpass fallo 4 veces seguidas en zonas urbanas del cuadro 2/12 (np.float64(-72.0), np.float64(-32.0), np.float64(-71.5), np.float64(-31.5)):
+    ConnectTimeout: HTTPSConnectionPool(host='overpass-api.de', port=443): Max retries exceeded with url: /api/interpreter (Caused by ConnectTimeoutError(<HTTPSConnection(host='overpass-api.de', port=443) at 0x198146b9490>, 'Connection to overpass-api.de timed out. (connect timeout=180)'))
+
+La corrida se detiene a proposito. Seguir produciria una red
+vial incompleta, y los puntos de corte que salen de una red
+incompleta se ven exactamente igual que los buenos: aparecen
+solo donde si hubo descarga.
+
+Overpass es un servicio publico y se satura. Reintenta en un
+rato; los cuadros ya bajados quedan en cache y no se repiten.
+   fin: 2026-08-23 12:35:24
+
+===========================================================================
+CUARTO INTENTO - con OVERPASS_URL apuntando a overpass.osm.ch
+
+Diagnostico de los tres intentos anteriores: overpass-api.de funciona,
+pero limita a 2 consultas simultaneas por IP (lo declara en /api/status).
+M3 hace 24 consultas seguidas y agota la cuota; cuando eso pasa el servidor
+deja de aceptar la conexion y el cliente lo ve como ConnectTimeout.
+El espejo oficial overpass.osm.ch atiende la misma consulta sin problema.
+   inicio: 2026-08-23 13:14:47
+===========================================================================
+Cobertura del DEM sobre la region: 100.0%
+Cuencas susceptibles: 167 de 444
+  crecida_detritos: 146 · flujo_detritos: 21
+
+Trazando cauces principales...
+  el cauce se corta bajo 0.15 km2 drenados (166 celdas)
+  167 trayectorias trazadas de 167 cuencas
+  largo del cauce: mediana 1.80 km, maximo 6.27 km
+Servidor Overpass: https://overpass.osm.ch/api
+Bajando OSM en 12 cuadros de 0.5x0.5 grados (solo los que tienen trayectorias cerca)...
+  [  1/12]      0 vias      0 poligonos urbanos  (vacio)
+
+   >>> CUARTO INTENTO ANULADO Y DETENIDO EN EL CUADRO 1. <<<
+
+   El diagnostico de arriba estaba equivocado: overpass.osm.ch no es un
+   espejo global sino un extracto regional suizo. Comprobado con la misma
+   consulta en dos lugares:
+
+     way[highway] en La Serena  -> overpass-api.de: 7.929 | osm.ch:      0
+     way[highway] en Zurich     -> overpass-api.de: 16.265 | osm.ch: 16.265
+
+   O sea que para Chile devolvia vacio, no error. Los HTTP 200 y el
+   InsufficientResponseError que parecian confirmar que el espejo servia
+   eran justamente la senal de que no tiene los datos: la misma confusion
+   entre 'vacio' y 'fallido' que este script acababa de corregir.
+
+   Revertido a overpass-api.de, que si tiene cobertura global y responde
+   bien (7.929 vias de La Serena en 3,4 s). Contra el limite de 2 consultas
+   por IP se sube la paciencia en vez de cambiar de servidor:
+   6 reintentos, espera creciente desde 45 s y 5 s de pausa entre cuadros.
+
+===========================================================================
+QUINTO INTENTO - overpass-api.de, con pausa entre cuadros
+   inicio: 2026-08-23 13:26:13
+===========================================================================
+Cobertura del DEM sobre la region: 100.0%
+Cuencas susceptibles: 167 de 444
+  crecida_detritos: 146 · flujo_detritos: 21
+
+Trazando cauces principales...
+  el cauce se corta bajo 0.15 km2 drenados (166 celdas)
+  167 trayectorias trazadas de 167 cuencas
+  largo del cauce: mediana 1.80 km, maximo 6.27 km
+Servidor Overpass: https://overpass-api.de/api
+Bajando OSM en 12 cuadros de 0.5x0.5 grados (solo los que tienen trayectorias cerca)...
+  [  1/12]   3018 vias     27 poligonos urbanos
+      zonas urbanas del cuadro 2/12 (-72.0, -32.0, -71.5, -31.5): ConnectTimeout, reintento 1/5 en 45s...
+      zonas urbanas del cuadro 2/12 (-72.0, -32.0, -71.5, -31.5): ConnectTimeout, reintento 2/5 en 90s...
+      zonas urbanas del cuadro 2/12 (-72.0, -32.0, -71.5, -31.5): ConnectTimeout, reintento 3/5 en 135s...
+      zonas urbanas del cuadro 2/12 (-72.0, -32.0, -71.5, -31.5): ConnectTimeout, reintento 4/5 en 180s...
+      zonas urbanas del cuadro 2/12 (-72.0, -32.0, -71.5, -31.5): ConnectTimeout, reintento 5/5 en 225s...
+
+Overpass fallo 6 veces seguidas en zonas urbanas del cuadro 2/12 (-72.0, -32.0, -71.5, -31.5):
+    ConnectTimeout: HTTPSConnectionPool(host='overpass-api.de', port=443): Max retries exceeded with url: /api/interpreter (Caused by ConnectTimeoutError(<HTTPSConnection(host='overpass-api.de', port=443) at 0x2b1e8592600>, 'Connection to overpass-api.de timed out. (connect timeout=180)'))
+
+La corrida se detiene a proposito. Seguir produciria una red
+vial incompleta, y los puntos de corte que salen de una red
+incompleta se ven exactamente igual que los buenos: aparecen
+solo donde si hubo descarga.
+
+Overpass es un servicio publico y se satura. Reintenta en un
+rato; los cuadros ya bajados quedan en cache y no se repiten.
+   fin: 2026-08-23 13:48:13
+
+===========================================================================
+SEXTO INTENTO - consulta de zonas urbanas partida en dos
+
+El quinto aborto en el mismo punto: la consulta combinada landuse+place
+del cuadro 2 fallo 6 de 6. Pedida directamente al servidor devuelve
+HTTP 429 (Too Many Requests) en 13 s; las dos etiquetas por separado
+devuelven HTTP 200 en 1,5 y 1,2 s, con 11 y 13 elementos. O sea que ese
+cuadro NO esta vacio y el problema es el costo de la consulta combinada.
+   inicio: 2026-08-23 13:49:12
+===========================================================================
+Cobertura del DEM sobre la region: 100.0%
+Cuencas susceptibles: 167 de 444
+  crecida_detritos: 146 · flujo_detritos: 21
+
+Trazando cauces principales...
+  el cauce se corta bajo 0.15 km2 drenados (166 celdas)
+  167 trayectorias trazadas de 167 cuencas
+  largo del cauce: mediana 1.80 km, maximo 6.27 km
+Servidor Overpass: https://overpass-api.de/api
+Bajando OSM en 12 cuadros de 0.5x0.5 grados (solo los que tienen trayectorias cerca)...
+      zonas urbanas (landuse) del cuadro 1/12 (-72.0, -32.5, -71.5, -32.0): ConnectTimeout, reintento 1/5 en 45s...
+      zonas urbanas (landuse) del cuadro 1/12 (-72.0, -32.5, -71.5, -32.0): ConnectTimeout, reintento 2/5 en 90s...
+      zonas urbanas (landuse) del cuadro 1/12 (-72.0, -32.5, -71.5, -32.0): ConnectTimeout, reintento 3/5 en 135s...
+      zonas urbanas (landuse) del cuadro 1/12 (-72.0, -32.5, -71.5, -32.0): ConnectTimeout, reintento 4/5 en 180s...
+      zonas urbanas (landuse) del cuadro 1/12 (-72.0, -32.5, -71.5, -32.0): ConnectTimeout, reintento 5/5 en 225s...
+
+Overpass fallo 6 veces seguidas en zonas urbanas (landuse) del cuadro 1/12 (-72.0, -32.5, -71.5, -32.0):
+    ConnectTimeout: HTTPSConnectionPool(host='overpass-api.de', port=443): Max retries exceeded with url: /api/interpreter (Caused by ConnectTimeoutError(<HTTPSConnection(host='overpass-api.de', port=443) at 0x28286d33e90>, 'Connection to overpass-api.de timed out. (connect timeout=180)'))
+
+La corrida se detiene a proposito. Seguir produciria una red
+vial incompleta, y los puntos de corte que salen de una red
+incompleta se ven exactamente igual que los buenos: aparecen
+solo donde si hubo descarga.
+
+Overpass es un servicio publico y se satura. Reintenta en un
+rato; los cuadros ya bajados quedan en cache y no se repiten.
+   fin: 2026-08-23 14:11:07
+
+===========================================================================
+SEPTIMO INTENTO - una peticion por cuadro y etiqueta
+
+El sexto aborto en el cuadro 1. Causa medida: un cuadro de 0,5 grados a
+esta latitud mide 2.646 km2 y osmnx subdivide todo lo que pase de 2.500,
+asi que cada consulta urbana se convertia en dos peticiones. Con landuse
+y place separados eran 4 por cuadro, 48 en total, contra una cuota de 2
+simultaneas. Se sube max_query_area_size a 5.000 km2: un cuadro, una
+peticion. Medido que el servidor la atiende (HTTP 200 en 1,2 s).
+   inicio: 2026-08-23 14:11:19
+===========================================================================
+Cobertura del DEM sobre la region: 100.0%
+Cuencas susceptibles: 167 de 444
+  crecida_detritos: 146 · flujo_detritos: 21
+
+Trazando cauces principales...
+  el cauce se corta bajo 0.15 km2 drenados (166 celdas)
+  167 trayectorias trazadas de 167 cuencas
+  largo del cauce: mediana 1.80 km, maximo 6.27 km
+Servidor Overpass: https://overpass-api.de/api
+Bajando OSM en 12 cuadros de 0.5x0.5 grados (solo los que tienen trayectorias cerca)...
+      vias del cuadro 1/12 (-72.0, -32.5, -71.5, -32.0): ConnectTimeout, reintento 1/5 en 45s...
+
+===========================================================================
+OCTAVO INTENTO - OSM desde el extracto local de Geofabrik
+
+Se abandona Overpass como fuente. Siete intentos y ninguno logro completar
+la descarga: el servidor publico limita a 2 consultas simultaneas por IP y
+M3 necesita del orden de 48.
+
+Fuente nueva: chile-260822-free.gpkg.zip de Geofabrik, datos de OSM al
+2026-08-22T20:21:28Z segun el README del propio archivo. Bajado del
+navegador, sin registro. Ademas de resolver la disponibilidad, hace que
+M3 sea reproducible: el extracto tiene fecha, Overpass no.
+   inicio: 2026-08-23 14:57:13
+===========================================================================
+Cobertura del DEM sobre la region: 100.0%
+Cuencas susceptibles: 167 de 444
+  crecida_detritos: 146 · flujo_detritos: 21
+
+Trazando cauces principales...
+  el cauce se corta bajo 0.15 km2 drenados (166 celdas)
+  167 trayectorias trazadas de 167 cuencas
+  largo del cauce: mediana 1.80 km, maximo 6.27 km
+Leyendo OSM del extracto local: chile.gpkg
+  vias: 52,444 en el recuadro -> 46,246 de los tipos que interesan
+  zonas urbanas: 1,189 de uso de suelo + 0 de localidad = 1,189 poligonos
+  red vial: 46,246 tramos | zonas urbanas: 1,189 poligonos
+
+Verificando que las capas se solapen...
+  trayectorias: X    239590-352540    Y   6437175-6752205  
+  red vial    : X    240596-380991    Y   6429601-6759941  
+  ok, ambas en EPSG:32719
+
+Bajando limites comunales...
+
+Cruzando trayectorias con la red vial...
+  457 pares via-trayectoria se tocan
+  422 puntos de corte tras fusionar duplicados
+
+Revisando entrada a zonas urbanas...
+  10 trayectorias entran en zona urbana
+  3 localidades con nombre alcanzadas
+
+==================================================================
+Puntos de corte: 422
+
+Por jerarquia de via:
+  track              122   (peso 0.10)
+  residential         91   (peso 0.30)
+  unclassified        79   (peso 0.30)
+  motorway            73   (peso 1.00)
+  service             24   (peso 0.15)
+  tertiary            20   (peso 0.45)
+  living_street        8   (peso 0.20)
+  motorway_link        5   (peso 0.15)
+
+Las 12 vias mas afectadas:
+                                      cortes  prioridad_max
+via_nombre              via_tipo                           
+Ruta 5 Norte            motorway          73          1.000
+Camino a Totoralillo    tertiary           6          0.725
+                        unclassified      75          0.650
+                        residential       50          0.650
+Héroes de la Concepción residential        3          0.650
+Los Lirios              residential        3          0.650
+Calle 14                residential        2          0.650
+Calle 5                 residential        2          0.650
+Huertos Viejos          residential        2          0.650
+Ignacio Carrera Pinto   residential        2          0.650
+Arturo Prat             residential        1          0.650
+Avenida Estadio         residential        1          0.650
+
+Los 12 cortes de mayor prioridad:
+ rank  prioridad   via_nombre via_tipo     comuna            clase  melton
+    1       1.00 Ruta 5 Norte motorway La Higuera   flujo_detritos    0.84
+    2       1.00 Ruta 5 Norte motorway   Coquimbo   flujo_detritos    0.83
+    3       1.00 Ruta 5 Norte motorway   Coquimbo   flujo_detritos    0.70
+    4       1.00 Ruta 5 Norte motorway   Coquimbo   flujo_detritos    0.68
+    5       1.00 Ruta 5 Norte motorway   Coquimbo   flujo_detritos    0.68
+    6       1.00 Ruta 5 Norte motorway   Coquimbo   flujo_detritos    0.68
+    7       1.00 Ruta 5 Norte motorway  La Serena   flujo_detritos    0.64
+    8       1.00 Ruta 5 Norte motorway  La Serena   flujo_detritos    0.64
+    9       1.00 Ruta 5 Norte motorway  La Serena   flujo_detritos    0.63
+   10       1.00 Ruta 5 Norte motorway   Coquimbo   flujo_detritos    0.61
+   11       0.78 Ruta 5 Norte motorway  Los Vilos crecida_detritos    1.01
+   12       0.78 Ruta 5 Norte motorway  Los Vilos crecida_detritos    1.01
+
+  capa   -> puntos_corte.gpkg, trayectorias.gpkg
+  tabla  -> m3_puntos_corte.csv
+  figura -> m3_exposicion.png
+   fin: 2026-08-23 14:58:00
+
+===========================================================================
+ANEXO - cifras derivadas de esta corrida
+===========================================================================
+
+Fuente de OSM : chile-260822-free.gpkg.zip (Geofabrik), datos al
+                2026-08-22T20:21:28Z. Bajado del navegador, sin registro.
+Entrada       : susceptibilidad.gpkg de la corrida 2026-08-23_m1_m2
+
+  cuencas susceptibles      167 de 444  (146 crecida + 21 flujo)
+  trayectorias trazadas     167 de 167
+  largo del cauce           mediana 1,80 km, maximo 6,27 km
+  red vial en el recuadro   52.444 -> 46.246 de los tipos que interesan
+  zonas urbanas             1.189 poligonos
+  pares via-trayectoria     457
+  PUNTOS DE CORTE           422
+
+Por jerarquia de via:
+  track            122      motorway          73
+  residential       91      service           24
+  unclassified      79      tertiary          20
+                            living_street      8
+                            motorway_link      5
+
+Por comuna:
+  Coquimbo   117 | La Higuera  94 | La Serena  79 | Ovalle  49
+  Canela      42 | Los Vilos   40 | Salamanca   1
+
+Por clase de la cuenca de origen:
+  crecida_detritos  351      flujo_detritos  71
+
+Las vias con nombre mas afectadas:
+  Ruta 5 Norte              motorway      73 cortes   prioridad max 1,000
+  Ruta D-190                tertiary      13          0,500
+  Camino Interior           track          8          0,550
+  Camino a Totoralillo      tertiary       6          0,725
+  Parque Eolico El Arrayan  service        6          0,575
+
+  265 de los 422 cortes caen en vias sin nombre en OSM (huellas y caminos
+  sin clasificar), asi que la tabla de arriba cubre 157 cortes.
+
+Zonas urbanas alcanzadas:
+  10 trayectorias entran en zona urbana
+  3 localidades con nombre: Cascabeles, Mina Los Pelambres y una tercera
+
+  ATENCION: esta cifra subestima. M3 filtra las zonas urbanas a poligonos, y
+  en el extracto las localidades de la region -La Serena, Coquimbo, Tongoy,
+  Combarbala, Monte Patria, Punitaqui- vienen como PUNTOS en la capa
+  gis_osm_places_free, 1.113 en total, que el filtro descarta. Los poligonos
+  de gis_osm_places_a_free en esta region son 5 islas. O sea que lo que se
+  reporta como "localidad alcanzada" sale de los nombres de los poligonos de
+  uso de suelo, que son barrios y sitios, no localidades.
+
+  No es un problema introducido por el cambio de fuente: con Overpass pasaba
+  lo mismo, porque el filtro a poligonos es del codigo. Queda pendiente
+  decidir si una trayectoria que llega a menos de X metros de un punto
+  poblado cuenta como alcance urbano, que es una decision de modelo.
+
+Verificacion de solape (la que fallo en la corrida invalida):
+  trayectorias  X 239.590 - 352.540
+  red vial      X 240.596 - 380.991
+  La red vial cubre y excede el rango de las trayectorias. En la corrida
+  invalida cubria X 245.816 - 264.959, o sea 19 km de 113.

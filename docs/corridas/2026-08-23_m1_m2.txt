@@ -1,0 +1,286 @@
+===========================================================================
+Corrida de referencia M1 + M2 - 23 de agosto de 2026
+===========================================================================
+
+Maquina : notebook local, Windows 11, 12,2 GB de RAM (6,3 GB libres al lanzar)
+Python  : 3.12.10 | rasterio 1.5.0 | geopandas 1.1.4 | pysheds 0.5
+DEM     : data/processed/dem_utm19s.tif, 14910 x 9743 px, EPSG:32719, 30 m
+          cobertura verificada sobre la region: 100,0%
+
+Motivo: las capas vectoriales en disco venian de un DEM truncado (lat -29 a
+-31, el 40% de la region). Esta es la primera corrida sobre el DEM completo.
+
+Comandos, en este orden:
+  python src/m1_terreno.py --umbral-km2 0.15 --area-min-km2 0.4
+  python src/m1_recortar_region.py
+  python src/m2_susceptibilidad.py
+
+
+===========================================================================
+1) m1_terreno.py --umbral-km2 0.15 --area-min-km2 0.4
+   inicio: 2026-08-23 00:16:01
+===========================================================================
+Cobertura del DEM sobre la region: 100.0%
+DEM cargado    : D:\Camila\Escritorio\alerta-aluviones\data\processed\dem_utm19s.tif
+  dimensiones  : 14910 filas x 9743 columnas
+  CRS          : EPSG:32719
+  altura min/max: 0 / 6914 m
+  pixel        : 900 m2 -> umbral = 166 pixeles
+
+Acondicionando el DEM...
+  pozos rellenados
+  depresiones rellenadas
+  planicies resueltas
+
+Calculando escurrimiento...
+  direccion de flujo (D8) lista
+  acumulacion lista (maximo: 21,178,682 pixeles)
+
+Extrayendo red de drenaje (umbral: 166 pixeles)...
+  370185 tramos, 207351.1 km de red en total
+
+Delineando cuencas...
+  1443 desembocaduras candidatas
+  493 cuencas descartadas por area < 0.4 km2
+  950 cuencas delineadas (105766.9 km2 en total)
+  la mayor: 19060.8 km2
+  2 tocan el borde del DEM: area truncada, M2 las excluye
+
+Guardando resultados...
+Traceback (most recent call last):
+  File "D:\Camila\Escritorio\alerta-aluviones\src\m1_terreno.py", line 656, in <module>
+    main()
+  File "D:\Camila\Escritorio\alerta-aluviones\src\m1_terreno.py", line 648, in main
+    figura_control(dem, acc, red, cuencas, grid, ruta_png)
+  File "D:\Camila\Escritorio\alerta-aluviones\src\m1_terreno.py", line 560, in figura_control
+    cuencas.boundary.plot(ax=ax1, color="black", linewidth=0.8)
+  File "D:\Camila\Escritorio\alerta-aluviones\.venv\Lib\site-packages\geopandas\geoseries.py", line 999, in plot
+    return plot_series(self, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Camila\Escritorio\alerta-aluviones\.venv\Lib\site-packages\geopandas\plotting.py", line 480, in plot_series
+    ax.figure.canvas.draw_idle()
+  File "D:\Camila\Escritorio\alerta-aluviones\.venv\Lib\site-packages\matplotlib\backend_bases.py", line 1989, in draw_idle
+    self.draw(*args, **kwargs)
+  File "D:\Camila\Escritorio\alerta-aluviones\.venv\Lib\site-packages\matplotlib\backends\backend_agg.py", line 438, in draw
+    self.figure.draw(self.renderer)
+  File "D:\Camila\Escritorio\alerta-aluviones\.venv\Lib\site-packages\matplotlib\artist.py", line 94, in draw_wrapper
+    result = draw(artist, renderer, *args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Camila\Escritorio\alerta-aluviones\.venv\Lib\site-packages\matplotlib\artist.py", line 71, in draw_wrapper
+    return draw(artist, renderer)
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Camila\Escritorio\alerta-aluviones\.venv\Lib\site-packages\matplotlib\figure.py", line 3282, in draw
+    mimage._draw_list_compositing_images(
+  File "D:\Camila\Escritorio\alerta-aluviones\.venv\Lib\site-packages\matplotlib\image.py", line 133, in _draw_list_compositing_images
+    a.draw(renderer)
+  File "D:\Camila\Escritorio\alerta-aluviones\.venv\Lib\site-packages\matplotlib\artist.py", line 71, in draw_wrapper
+    return draw(artist, renderer)
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Camila\Escritorio\alerta-aluviones\.venv\Lib\site-packages\matplotlib\axes\_base.py", line 3367, in draw
+    mimage._draw_list_compositing_images(
+  File "D:\Camila\Escritorio\alerta-aluviones\.venv\Lib\site-packages\matplotlib\image.py", line 133, in _draw_list_compositing_images
+    a.draw(renderer)
+  File "D:\Camila\Escritorio\alerta-aluviones\.venv\Lib\site-packages\matplotlib\artist.py", line 71, in draw_wrapper
+    return draw(artist, renderer)
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Camila\Escritorio\alerta-aluviones\.venv\Lib\site-packages\matplotlib\image.py", line 633, in draw
+    im, l, b, trans = self.make_image(
+                      ^^^^^^^^^^^^^^^^
+  File "D:\Camila\Escritorio\alerta-aluviones\.venv\Lib\site-packages\matplotlib\image.py", line 936, in make_image
+    return self._make_image(self._A, bbox, transformed_bbox, clip,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Camila\Escritorio\alerta-aluviones\.venv\Lib\site-packages\matplotlib\image.py", line 516, in _make_image
+    A = self.to_rgba(A)
+        ^^^^^^^^^^^^^^^
+  File "D:\Camila\Escritorio\alerta-aluviones\.venv\Lib\site-packages\matplotlib\colorizer.py", line 358, in to_rgba
+    return self._colorizer.to_rgba(x, alpha=alpha, bytes=bytes, norm=norm)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Camila\Escritorio\alerta-aluviones\.venv\Lib\site-packages\matplotlib\colorizer.py", line 146, in to_rgba
+    rgba = self.cmap(x, alpha=alpha, bytes=bytes)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Camila\Escritorio\alerta-aluviones\.venv\Lib\site-packages\matplotlib\colors.py", line 787, in __call__
+    rgba, mask = self._get_rgba_and_mask(X, alpha=alpha, bytes=bytes)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Camila\Escritorio\alerta-aluviones\.venv\Lib\site-packages\matplotlib\colors.py", line 844, in _get_rgba_and_mask
+    rgba = lut.take(xa, axis=0, mode='clip')
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+numpy._core._exceptions._ArrayMemoryError: Unable to allocate 4.33 GiB for an array with shape (14912, 9745, 4) and data type float64
+   fin: 2026-08-23 00:52:02
+
+===========================================================================
+   NOTA: m1_terreno.py escribio rasters y vectores correctamente pero
+   murio al dibujar la figura de control (_ArrayMemoryError, 4,33 GiB:
+   imshow pedia un RGBA float64 del tamano del raster completo). Se
+   corrigio figura_control() para submuestrear antes de dibujar y se
+   regenero outputs/m1_terreno.png desde los rasters guardados, sin
+   repetir la hidrologia. Los datos de arriba no cambian.
+===========================================================================
+
+===========================================================================
+2) m1_recortar_region.py
+   inicio: 2026-08-23 00:58:05
+===========================================================================
+Cobertura del DEM sobre la region: 100.0%
+Limite regional  : D:\Camila\Escritorio\alerta-aluviones\data\raw\limite_coquimbo.gpkg (ya estaba)
+  superficie de la region: 40,576 km2
+
+Cuencas: 950 en total -> 444 descargan en la region
+  cubren el 96% de la superficie regional
+Tramos : 370185 en total -> 134329 dentro de esas cuencas
+
+Superficie drenada por esas cuencas: 39,523 km2
+
+Las 8 cuencas mas grandes:
+ id_cuenca   area_km2
+         3 11675.1204
+         4  9408.1518
+         5  7620.3810
+         8  4051.6587
+        13   742.2291
+        14   712.9701
+        15   687.8511
+        18   537.9804
+
+  vectores -> cuencas_coquimbo.gpkg, red_quebradas_coquimbo.gpkg
+  figura   -> D:\Camila\Escritorio\alerta-aluviones\outputs\m1_cuencas_coquimbo.png
+   fin: 2026-08-23 00:58:26
+
+===========================================================================
+3) m2_susceptibilidad.py
+   inicio: 2026-08-23 00:59:29
+===========================================================================
+Cobertura del DEM sobre la region: 100.0%
+Cuencas de entrada: 444
+Leyendo el DEM y midiendo cada cuenca...
+  calculando pendientes...
+
+Clasificacion, por los dos criterios:
+                        Wilford   solo Melton
+  flujo_detritos             21            33
+  crecida_detritos          146           134
+  inundacion                277           277
+
+  12 cuencas cambian de clase segun el criterio de largo.
+  Son las mas energeticas de la region, descartadas solo por ser largas:
+ id_cuenca  area_km2  largo_km  melton
+       944      0.40      2.84    1.01
+       933      0.42      2.70    0.96
+       447      1.61      4.02    0.87
+       694      0.74      2.89    0.79
+       444      1.62      3.98    0.77
+
+  El umbral de 2.7 km viene de un estudio en la Columbia
+  Britanica. M5 va a decir si sirve para Coquimbo o hay que recalibrarlo.
+
+  380 de 444 cuencas estan dentro del rango de calibracion del indice (<= 10 km2)
+
+Las 12 cuencas mas susceptibles:
+ ranking  id_cuenca  area_km2  desnivel_m  largo_km  pend_media_g  melton            clase
+       1        944      0.40      641.26      2.84          7.64    1.01 crecida_detritos
+       2        933      0.42      625.05      2.70         14.93    0.96 crecida_detritos
+       3        914      0.43      631.71      2.43         14.44    0.96   flujo_detritos
+       4        781      0.57      659.50      1.95         20.67    0.87   flujo_detritos
+       5        447      1.61     1101.26      4.02         22.18    0.87 crecida_detritos
+       6        558      1.04      851.78      2.43         23.57    0.84   flujo_detritos
+       7        704      0.71      696.55      2.52         15.66    0.83   flujo_detritos
+       8        681      0.76      692.52      2.52         17.04    0.80   flujo_detritos
+       9        694      0.74      675.44      2.89         16.22    0.79 crecida_detritos
+      10        723      0.67      636.50      2.36         14.26    0.78   flujo_detritos
+      11        444      1.62      975.50      3.98         18.56    0.77 crecida_detritos
+      12        648      0.82      686.34      3.21         10.56    0.76 crecida_detritos
+
+  capa   -> susceptibilidad.gpkg
+  figura -> D:\Camila\Escritorio\alerta-aluviones\outputs\m2_susceptibilidad.png
+   fin: 2026-08-23 01:01:31
+
+===========================================================================
+ANEXO - verificaciones derivadas de esta misma corrida
+(medidas sobre data/processed/ recien escrito, no tomadas de ninguna
+corrida anterior ni del README viejo)
+===========================================================================
+
+A) Control contra las areas oficiales de la DGA
+-----------------------------------------------
+Las tres cuencas mayores se identifican por su desembocadura, comparando
+las coordenadas de salida contra las bocas conocidas de cada rio:
+
+  id  3  Limari   11.675,1 km2   boca -30,728 / -71,690  (2,4 km de Punta Limari)
+  id  4  Elqui     9.408,2 km2   boca -29,894 / -71,274  (1,6 km de La Serena)
+  id  5  Choapa    7.620,4 km2   boca -31,623 / -71,558  (3,0 km de Huentelauquen)
+  id  8  Los Choros 4.051,7 km2  boca -29,306 / -71,364
+
+  Cuenca   Delineada     Oficial DGA   Desvio
+  Choapa    7.620,4 km2   ~7.650 km2   -0,4%
+  Elqui     9.408,2 km2   ~9.657 km2   -2,6%
+  Limari   11.675,1 km2  ~11.800 km2   -1,1%
+
+  El Limari se delinea entero. No existe la "cuenca contigua de 1.878 km2"
+  que el README menciona: despues de Los Choros (4.051,7) la siguiente
+  cuenca mide 742,2 km2. La discrepancia del 21% no se reproduce.
+
+B) Cuencas de borde
+-------------------
+  toca_borde = True en cuencas.gpkg (area con margen) : 2
+  cuencas cuya geometria alcanza el borde del raster  : 214
+  de esas 214, con desembocadura dentro de Coquimbo   : 0
+  clase = borde_truncado en susceptibilidad.gpkg      : 0
+
+  O sea que la marca `toca_borde` esta sub-detectando (2 de 214), pero
+  ninguna de las 214 entra a la region: todas drenan hacia Argentina por
+  el borde este del raster. Las cifras regionales no estan contaminadas.
+  Causa: al reproyectar a UTM queda una franja de una celda sin dato en
+  los bordes este, oeste y sur del rectangulo, asi que la comprobacion
+  -que mira la primera y ultima fila/columna del raster- nunca encuentra
+  terreno ahi. Por el norte no hay franja (la fila 0 tiene 619 celdas con
+  terreno de 9.743) y por eso ahi si detecta las 2.
+
+C) Concentracion costera de las cuencas susceptibles
+-----------------------------------------------------
+  flujo_detritos    n= 21  area 0,43-1,07 km2  bocas entre lon -71,71 y -71,29
+  crecida_detritos  n=146  area 0,40-11,3 km2  bocas entre lon -71,72 y -70,59
+  inundacion        n=277  area 0,40-11.675 km2
+
+  Ninguna cuenca de flujo de detritos se extiende al este de lon -71,27.
+  La region llega hasta -69,81.
+
+  Reparto de la superficie drenada:
+    las 4 cuencas mayores  :   4 cuencas, 32.755,3 km2 (82,9%), las 4 "inundacion"
+    cuencas <=  10 km2     : 380 cuencas,    681,2 km2 ( 1,7%)
+    cuencas <= 100 km2     : 427 cuencas,  2.175,5 km2 ( 5,5%)
+
+  Explicacion: m1_terreno define una desembocadura como la ultima celda con
+  terreno antes del vacio, o sea la costa. Toda quebrada del interior es
+  afluente de Elqui, Limari o Choapa y no recibe cuenca propia. M2 la
+  clasifica como parte de una cuenca de 10.000 km2, cuyo Melton es bajo por
+  construccion. El indice solo "ve" las quebradas que descargan al mar.
+
+D) Otras cifras de M2 sobre la region completa
+-----------------------------------------------
+  Melton maximo            : 1,009
+  pendiente media maxima   : 24,9 grados
+  pendiente p90 maxima     : 38,8 grados
+  melton_aplicable = True  : 380 de 444
+  discrepan clase/clase_melton: 12 (crecida_detritos por Wilford,
+                                    flujo_detritos por solo Melton)
+
+E) Reproduccion del efecto de --area-min-km2 (capitulo 08)
+-----------------------------------------------------------
+El filtro por area se aplica al final de delinear_cuencas(), despues de
+delinear todo, asi que quedarse con las cuencas >= 2,0 km2 de esta corrida
+da el mismo inventario que habria producido una corrida con --area-min-km2
+2.0. No hace falta re-correr la hidrologia para comparar.
+
+  Metrica                        Con 2,0 km2   Con 0,4 km2   Cambio
+  Cuencas delineadas (c/margen)          391           950    x2,4
+  Cuencas que descargan en la region     170           444    x2,6
+  Cuencas de flujo de detritos             0            21      -
+  Cuencas de flujo (solo Melton)           3            33     x11
+  Superficie drenada total        39.280 km2    39.523 km2   +0,6%
+
+  La superficie casi no se mueve (+0,6%): el territorio es el mismo y lo
+  que cambia es la resolucion del inventario. Es la misma verificacion que
+  reporta el README, y da el mismo +0,6%.
+
+  Con 2,0 km2 no queda NINGUNA cuenca de flujo de detritos en la region,
+  no una. El resultado absurdo que motivo bajar el parametro es todavia
+  mas absurdo sobre el DEM completo.

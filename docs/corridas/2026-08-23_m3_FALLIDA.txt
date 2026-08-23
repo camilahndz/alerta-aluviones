@@ -1,0 +1,102 @@
+===========================================================================
+Corrida de referencia M3 - 23 de agosto de 2026
+===========================================================================
+
+Sobre la salida de M1/M2 de docs/corridas/2026-08-23_m1_m2.txt
+(444 cuencas, 39.523 km2, DEM verificado al 100% de cobertura).
+
+Comando: python src/m3_exposicion.py   (sin --permitir-cobertura-parcial)
+   inicio: 2026-08-23 01:03:47
+===========================================================================
+Cobertura del DEM sobre la region: 100.0%
+Cuencas susceptibles: 167 de 444
+  crecida_detritos: 146 · flujo_detritos: 21
+
+Trazando cauces principales...
+  el cauce se corta bajo 0.15 km2 drenados (166 celdas)
+  167 trayectorias trazadas de 167 cuencas
+  largo del cauce: mediana 1.80 km, maximo 6.27 km
+Bajando OSM en 12 cuadros de 0.5x0.5 grados (solo los que tienen trayectorias cerca)...
+  [  1/12]   3018 vias     27 poligonos urbanos
+  [  2/12]      0 vias      0 poligonos urbanos
+  [  3/12]   2088 vias      2 poligonos urbanos
+  [  4/12]      0 vias      0 poligonos urbanos
+  [  5/12]      0 vias      0 poligonos urbanos
+  [  6/12]      0 vias      0 poligonos urbanos
+  [  7/12]      0 vias      0 poligonos urbanos
+  [  8/12]      0 vias      0 poligonos urbanos
+  [  9/12]      0 vias      0 poligonos urbanos
+  [ 10/12]      0 vias      0 poligonos urbanos
+  [ 11/12]      0 vias      0 poligonos urbanos
+  [ 12/12]      0 vias      0 poligonos urbanos
+  guardado en D:\Camila\Escritorio\alerta-aluviones\data\raw\osm
+  red vial: 5,106 tramos | zonas urbanas: 29 poligonos
+
+Verificando que las capas se solapen...
+  trayectorias: X    239590-352540    Y   6437175-6752205  
+  red vial    : X    245816-264959    Y   6429849-6568185  
+  ok, ambas en EPSG:32719
+
+Bajando limites comunales...
+
+Cruzando trayectorias con la red vial...
+  48 pares via-trayectoria se tocan
+  25 puntos de corte tras fusionar duplicados
+
+Revisando entrada a zonas urbanas...
+  ninguna trayectoria entra en zona urbana
+D:\Camila\Escritorio\alerta-aluviones\src\m3_exposicion.py:609: UserWarning: The GeoDataFrame you are attempting to plot is empty. Nothing has been displayed.
+  sel.cx[recuadro[0]:recuadro[2], recuadro[1]:recuadro[3]].plot(
+
+==================================================================
+Puntos de corte: 25
+
+Por jerarquia de via:
+  track               14   (peso 0.10)
+  motorway             7   (peso 1.00)
+  unclassified         3   (peso 0.30)
+  motorway_link        1   (peso 0.15)
+
+Las 12 vias mas afectadas:
+                       cortes  prioridad_max
+via_nombre   via_tipo                       
+Ruta 5 Norte motorway       7          0.775
+
+Los 12 cortes de mayor prioridad:
+ rank  prioridad   via_nombre      via_tipo comuna            clase  melton
+    1       0.78 Ruta 5 Norte      motorway Canela crecida_detritos    0.56
+    2       0.78 Ruta 5 Norte      motorway Canela crecida_detritos    0.56
+    3       0.78 Ruta 5 Norte      motorway Canela crecida_detritos    0.54
+    4       0.78 Ruta 5 Norte      motorway Canela crecida_detritos    0.40
+    5       0.78 Ruta 5 Norte      motorway Canela crecida_detritos    0.40
+    6       0.78 Ruta 5 Norte      motorway Canela crecida_detritos    0.39
+    7       0.78 Ruta 5 Norte      motorway Canela crecida_detritos    0.35
+    8       0.42          NaN  unclassified Canela crecida_detritos    0.56
+    9       0.42          NaN  unclassified Canela crecida_detritos    0.56
+   10       0.42          NaN  unclassified Ovalle crecida_detritos    0.31
+   11       0.35          NaN motorway_link Canela crecida_detritos    0.56
+   12       0.33          NaN         track Canela crecida_detritos    0.56
+
+  capa   -> puntos_corte.gpkg, trayectorias.gpkg
+  tabla  -> m3_puntos_corte.csv
+  figura -> m3_exposicion.png
+   fin: 2026-08-23 01:44:00
+
+===========================================================================
+CORRIDA INVALIDA - se conserva como evidencia del diagnostico.
+
+10 de los 12 cuadros de OSM fallaron por saturacion de Overpass y el
+except Exception de descargar_osm los reporto como '0 vias'. La red vial
+resultante cubria 19 km de los 113 km de trayectorias y los 25 puntos de
+corte salieron todos amontonados en Canela, que era el unico sector con
+caminos descargados.
+
+Comprobado al dia siguiente pidiendo los mismos cuadros directamente:
+  cuadro 10 (La Serena / Coquimbo): reporto 0 -> devuelve 61.386 aristas
+  cuadro  2 (Los Vilos)           : reporto 0 -> devuelve  4.136 aristas
+  cuadro  3 (Canela)              : reporto 2.088 -> devuelve 2.088 (cache)
+
+Arreglado en src/m3_exposicion.py con _pedir_a_overpass(): solo
+InsufficientResponseError significa 'cuadro vacio'; cualquier otra
+excepcion se reintenta y, si insiste, aborta la corrida.
+===========================================================================
