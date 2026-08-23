@@ -70,6 +70,9 @@ matplotlib.use("Agg")
 import matplotlib.patches as mpatches  # noqa: E402
 import matplotlib.pyplot as plt  # noqa: E402
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from cobertura import COBERTURA_MINIMA, verificar_cobertura  # noqa: E402
+
 RAIZ = Path(__file__).resolve().parent.parent
 
 # --- Umbrales de Wilford et al. (2004) ---------------------------------------
@@ -345,6 +348,12 @@ def main():
     for ruta in (ruta_cuencas, ruta_red, ruta_dem):
         if not ruta.exists():
             sys.exit(f"Falta {ruta}\nCorre antes los scripts de M1.")
+
+    # El desnivel de cada cuenca sale de este DEM, y el desnivel es la H de
+    # H/raiz(A). Si el DEM viene recortado, el indice sale mal por los dos
+    # lados. Ver src/cobertura.py.
+    verificar_cobertura(ruta_dem, RAIZ / "data" / "raw" / "limite_coquimbo.gpkg",
+                        COBERTURA_MINIMA)
 
     cuencas = gpd.read_file(ruta_cuencas)
     red = gpd.read_file(ruta_red)

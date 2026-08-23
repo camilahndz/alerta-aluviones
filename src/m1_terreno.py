@@ -43,6 +43,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import compat_pysheds  # noqa: E402,F401  parche numpy 2, tiene que ir antes de pysheds
+from cobertura import COBERTURA_MINIMA, verificar_cobertura  # noqa: E402
 from pysheds.grid import Grid  # noqa: E402
 from pysheds.sview import Raster, ViewFinder  # noqa: E402
 
@@ -58,6 +59,11 @@ CRS_METRICO = "EPSG:32719"
 # pixel, empezando en el Norte y girando en el sentido del reloj:
 # N, NE, E, SE, S, SO, O, NO.
 DIRMAP = (64, 128, 1, 2, 4, 8, 16, 32)
+
+# Lado maximo, en pixeles, con que se dibuja un raster en la figura de control.
+# A 140 dpi cada panel mide ~2.100 px de ancho, asi que 2.500 ya es mas detalle
+# del que la figura puede mostrar. Ver figura_control() para por que importa.
+LADO_MAX_FIGURA_PX = 2500
 
 
 # --------------------------------------------------------------------------
@@ -543,15 +549,41 @@ def figura_control(dem, acc, red, cuencas, grid, ruta_png: Path):
 
     Los rasters se dibujan con `extent` en coordenadas del mundo real para que
     los vectores calcen encima sin ninguna conversion.
+
+    Los rasters se submuestrean antes de dibujarlos, y eso no es cosmetico. La
+    primera corrida sobre el DEM regional completo (23 de agosto de 2026) murio
+    justo aca, despues de 36 minutos de hidrologia y con los datos ya escritos
+    en disco:
+
+        numpy._core._exceptions._ArrayMemoryError: Unable to allocate 4.33 GiB
+        for an array with shape (14912, 9745, 4) and data type float64
+
+    Lo que pasa es que `imshow` le pide al colormap una imagen RGBA del tamano
+    del arreglo de entrada, no del tamano de la figura. Para 145 millones de
+    pixeles eso son 4,33 GiB de float64 que matplotlib arma entera y despues
+    remuestrea a los ~2.100 pixeles de ancho que mide la figura a 140 dpi. O sea
+    que el 99,9% de ese arreglo se calcula para tirarlo.
+
+    Tomando una celda de cada `paso` se dibuja exactamente lo mismo a ojo, con
+    tres ordenes de magnitud menos de memoria. El submuestreo puede dejar fuera
+    hasta `paso` filas o columnas del extremo (unos 200 m sobre 447 km), un
+    desajuste que a esta escala no se ve y que no afecta a los vectores, que se
+    siguen dibujando completos y en coordenadas del mundo real.
     """
     xmin, ymin, xmax, ymax = grid.bbox
     extension = (xmin, xmax, ymin, ymax)
 
+    sin_dato = dem.nodata
+    paso = max(1, int(np.ceil(max(np.asarray(dem).shape) / LADO_MAX_FIGURA_PX)))
+    if paso > 1:
+        print(f"  la figura se dibuja tomando 1 de cada {paso} pixeles")
+
     # El "sin dato" (mar y anillo) se oculta para que no ensucie la vista: se
     # tapa con transparencia en vez de dejar que el colormap lo pinte.
-    dem_arr = np.asarray(dem, dtype="float32")
-    dem_vista = np.ma.masked_equal(dem_arr, dem.nodata)
-    acc_vista = np.ma.masked_where(dem_arr == dem.nodata, np.asarray(acc))
+    dem_arr = np.asarray(dem, dtype="float32")[::paso, ::paso]
+    dem_vista = np.ma.masked_equal(dem_arr, sin_dato)
+    acc_vista = np.ma.masked_where(dem_arr == sin_dato,
+                                   np.asarray(acc)[::paso, ::paso])
 
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 7))
 
@@ -604,6 +636,11 @@ def main():
     args.salida.mkdir(parents=True, exist_ok=True)
     dir_outputs = RAIZ / "outputs"
     dir_outputs.mkdir(parents=True, exist_ok=True)
+
+    # Antes de gastar media hora de hidrologia: que el DEM sea el completo y no
+    # un recorte de prueba que quedo en processed/. Ver src/cobertura.py.
+    verificar_cobertura(args.dem, RAIZ / "data" / "raw" / "limite_coquimbo.gpkg",
+                        COBERTURA_MINIMA)
 
     grid, dem, crs, afin_original = cargar_dem(args.dem)
 

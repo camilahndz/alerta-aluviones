@@ -38,6 +38,9 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from cobertura import COBERTURA_MINIMA, verificar_cobertura  # noqa: E402
+
 RAIZ = Path(__file__).resolve().parent.parent
 
 CRS_METRICO = "EPSG:32719"
@@ -198,6 +201,14 @@ def main():
     for ruta in (ruta_cuencas, ruta_red):
         if not ruta.exists():
             sys.exit(f"Falta {ruta}\nCorre antes: python src/m1_terreno.py")
+
+    # Este script no lee el DEM, pero las cuencas que filtra salieron de el. Se
+    # verifica igual: si el DEM en disco es parcial, las cuencas tambien lo son
+    # y filtrarlas por region solo esconderia el problema mas abajo. Ver
+    # src/cobertura.py.
+    verificar_cobertura(args.procesados / "dem_utm19s.tif",
+                        RAIZ / "data" / "raw" / "limite_coquimbo.gpkg",
+                        COBERTURA_MINIMA)
 
     limite = obtener_limite(
         RAIZ / "data" / "raw" / f"limite_{args.region.lower()}.gpkg", args.region

@@ -38,12 +38,13 @@ import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
-import geopandas as gpd
 import numpy as np
 import rasterio
 from rasterio.merge import merge
 from rasterio.warp import Resampling, calculate_default_transform, reproject
-from shapely.geometry import box
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from cobertura import COBERTURA_MINIMA, verificar_cobertura  # noqa: E402
 
 RAIZ = Path(__file__).resolve().parent.parent
 
@@ -72,9 +73,6 @@ CRS_METRICO = "EPSG:32719"  # UTM 19 Sur
 # pero se pierden como cuencas analizables. Ampliar por el norte cuesta 3 tiles
 # mas y un 25% de memoria.
 BBOX_COQUIMBO = (-72.0, -32.5, -69.7, -29.0)  # oeste, sur, este, norte
-
-# Cuanto del poligono regional tiene que quedar dentro del mosaico para seguir.
-COBERTURA_MINIMA = 0.99
 
 
 def nombre_tile(lat_sur: int, lon_oeste: int) -> str:
@@ -156,44 +154,6 @@ def descargar(bbox, carpeta: Path, hilos: int) -> list[Path]:
 
     print(f"Tiles con terreno: {len(disponibles)}")
     return disponibles
-
-
-def verificar_cobertura(mosaico: Path, limite: Path, minimo: float):
-    """Comprueba que el mosaico cubra la region antes de dejarlo pasar.
-
-    Esta funcion existe por un error concreto que costo una corrida completa de
-    M1, M2 y M3. Durante el desarrollo se uso `--bbox` chico para probar rapido,
-    y el DEM parcial que quedo en disco -dos grados de latitud, el 40% de la
-    region- se proceso despues como si fuera el bueno. Nada en la salida
-    delataba el faltante: los numeros se veian igual de plausibles.
-
-    Y hay un efecto de segundo orden peor que el faltante. Las cuencas que el
-    borde del recorte parte por la mitad quedan con el area truncada, y como la
-    razon de Melton es H/raiz(A), achicar A **infla** el indice. O sea que el
-    recorte no solo omite cuencas: fabrica cuencas "criticas" que no lo son.
-
-    Por eso aborta en vez de advertir.
-    """
-    if not limite.exists():
-        print(f"  AVISO: falta {limite.name}, no se puede verificar cobertura.")
-        return float("nan")
-
-    region = gpd.read_file(limite).to_crs("EPSG:4326").geometry.union_all()
-    with rasterio.open(mosaico) as src:
-        caja = box(*src.bounds)
-
-    cubierto = region.intersection(caja).area / region.area
-    print(f"  cobertura de la region: {100 * cubierto:.1f}%")
-
-    if cubierto < minimo:
-        sys.exit(
-            f"\nEl mosaico cubre solo el {100 * cubierto:.1f}% de la region "
-            f"(minimo {100 * minimo:.0f}%).\n"
-            "Seguir produciria cifras parciales que no se ven parciales, y\n"
-            "ademas inflaria la razon de Melton de las cuencas cortadas por el\n"
-            "borde. Revisa --bbox y que los tiles hayan bajado completos."
-        )
-    return cubierto
 
 
 def unir(tiles: list[Path], salida: Path):
@@ -307,7 +267,7 @@ def main():
     mosaico = carpeta_salida / "dem_mosaico_wgs84.tif"
     unir(tiles, mosaico)
     verificar_cobertura(mosaico, RAIZ / "data" / "raw" / "limite_coquimbo.gpkg",
-                        COBERTURA_MINIMA)
+                        COBERTURA_MINIMA, etiqueta="mosaico")
 
     dem_final = carpeta_salida / "dem_utm19s.tif"
     reproyectar(mosaico, dem_final, args.resolucion, not args.conservar_mar)
