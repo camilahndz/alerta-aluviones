@@ -57,13 +57,23 @@ instalar esas dos con conda o mamba y el resto con pip.
 
 ## Cómo se corre M1
 
-Tres scripts, en este orden:
+Cuatro scripts, en este orden:
 
 ```bash
 python src/m1_preparar_dem.py                                   # baja el DEM, lo une y lo pasa a UTM 19S
+python src/m1_limite_region.py                                  # arma el limite regional desde el zip de la BCN
 python src/m1_terreno.py --umbral-km2 0.15 --area-min-km2 0.4   # rellena, calcula flujo, delinea cuencas
 python src/m1_recortar_region.py                                # deja solo las que descargan en Coquimbo
 ```
+
+El segundo necesita el zip de división regional de la
+[Mapoteca de la BCN](https://www.bcn.cl/siit/mapas_vectoriales), sin
+descomprimir, en `data/raw/Regiones.zip`. Produce `limite_coquimbo.gpkg`, que es
+el polígono contra el que `src/cobertura.py` comprueba que el DEM cubra la región
+antes de calcular nada. Hasta octubre de 2026 ese archivo simplemente estaba en
+disco, sin fuente anotada: cuando se perdió `data/raw/` no había forma de
+regenerarlo, y la salvaguarda que vigila a los otros cinco scripts era la única
+pieza del repositorio que no se podía reconstruir.
 
 Los dos parámetros que vale la pena mover están en el segundo. `--umbral-km2`
 fija el área drenada mínima para considerar que hay cauce: bajarlo densifica la
@@ -277,14 +287,276 @@ alcance urbano es una decisión de modelo y queda para M5.
 
 ---
 
+## Cómo se corre M4
+
+```bash
+python src/m4_lluvia.py              # usa el cache de data/raw/lluvia/
+python src/m4_lluvia.py --refrescar  # vuelve a pegarle a VIPNET
+python src/m4_umbrales.py            # imprime los umbrales con sus citas
+```
+
+M2 dijo qué quebradas *pueden* generar un flujo. M4 responde la otra mitad:
+*cuándo*. Se expresa como un umbral intensidad-duración (I-D), una curva
+`I = α · D^(−β)` que baja hacia la derecha porque un chaparrón corto tiene que
+ser violento para gatillar, mientras que una lluvia larga puede ser suave y
+lograrlo por saturación.
+
+**M4 no ajusta un umbral propio.** Una curva I-D se calibra con decenas de pares
+(episodio, activó / no activó). En la ventana de este proyecto hay tres bloques
+con activaciones documentadas. Una curva ajustada sobre tres puntos pasa por los
+tres y no predice nada. Lo que M4 hace es construir el pipeline de lluvia
+sub-diaria y aplicarle umbrales publicados, guardando una columna por umbral sin
+elegir ganador —el mismo criterio con que M2 guarda dos clasificaciones—.
+
+### De dónde sale la lluvia
+
+De **VIPNET**, el Visualizador Hidrométrico Nacional de la DGA
+(`vipnet.mop.gob.cl`), que expone una API REST pública sin registro, sin token y
+sin captcha, con **paso de 30 minutos**.
+
+El camino obvio no sirve: DGASAT (`snia.mop.gob.cl/dgasat`) entrega los mismos
+valores horarios, pero sus botones "Ver Tabla" y "Ver Gráfico" están detrás de un
+reCAPTCHA v2 de Google. No es automatizable y no se intenta rodear.
+
+Tampoco se usa CR2MET ni ningún producto diario: la intensidad es sub-diaria, y
+150 mm en cuatro días y 150 mm en seis horas son el mismo número diario y
+fenómenos distintos. GPM IMERG quedó fuera porque no hizo falta —la mediana de
+distancia cuenca-estación es 16 km, bajo el criterio de 30 km que se había
+fijado— y porque su Final Run no cubre 2026.
+
+> El inventario completo de fuentes que respaldaba esta decisión
+> (`docs/corridas/2026-08-23_m4_paso0_inventario.txt`) **se perdió** junto con el
+> resto de `data/raw/` en septiembre de 2026 y no se ha reconstruido. Lo que
+> queda documentado es la conclusión, no el barrido que la sostuvo.
+
+### Las decisiones que hay que poder defender
+
+**Se trabaja con el acumulado, no con la suma de incrementos.** VIPNET entrega
+`instantaneo` (el incremento del paso) y `acumulado` (el contador corrido).
+Parecen redundantes y no lo son: en CUNCUMEN (04703003-K) la suma de incrementos
+da 208,0 mm y el acumulado sube 409,5 mm sobre la misma ventana. La diferencia
+está donde la serie tiene huecos: el contador siguió avanzando y no quedó
+registro. Sumar incrementos sub-cuenta justo en las estaciones que peor
+transmiten.
+
+**Sin dato no es cero milímetros.** La serie se arma sobre una grilla regular de
+30 minutos y cada paso queda con un valor o con NaN, nunca con un cero de
+relleno. Un hueco largo corta el registro en vez de simular un período seco,
+porque un período seco falso parte un episodio en dos y le baja la duración a los
+dos pedazos. Es el mismo error del cuadro vacío contra la consulta fallida que
+arruinó tres corridas de M3, por el otro extremo.
+
+Con dos salvedades que la reconstrucción de octubre tuvo que agregar, porque sin
+ellas estaciones enteras se evaporaban sin que nada fallara. La primera: **la red
+no transmite en punto.** Hay estaciones que reportan a los :59, otras a los :22.
+Casar por marca de tiempo exacta las deja en cero registros, y el resto del
+pipeline no distingue eso de una estación muda. Se redondea al slot más cercano.
+La segunda: **hay estaciones horarias**, no de 30 minutos, y los slots que ellas
+no usan no son huecos de transmisión. Se mide la cadencia propia de cada una y se
+tolera hasta el doble antes de llamar hueco a un silencio.
+
+**Los máximos imposibles de 30 minutos son nieve, no sensores rotos.** Glaciar
+Tapado, a 4.065 m, registró 233,8 mm en media hora. En julio a esa altura no
+llueve: nieva, y el pluviómetro suelta el equivalente de golpe cuando se derrite.
+El corte no se pone a ojo: con la temperatura de la misma red se ajusta día a día
+una recta de temperatura contra altitud y se despeja dónde cruza los 0 grados.
+Esa es la **isoterma 0 observada**, y durante el temporal de julio dio 2.643 m.
+El ajuste solo se acepta con 8 estaciones o más, gradiente entre 2 y 10 °C/km y
+R² sobre 0,70; si no, ese día queda sin isoterma y se dice: de los 84 días de la
+ventana, solo 22 lo consiguen.
+
+**Y el paso en que una estación vuelve de un corte no es un pico de lluvia.**
+Trae el alza del contador de todo el corte junta, así que su valor sirve para
+sumar y miente para cualquier cuenta de intensidad. HURTADO salía con 373,1 mm en
+media hora —746 mm/h, dos órdenes de magnitud sobre Caine— hasta que esos pasos
+se marcaron aparte. Ahora R4 los excluye del máximo de 30 minutos y R3 descarta
+el episodio que los contenga.
+
+### Selección de estaciones
+
+Las reglas se escribieron **antes** de mirar los datos, se aplican en orden, y el
+reporte dice qué estación cayó por cuál:
+
+| Regla | Unidad | Criterio | Cayeron |
+|---|---|---|---|
+| R1 | estación | está en Coquimbo y declara parámetro de precipitación | 107 entran |
+| R2 | estación | cobertura de la ventana ≥ 50% | 1 |
+| R3 | episodio | sin hueco de transmisión adentro | 58 episodios |
+| R4 | estación | incremento máximo de 30 min ≤ 20 mm | 4 |
+| R5 | episodio | la estación bajo la isoterma 0 observada | 7 episodios |
+
+Quedan **102 estaciones de 107**.
+
+**R3 cambió de granularidad después de mirar los datos, y eso queda escrito.** La
+primera versión era por estación —descartar si el desajuste entre suma y
+acumulado pasaba de 0,10— y botaba 24 de las 107, entre ellas LAMBERT, que es la
+estación más cercana a 7 de las 21 cuencas críticas. Al ir a ver por qué fallaban
+apareció que el desajuste no estaba repartido sino concentrado en un solo hueco
+por estación: en LAMBERT, 25,2 mm de un desajuste total de 25,2 mm caben en un
+único hueco de 94 horas el 24 de julio. El mecanismo que la regla vigilaba es el
+correcto, pero el daño está localizado en el tiempo, así que la regla pasó a
+aplicarse por episodio con el mismo criterio. El efecto sobre el resultado se
+reporta en las dos versiones: **es idéntico**, así que la discusión es sobre el
+método y no sobre el número.
+
+**15 estaciones quedan marcadas como ambiguas** y ninguna se descarta. Son pares
+vecinos que se contradicen sin que ninguna regla pueda decidir cuál está mala:
+LAS BURRAS con 343,5 mm contra RIO ILLAPEL EN LAS BURRAS con 1,1 mm a 200 metros;
+EL MAITEN con 1,9 mm contra RIO MOSTAZAL EN CUESTECITA a 3,8 km; RIO CUNCUMEN
+ANTES JUNTA CHOAPA con 962,0 mm contra CUNCUMEN con 409,5 mm a 2,2 km.
+Elegir cuál sobrevive mirando cuál cuadra mejor sería elegir el resultado.
+
+El corte que las marca —vecinas a menos de 5 km que difieren en más del doble—
+es **la constante más débil de M4 y conviene decirlo**. No sale de un criterio
+independiente sino de que los tres pares de arriba queden dentro, y el tercero es
+el que manda: 962 contra 409,5 es un factor de 2,35, así que cualquier umbral más
+exigente lo dejaba pasar. La justificación física existe pero es blanda: dos
+pluviómetros a 2 km no pueden ver una diferencia de más del doble en un temporal
+frontal que cubre cientos de kilómetros.
+
+### Episodios
+
+Un episodio es un bloque de lluvia separado del siguiente por un período seco. El
+corte es de **12 horas**, centro del rango de 6 a 24 h que la literatura usa en
+clima árido. No hay valor canónico: es un juicio, y por eso se corre la
+sensibilidad con los dos extremos.
+
+| Corte seco | Episodios | D mediana | Episodios que superan Caine |
+|---|---|---|---|
+| 6 h | 592 | 7,5 h | 33 |
+| **12 h** | **455** | **9,0 h** | **26** |
+| 24 h | 359 | 10,0 h | 20 |
+
+Hay un segundo parámetro de juicio que el trabajo original no dejó escrito y que
+manda tanto como el primero: **qué cuenta como paso seco**. Con cero exacto, una
+sola basculada perdida en doce horas impide el corte y pega dos temporales en
+uno. Medido sobre la ventana del 17 al 22 de julio, la duración mediana pasa de
+53 a 113 horas, y la duración es justamente lo que entra al umbral.
+
+Se fijó en **0,2 mm**, que es la resolución de la cubeta basculante de la red: un
+paso con menos que eso no es lluvia medida, es la cubeta todavía sin volcar.
+
+| Paso seco | Episodios | D mediana | Episodios que superan Caine |
+|---|---|---|---|
+| cero exacto | 455 | 11,5 h | 22 |
+| < 0,1 mm | 467 | 11,5 h | 23 |
+| **< 0,2 mm** | **455** | **9,0 h** | **26** |
+| < 0,5 mm | 424 | 7,2 h | 29 |
+
+**Los dos parámetros mandan sobre el resultado, no solo sobre el conteo**, y hay
+que decirlo igual que se dijo del umbral de largo de Wilford en M2.
+
+### Resultado de M4
+
+448 episodios en 94 estaciones, con paso de 30 minutos, entre el 1 de junio y el
+23 de agosto de 2026. La ventana termina el 23 y no el 31 de agosto porque los
+últimos días todavía no existen; no se rellenan con ceros.
+
+Control externo: **La Serena (Escuela Agrícola) acumula 150,9 mm en julio de
+2026**, contra los más de 150 mm en cuatro días que reportó la prensa sobre el
+récord de 125 mm de julio de 1987. El acumulado del sensor sube de 2,6 a 153,5 mm
+y las dos cuentas cuadran al decimal.
+
+Los tres bloques documentados, vistos por la red:
+
+| Ventana | Episodios | Lluvia mediana | D mediana | I media mediana |
+|---|---|---|---|---|
+| 17 al 22 de julio | 78 | 130,9 mm | 57,8 h | 2,19 mm/h |
+| 31 de julio | 72 | 23,9 mm | 8,2 h | 2,48 mm/h |
+| 14 al 16 de agosto | 82 | 6,2 mm | 11,8 h | 0,67 mm/h |
+
+El episodio mayor de la ventana son 412,6 mm en 117,5 h en ANDACOLLO.
+
+Las 167 cuencas evaluadas no son las 444 de la región, sino las que M2 declaró
+capaces de algo más que agua limpia: 21 de flujo de detritos y 146 de crecida de
+detritos. Preguntarle a una cuenca de clase inundación si supera un umbral de
+flujos de detritos no significa nada. La mediana de distancia de una cuenca a su
+estación es de **15,9 km**, bajo el criterio de 30 km fijado antes de mirar.
+
+**Cuencas que superan cada umbral: 2 de 167 para Caine (1980), 0 de 167 para Ben
+David-Novak et al. (2004).** Ninguna supera un umbral y no el otro.
+
+Y esos dos positivos hay que leerlos con cuidado, porque el propio M4 los
+desconfía y lo dice en pantalla:
+
+* La cuenca 305 está asignada a **RIO CUNCUMEN ANTES JUNTA CHOAPA**, una de las
+  estaciones marcadas como ambiguas: registra 962,0 mm en la ventana contra
+  409,5 mm de CUNCUMEN, a 2,2 km.
+* La cuenca 805 depende de un episodio de **QUILIMARÍ que dura un solo paso de
+  30 minutos**: el contador salta de 1,3 a 15,5 mm y queda plano siete horas a
+  cada lado. La lluvia real no da escalones. Y como media hora es la duración
+  mínima posible, cualquier paso sobre ~9,7 mm supera Caine por construcción.
+
+**Descontados los dos, ninguna cuenca supera ningún umbral en toda la ventana.**
+El resultado de M4 es, en la práctica, negativo.
+
+### El hallazgo principal, que es un resultado negativo
+
+Casi todos los pares cuenca-episodio caen **debajo** de las dos curvas, y no por
+poco: sobre los 476 pares, la razón mediana entre la intensidad medida y la que
+Caine pide es **0,35**. Es decir que el episodio típico llega a un tercio de lo
+que el umbral exige, en una ventana donde hubo activaciones documentadas.
+
+> El control fino contra las siete quebradas con activación documentada
+> —`outputs/m4_control_cordura.csv`— **no se regeneró** en la corrida de octubre:
+> depende de un inventario de activaciones que no estaba en el código
+> recuperable. Es trabajo de M5 y queda declarado como pendiente.
+
+Esto no invalida el pipeline —las series reproducen el control externo al
+decimal— pero dice algo sustantivo: **un umbral I-D global no describe este
+régimen**. El temporal de julio fue largo y suave, no corto e intenso, y las
+quebradas se activaron por acumulación y saturación antes que por intensidad. Es
+coherente con Vergara Dal Pont et al. (2018), que para la cuenca media del Elqui
+concluye que estos flujos se generan por escorrentía y no por deslizamiento.
+
+La lluvia antecedente apunta en la misma dirección y está medida. **35 episodios
+llegan con más de 50 mm acumulados en las 72 horas previas y ninguno de ellos
+supera Caine.** Los casos extremos son elocuentes: el episodio del 19 de julio en
+RIO CHOAPA EN SALAMANCA arrastra **265,6 mm de lluvia antecedente en 72 horas** y
+aun así se queda en 2,3 mm/h de intensidad media; el de CAIMANES, 239,4 mm con
+2,1 mm/h. Un suelo con esa cantidad de agua encima no necesita un chaparrón para
+soltar material, y **un umbral que solo mira I y D no ve nada de eso**.
+
+Ahí está, medida, la variable que le falta al modelo. Esas columnas ya se
+escriben en `m4_episodios.csv` y son el punto de partida de M5.
+
+### Umbrales aplicados, con la cita completa
+
+| Umbral | Forma | Validez | Cita |
+|---|---|---|---|
+| Caine (1980) | `I = 14,82 · D^(−0,39)` | 10 min a 10 días | Caine, N. (1980). *Geografiska Annaler A*, 62(1-2), 23-27. |
+| Ben David-Novak et al. (2004) | `I ≥ 30 mm/h durante D ≥ 1 h` | clima hiperárido | Ben David-Novak, H., Morin, E., & Enzel, Y. (2004). *GSA Bulletin*, 116(5-6), 718-728. doi:10.1130/B25403.2 |
+
+El segundo se aplica sobre la intensidad máxima en 60 minutos, no sobre la media,
+porque así está enunciado, y viene con una advertencia de transferencia escrita en
+el código: fue calibrado sobre tormentas convectivas de desierto, y Coquimbo
+recibe lluvia frontal de invierno. Su silencio es información, no una falla.
+
+**Guzzetti et al. (2008) no entró.** Es el umbral global de referencia después de
+Caine, pero el artículo está detrás de pago y sus coeficientes no se pudieron
+verificar en ninguna fuente abierta. Escribir de memoria un número bajo el nombre
+de un autor real es exactamente el error que el capítulo 12 del recorrido
+documenta. Queda como el primer pendiente de M4: son dos números en
+`src/m4_umbrales.py`, y el archivo ya tiene escrito el hueco y el motivo.
+
+### Salidas
+
+| Archivo | Contenido |
+|---|---|
+| `data/processed/gatillo.gpkg` | 476 filas, una por cuenca y episodio, con D, I, antecedente 24/72/168 h, distancia y área, y una columna por umbral |
+| `outputs/m4_umbral_id.png` | log-log con las curvas y los episodios encima |
+| `outputs/m4_episodios.csv` | los 448 episodios, legibles sin abrir un SIG |
+| `outputs/m4_control_cordura.csv` | *pendiente*: las 7 quebradas documentadas contra los umbrales. Necesita el inventario de activaciones, que es trabajo de M5 |
+---
+
 ## Hoja de ruta
 
 - [x] **M0 — Andamiaje**: repo, estructura, README, primer commit.
 - [x] **M1 — Terreno**: DEM descargado; cuencas y red de quebradas delineadas.
 - [x] **M2 — Susceptibilidad**: mapa de quebradas rankeadas por peligro (razón de Melton).
-- [x] **M3 — Exposición**: cruce con red vial y zonas urbanas → 422 puntos de corte.
-- [ ] **M4 — Gatillo de lluvia**: umbral intensidad-duración calibrado.
-- [ ] **M5 — Validación**: comparación contra julio de 2026 y métricas.
+- [x] **M3 — Exposición**: cruce con red vial y zonas urbanas → 422 puntos de corte. *(Código en el repositorio; salidas pendientes de regenerar, ver abajo.)*
+- [x] **M4 — Gatillo de lluvia**: 448 episodios de 30 min y umbrales publicados aplicados.
+- [ ] **M5 — Validación**: comparación contra los tres episodios de 2026 y métricas.
 - [ ] **M6 — Entrega**: mapa o visor final y documentación.
 
 M0 a M3 forman la versión mínima mostrable (v0). M4 y M5 son calibración y
@@ -325,10 +597,11 @@ QGIS para visualización y Google Earth Engine para lo satelital.
 
 Toda cifra de este README sale de una corrida guardada en
 [`docs/corridas/`](docs/corridas/), con la salida de consola completa y las
-verificaciones derivadas anotadas al final. La corrida de referencia de M1 y M2
-es [`2026-08-23_m1_m2.txt`](docs/corridas/2026-08-23_m1_m2.txt), hecha en local
-sobre el DEM completo, con la cobertura verificada al 100% de la superficie
-regional antes de calcular nada.
+verificaciones derivadas anotadas al final. La corrida de referencia de M1, M2 y
+M4 es
+[`2026-10-10_reconstruccion_m1_m2_m4.txt`](docs/corridas/2026-10-10_reconstruccion_m1_m2_m4.txt),
+hecha en local sobre el DEM completo, con la cobertura verificada al 100% de la
+superficie regional.
 
 Esto existe porque durante un tiempo no fue así. Entre el 7 y el 23 de agosto de
 2026 el repositorio reportaba cifras de una corrida remota que no se podían
@@ -336,6 +609,28 @@ reproducir en local, sobre un DEM al que le faltaba el tercio sur de la región.
 El capítulo 12 del recorrido cuenta el episodio completo. La regla que quedó: si
 un número no salió de una corrida guardada en `docs/corridas/`, no entra a este
 README.
+
+### La segunda vez que la regla sirvió
+
+El 19 de septiembre de 2026 se perdió el disco de trabajo. Lo que estaba
+commiteado volvió de GitHub; lo que no, no volvió. Se perdieron `data/raw/`
+completo y **el código de M4, que nunca se había commiteado**. Sobrevivió solo
+esta sección del README, que lo documentaba.
+
+M4 se reescribió desde esa documentación y la corrida del 10 de octubre
+reproduce al decimal sus cifras de control —La Serena 150,9 mm en julio, los
+409,5 mm de CUNCUMEN por acumulado contra 208,0 por incrementos, los 25,2 mm de
+desajuste de LAMBERT— además de las 107 estaciones de R1, las 167 cuencas
+susceptibles y los 15,9 km de distancia mediana. Los conteos no dan idénticos
+porque VIPNET rellenó huecos entre agosto y octubre; está medido y anotado en la
+corrida.
+
+De paso aparecieron tres errores que el código perdido tenía y esta versión no:
+estaciones que desaparecían por no transmitir en punto, pasos de recuperación
+contados como picos de intensidad, y la falta del filtro de cuencas susceptibles.
+
+La lección es más barata de escribir que de aprender: **documentar sirvió para
+reconstruir el código, pero no reemplaza al commit**.
 
 ---
 

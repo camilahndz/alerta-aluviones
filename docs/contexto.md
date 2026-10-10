@@ -58,12 +58,18 @@ observados.
 | Hito | Contenido | Estado |
 |---|---|---|
 | **M0** | Andamiaje: repo, estructura, README, .gitignore, primer commit | Cerrado |
-| **M1** | Terreno: DEM, relleno de sumideros, dirección y acumulación de flujo, cuencas y red de quebradas | Cerrado y reproducible en local (corrida 2026-08-23) |
-| **M2** | Susceptibilidad: variables de terreno + quebradas rankeadas (razón de Melton) | Cerrado y reproducible en local (corrida 2026-08-23) |
-| **M3** | Exposición: cruce de trayectorias con red vial (OSM) y zonas urbanas | Cerrado — 422 puntos de corte (corrida 2026-08-23) |
-| **M4** | Gatillo: umbral I-D calibrado con eventos observados (incl. julio 2026) | No iniciado |
+| **M1** | Terreno: DEM, relleno de sumideros, dirección y acumulación de flujo, cuencas y red de quebradas | Cerrado y reproducible en local (corrida 2026-10-10) |
+| **M2** | Susceptibilidad: variables de terreno + quebradas rankeadas (razón de Melton) | Cerrado y reproducible en local (corrida 2026-10-10) |
+| **M3** | Exposición: cruce de trayectorias con red vial (OSM) y zonas urbanas | Código cerrado — 422 puntos de corte (corrida 2026-08-23). **Salidas pendientes de regenerar**: falta volver a bajar el extracto de OSM |
+| **M4** | Gatillo: lluvia sub-diaria de VIPNET + umbrales publicados aplicados | Cerrado y reproducible en local (corrida 2026-10-10). **Resultado negativo**: ninguna cuenca supera un umbral, y eso es el hallazgo |
 | **M5** | Validación: matriz de confusión vs. lo ocurrido; precisión, recall, AUC ROC | No iniciado |
 | **M6** | Entrega: mapa/visor final + documentación | No iniciado |
+
+M4 cambió de contenido respecto de lo que este documento proyectaba. Decía
+"umbral I-D **calibrado**" y lo que se pudo hacer fue aplicar umbrales
+**publicados**: con tres bloques de activaciones documentadas no hay con qué
+calibrar una curva, y ajustarla sobre tres puntos habría sido dibujar, no
+medir. Calibrar es M5.
 
 M0–M3 = v0 mostrable. M4–M5 = v1 (calibración y validación).
 
@@ -130,6 +136,23 @@ Hidrología: pysheds o richdem (o GRASS GIS si se requiere `r.watershed` /
   las cuencas de flujo de detritos salían 38 contra 21. Por eso `src/cobertura.py`
   verifica cobertura al inicio de los cinco scripts que leen un DEM, y aborta bajo
   el 99%.
+
+- **Que una estación desaparezca en vez de fallar.** Un dato que no calza con lo
+  que el código espera -una marca de tiempo a los :59 cuando la grilla es de 30
+  minutos, una estación horaria en una red de media hora- no produce un error:
+  produce cero registros, que el resto del pipeline trata como "no reportó". En
+  M4 eso borraba estaciones enteras, entre ellas Glaciar Tapado y Río Cuncumén.
+  Es la misma familia del cuadro vacío contra la consulta fallida de M3 y del DEM
+  truncado de M1: **el error que no da error**. La defensa es contar cuántas
+  unidades entran y cuántas salen de cada paso, y mirar la diferencia.
+
+- **Confundir un artefacto del instrumento con una medición.** El contador de un
+  pluviómetro sube por dos motivos: porque llovió o porque el equipo hizo algo.
+  Un pluviómetro que vuelve de un corte vuelca de golpe todo lo acumulado, y uno
+  sobre la isoterma 0 suelta la nieve derretida de varios días. Los dos producen
+  intensidades de 30 minutos enormes y perfectamente falsas. La señal que los
+  delata es la forma: la lluvia real sube y baja, un artefacto es un escalón
+  entre ceros.
 
 - **Que la unidad de análisis no coincida con el fenómeno.** M1 corta cuencas solo
   donde el terreno termina, o sea en la costa, así que las quebradas interiores
