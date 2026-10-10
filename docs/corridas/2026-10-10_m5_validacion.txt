@@ -1,0 +1,160 @@
+M5 - Validacion contra el temporal de julio de 2026
+10 de octubre de 2026, local, .venv con Python 3.12
+
+Comando:
+  python src/m5_validacion.py
+
+Entradas: docs/inventario_activaciones_2026-07.csv (18 activaciones documentadas)
+          data/processed/susceptibilidad.gpkg (3.757 unidades, 2.589 susceptibles)
+          data/processed/gatillo.gpkg (11.591 pares, 668 cuencas sobre Caine)
+          data/raw/osm/chile.gpkg (extracto del 08-10-2026, para geolocalizar)
+
+========================================================================
+==========================================================================
+M5 - Validacion contra el temporal de julio de 2026
+==========================================================================
+
+Entradas del inventario: 18
+Unidades susceptibles: 2,589
+Unidades que superan Caine: 668
+
+Ubicando cada entrada en OpenStreetMap...
+
+ id quebrada                 evidencia          susc  pos  veredicto
+  1 El Rincon                activacion           10   10  predicho
+  2 Marquesa                 activacion           57    0  no_predicho
+  3 Batuco                   escurrimiento        18   11  predicho
+  4 Estero de Punitaqui      escurrimiento        29   15  predicho
+  5 Las Canas                escurrimiento        26    0  no_predicho
+  6 Carcamo                  escurrimiento        15   15  predicho
+  7 Cruz de Cana             activacion            0    0  sin_cobertura
+  8 Quebrada de Martinez     activacion            4    0  no_predicho
+  9 El Islon                 aluvion               2    0  no_predicho
+ 10 Tres Cruces              activacion           24    0  no_predicho
+ 11 Tambillos                activacion            0    0  sin_cobertura
+ 12 Las Barrancas            activacion            3    0  no_predicho
+ 13 Cutum                    activacion_menor      9    0  no_predicho
+ 14 Cajon del Romero         activacion            0    0  sin_cobertura
+ 15 Santa Gracia             activacion_menor     30    0  no_predicho
+ 16 Arrayan Costero          alerta_preventiva    12    0  no_predicho
+ 17 Los Loros                activacion_menor     37    0  no_predicho
+ 18 San Carlos               activacion_menor     24    0  no_predicho
+
+todas las entradas: 18
+  sin ubicar en OSM          0
+  sin cobertura del modelo   3
+  evaluadas y no predichas  11
+  predichas                  4
+  RECALL sobre las evaluadas: 4/15 = 27%
+
+solo evidencia fuerte: 9
+  sin ubicar en OSM          0
+  sin cobertura del modelo   3
+  evaluadas y no predichas   5
+  predichas                  1
+  RECALL sobre las evaluadas: 1/6 = 17%
+
+  La precision NO se reporta y no es un olvido: el inventario no tiene
+  negativos observados. Ver la cabecera de este archivo.
+
+--------------------------------------------------------------------------
+Que tan lejos estuvo el umbral en las que fallo:
+  minimo 0.25 | mediana 0.75 | maximo 0.77
+  10 de 11 caen entre 0,55 y 0,80 de lo que Caine pide
+
+Recall que daria un umbral escalado (Caine multiplicado por k):
+      k         recall
+    1.0       4/15 ( 27%)   <- Caine sin tocar
+    0.9       4/15 ( 27%)
+    0.8       4/15 ( 27%)
+    0.7      12/15 ( 80%)
+    0.6      13/15 ( 87%)
+    0.5      14/15 ( 93%)
+
+  ESTE ESCALAMIENTO NO SE ADOPTA, Y LA RAZON IMPORTA.
+  Elegir el k que maximiza el recall sobre este mismo inventario es
+  ajustar el modelo contra su propia validacion: el numero que saldria
+  despues no mediria nada. Ademas las entradas no son independientes
+  -varias comparten la estacion mas cercana, y por eso repiten razon-
+  asi que los 15 casos valen bastante menos de 15 observaciones.
+  Para calibrar en serio hacen falta episodios sin activacion
+  documentada, que es lo que este inventario no tiene.
+
+  tabla -> m5_validacion.csv
+
+========================================================================
+VERIFICACIONES DERIVADAS
+========================================================================
+
+LAS TRES ENTRADAS SIN COBERTURA NO SON ERRORES DE PREDICCION
+
+  Cruz de Cana, Tambillos y Cajon del Romero no tienen ninguna unidad
+  susceptible a menos de 3 km. El modelo no se equivoco ahi: nunca evaluo ese
+  lugar.
+
+  La causa esta medida. Las tres caen en cuencas costeras de entre 195 y 538
+  km2, y m1_subcuencas.py solo delinea una subcuenca cuando el cauce receptor
+  drena al menos 200 km2. Un afluente que entra a un cauce costero de 150 km2
+  no recibe unidad.
+
+  Bajando --valle-min-km2 a 25 aparecen bocas junto a Cruz de Cana y Tambillos.
+  NO SE HIZO, y el motivo es de metodo: bajar un parametro del modelo hasta que
+  cubra los casos de su propia validacion es ajustar contra el conjunto de
+  prueba. Queda anotado como lo primero que deberia revisar una iteracion
+  siguiente, con un inventario distinto del que se uso para detectarlo.
+
+EL EMPAREJAMIENTO POR CONTENCION ESTABA MAL Y HABRIA DADO UN RESULTADO FALSO
+
+  La primera version buscaba la unidad que CONTIENE el punto reportado. La
+  prensa reporta donde se VIO el flujo -un cruce de ruta, un pueblo- y eso cae
+  en el fondo del valle, que pertenece a la cuenca del rio. Con contencion, el
+  aluvion del Islon calzaba con la cuenca del Elqui (9.408 km2, clase
+  inundacion) y 9 de las 18 entradas aparecian sin unidad susceptible.
+
+  Con cercania -unidades susceptibles a menos de 3 km- quedan 3 sin cobertura
+  en vez de 9. La diferencia entre las dos versiones no es un ajuste: la
+  primera medi­a otra cosa.
+
+LAS FALLAS SON INFORMACION, NO SOLO FALLAS
+
+  Las tres quebradas con mas unidades cerca, comparadas:
+
+  quebrada              comuna      lluvia   duracion   I media   razon vs Caine
+  El Rincon (acierto)   Los Vilos   238,6 mm    52,5 h   4,54        1,44
+  Marquesa (falla)      Vicuna      198,7 mm   112,0 h   3,27        0,75
+  Tres Cruces (falla)   Paihuano    159,4 mm   111,5 h   2,34        0,67
+
+  El Choapa recibio practicamente la misma agua que el Elqui en LA MITAD del
+  tiempo. No es que el modelo midiera mal el Elqui: el Elqui de verdad no
+  alcanzo la intensidad que Caine pide, y las quebradas se activaron igual.
+
+  Es la evidencia cuantitativa de lo que M4 ya sospechaba por otro camino: en
+  este regimen la activacion no la manda la intensidad.
+
+CUANTO SOBRA EL UMBRAL GLOBAL
+
+  De las 11 entradas evaluadas y no predichas, 10 caen entre 0,55 y 0,80 de lo
+  que Caine exige, con mediana 0,75. El recall salta de 27% a 80% entre k=0,8 y
+  k=0,7, porque ahi esta el grueso de los casos.
+
+  Lectura: el umbral de Caine queda del orden de un 30% alto para la Region de
+  Coquimbo. El escalamiento NO se adopta; ver el motivo en la salida de arriba
+  y en la cabecera de src/m5_validacion.py.
+
+LO QUE M5 NO PUEDE RESPONDER
+
+  - Precision. El inventario no tiene negativos observados: que 650 de las 668
+    cuencas marcadas no figuren en prensa no las vuelve falsos positivos.
+  - AUC, F1 y cualquier metrica que necesite la matriz completa.
+  - Independencia. Varias entradas comparten la estacion mas cercana y por eso
+    repiten exactamente la misma razon (0,747 aparece cuatro veces). Los 15
+    casos evaluados valen bastante menos de 15 observaciones.
+
+PENDIENTES QUE DEJA M5
+
+  1. Un inventario con negativos. Sin eso no hay calibracion posible, solo
+     evidencia de que el umbral global sobra.
+  2. Revisar --valle-min-km2 con datos distintos a este inventario.
+  3. La isoterma del lado de la cuenca: 452 de las 2.589 susceptibles estan
+     sobre los 2.643 m donde en julio nieva.
+  4. El umbral de largo de Wilford, que ahora decide 455 clasificaciones.
