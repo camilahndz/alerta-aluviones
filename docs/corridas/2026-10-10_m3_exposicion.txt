@@ -1,0 +1,136 @@
+M3 - Exposicion vial, corrida del 10 de octubre de 2026
+Local, .venv con Python 3.12
+
+Comando:
+  python src/m3_preparar_osm.py     # snapshot chile-261008-free.gpkg.zip
+  python src/m3_exposicion.py
+
+Extracto de OSM: chile-261008-free.gpkg.zip, estado del 8 de octubre de 2026.
+No se uso chile-latest: ver data/raw/osm/PROCEDENCIA.txt y el docstring de
+src/m3_preparar_osm.py.
+
+Esta corrida regenera las salidas de M3, que se perdieron con data/raw/ en
+septiembre. El codigo de M3 no se toco: estaba commiteado y volvio de GitHub.
+
+========================================================================
+Cobertura del DEM sobre la region: 100.0%
+Cuencas susceptibles: 167 de 444
+  crecida_detritos: 146 · flujo_detritos: 21
+
+Trazando cauces principales...
+  el cauce se corta bajo 0.15 km2 drenados (166 celdas)
+  167 trayectorias trazadas de 167 cuencas
+  largo del cauce: mediana 1.80 km, maximo 6.27 km
+Leyendo OSM del extracto local: chile.gpkg
+  vias: 52,677 en el recuadro -> 46,440 de los tipos que interesan
+  zonas urbanas: 1,195 de uso de suelo + 0 de localidad = 1,195 poligonos
+  red vial: 46,440 tramos | zonas urbanas: 1,195 poligonos
+
+Verificando que las capas se solapen...
+  trayectorias: X    239590-352540    Y   6437175-6752205  
+  red vial    : X    240596-380991    Y   6429601-6759941  
+  ok, ambas en EPSG:32719
+
+Bajando limites comunales...
+
+Cruzando trayectorias con la red vial...
+  457 pares via-trayectoria se tocan
+  422 puntos de corte tras fusionar duplicados
+
+Revisando entrada a zonas urbanas...
+  10 trayectorias entran en zona urbana
+  3 localidades con nombre alcanzadas
+
+==================================================================
+Puntos de corte: 422
+
+Por jerarquia de via:
+  track              122   (peso 0.10)
+  residential         91   (peso 0.30)
+  unclassified        79   (peso 0.30)
+  motorway            73   (peso 1.00)
+  service             24   (peso 0.15)
+  tertiary            20   (peso 0.45)
+  living_street        8   (peso 0.20)
+  motorway_link        5   (peso 0.15)
+
+Las 12 vias mas afectadas:
+                                      cortes  prioridad_max
+via_nombre              via_tipo                           
+Ruta 5 Norte            motorway          73          1.000
+Camino a Totoralillo    tertiary           6          0.725
+                        unclassified      75          0.650
+                        residential       50          0.650
+Héroes de la Concepción residential        3          0.650
+Los Lirios              residential        3          0.650
+Calle 14                residential        2          0.650
+Calle 5                 residential        2          0.650
+Huertos Viejos          residential        2          0.650
+Ignacio Carrera Pinto   residential        2          0.650
+Arturo Prat             residential        1          0.650
+Avenida Estadio         residential        1          0.650
+
+Los 12 cortes de mayor prioridad:
+ rank  prioridad   via_nombre via_tipo     comuna            clase  melton
+    1       1.00 Ruta 5 Norte motorway La Higuera   flujo_detritos    0.84
+    2       1.00 Ruta 5 Norte motorway   Coquimbo   flujo_detritos    0.83
+    3       1.00 Ruta 5 Norte motorway   Coquimbo   flujo_detritos    0.70
+    4       1.00 Ruta 5 Norte motorway   Coquimbo   flujo_detritos    0.68
+    5       1.00 Ruta 5 Norte motorway   Coquimbo   flujo_detritos    0.68
+    6       1.00 Ruta 5 Norte motorway   Coquimbo   flujo_detritos    0.68
+    7       1.00 Ruta 5 Norte motorway  La Serena   flujo_detritos    0.64
+    8       1.00 Ruta 5 Norte motorway  La Serena   flujo_detritos    0.64
+    9       1.00 Ruta 5 Norte motorway  La Serena   flujo_detritos    0.63
+   10       1.00 Ruta 5 Norte motorway   Coquimbo   flujo_detritos    0.61
+   11       0.78 Ruta 5 Norte motorway  Los Vilos crecida_detritos    1.01
+   12       0.78 Ruta 5 Norte motorway  Los Vilos crecida_detritos    1.01
+
+  capa   -> puntos_corte.gpkg, trayectorias.gpkg
+  tabla  -> m3_puntos_corte.csv
+  figura -> m3_exposicion.png
+
+[exited with code 0]
+
+========================================================================
+VERIFICACIONES DERIVADAS
+========================================================================
+
+CONTRA LA CORRIDA ORIGINAL DEL 23-08-2026
+
+  concepto                          esta corrida      README
+  cuencas susceptibles                       167         167
+  largo mediano del cauce                1,80 km     1,80 km
+  tramos de via considerados              46.440      46.246
+  PUNTOS DE CORTE                            422         422
+  cortes sobre motorway                       73          73
+  cortes sobre track                         122         122
+  cortes sobre residential                    91          91
+  cortes sobre unclassified                   79          79
+
+  El unico numero que se movio es el de tramos de via, y se esperaba: el
+  extracto de OSM es del 8 de octubre y el original era de agosto. Que el
+  conteo de cortes no se moviera ni en uno sobre 194 tramos nuevos dice que
+  los cruces estan en vias troncales estables, no en el detalle que OSM edita
+  todas las semanas.
+
+LECTURA DEL MAPA (outputs/m3_exposicion.png)
+
+  Los cortes se concentran en la franja costera, donde la Ruta 5 Norte cruza
+  una por una las quebradas que bajan al mar. No hay cortes dispersos por
+  ladera, que es la senal de que el trazado de cauces fallo. El acercamiento
+  sobre Coquimbo y La Serena concentra 114 de los 422.
+
+  Que casi todo sea costero NO es un hallazgo del modelo: es el limite
+  estructural que documenta el capitulo 12 del recorrido. M1 corta cuencas
+  donde termina el terreno, o sea en la costa, asi que las quebradas
+  interiores quedan absorbidas en las cuencas de rio y nunca se evaluan por
+  separado.
+
+PENDIENTE QUE SIGUE ABIERTO
+
+  El reporte de localidades alcanzadas sigue subestimado y no debe citarse.
+  Esta corrida lo confirma con el numero a la vista: "zonas urbanas: 1.195 de
+  uso de suelo + 0 de localidad". Las localidades de la region estan mapeadas
+  como puntos en OSM y el filtro de poligonos las descarta todas. Decidir si
+  una trayectoria que pasa cerca de un punto poblado cuenta como alcance
+  urbano es decision de modelo y es trabajo de M5.
