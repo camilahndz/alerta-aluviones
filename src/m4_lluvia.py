@@ -189,13 +189,39 @@ ANTECEDENTES_H = (24, 72, 168)
 # Cruce con las cuencas.
 DISTANCIA_MAXIMA_KM = 30.0
 
+# A que cuencas se les aplica el umbral.
+#
+# No a las 444 de la region, sino a las que M2 clasifico como capaces de
+# generar algo mas que agua limpia: flujo de detritos o crecida de detritos.
+# Preguntarle a una cuenca de clase inundacion si supera un umbral de flujos de
+# detritos no tiene sentido, y meteria 277 filas de ruido que bajarian cualquier
+# porcentaje que uno quiera leer en la tabla.
+#
+# Son las dos mitades de una misma pregunta: M2 dice cuales pueden, M4 dice
+# cuando. Si M2 ya dijo que no puede, M4 no tiene nada que decir.
+CLASES_SUSCEPTIBLES = ("flujo_detritos", "crecida_detritos")
+
 # Estaciones ambiguas: pares vecinos que se contradicen.
 #
-# NOTA DE RECONSTRUCCION: estos dos cortes no estaban escritos en la
-# documentacion que sobrevivio, solo sus dos ejemplos (LAS BURRAS y EL MAITEN).
-# Estan elegidos para reproducirlos y hay que revisarlos contra la corrida.
+# NOTA DE RECONSTRUCCION: estos cortes no estaban escritos en la documentacion
+# que sobrevivio, solo tres ejemplos. Estan elegidos para que los tres queden
+# marcados, y eso es todo el respaldo que tienen:
+#
+#   LAS BURRAS 343,5 mm  vs  RIO ILLAPEL EN LAS BURRAS 1,1 mm   a 0,2 km
+#   RIO MOSTAZAL EN CUESTECITA  vs  EL MAITEN 1,9 mm            a 3,8 km
+#   RIO CUNCUMEN ANTES JUNTA 962,0 mm  vs  CUNCUMEN 409,5 mm    a 2,2 km
+#
+# El tercero es el que manda sobre la razon: 962/409,5 = 2,35, asi que un corte
+# en 10 -o en 3- lo dejaba pasar, y es justamente la estacion de la que depende
+# el unico positivo que el trabajo original reporto. Con 2,0 los tres entran.
+#
+# Que el corte salga de los ejemplos y no de un criterio independiente es una
+# debilidad real y por eso esta escrita. Dos pluviometros a 2 km no pueden ver
+# una diferencia de mas del doble en un temporal frontal de invierno, que cubre
+# cientos de kilometros: esa es la justificacion fisica, y es mas blanda que la
+# de cualquier otra constante de este archivo.
 AMBIGUA_DISTANCIA_KM = 5.0
-AMBIGUA_RAZON = 10.0
+AMBIGUA_RAZON = 2.0
 AMBIGUA_DIFERENCIA_MM = 50.0
 
 
@@ -995,9 +1021,15 @@ def main():
         return
 
     import geopandas as gpd
-    cuencas = gpd.read_file(ruta_susc)
+    todas = gpd.read_file(ruta_susc)
+    cuencas = todas[todas["clase"].isin(CLASES_SUSCEPTIBLES)].copy()
+    print(f"\nCuencas de M2: {len(todas)}; susceptibles "
+          f"({' + '.join(CLASES_SUSCEPTIBLES)}): {len(cuencas)}")
+    if cuencas.empty:
+        sys.exit("M2 no dejo ninguna cuenca susceptible. Revisa susceptibilidad.gpkg.")
+
     asignadas = asignar_estacion(cuencas, catalogo)
-    print(f"\nCuencas: {len(cuencas)}; mediana de distancia a su estacion: "
+    print(f"  mediana de distancia cuenca-estacion: "
           f"{asignadas['distancia_km'].median():.1f} km")
 
     lejos = int((asignadas["distancia_km"] > DISTANCIA_MAXIMA_KM).sum())
@@ -1020,11 +1052,35 @@ def main():
         n_cuencas = pares.loc[pares[u.columna].fillna(False), "id_cuenca"].nunique()
         print(f"  cuencas que superan {u.nombre:<32} {n_cuencas:>4} de {len(cuencas)}")
 
-    solo_ambiguas = pares[pares["supera_caine"].fillna(False) & pares["ambigua"]]
-    if not solo_ambiguas.empty:
-        print(f"\n  AVISO: {solo_ambiguas['id_cuenca'].nunique()} de esas cuencas "
-              "dependen de una estacion marcada como ambigua.")
-        print("  Descartandolas, el resultado de M4 es negativo.")
+    # De que se sostiene cada positivo. Un umbral superado por una sola cuenca
+    # no es un hallazgo hasta saber si el dato que lo sostiene aguanta.
+    positivos = pares[pares["supera_caine"].fillna(False)]
+    if not positivos.empty:
+        print("\n  De que se sostiene cada positivo:")
+        sospechosos = set()
+        for _, p in positivos.iterrows():
+            motivos = []
+            if p["ambigua"]:
+                motivos.append("estacion marcada como ambigua")
+            # Un episodio de un solo paso de 30 min aislado entre horas secas no
+            # tiene forma de lluvia: es un escalon del contador. Y como la
+            # duracion minima posible es media hora, cualquier paso sobre
+            # ~9,7 mm supera Caine por construccion.
+            if p["duracion_h"] <= 0.5:
+                motivos.append("episodio de un solo paso de 30 min")
+            if p["distancia_km"] > DISTANCIA_MAXIMA_KM:
+                motivos.append(f"estacion a {p['distancia_km']:.0f} km")
+            estado = "; ".join(motivos) if motivos else "sin objeciones"
+            if motivos:
+                sospechosos.add(p["id_cuenca"])
+            print(f"    cuenca {int(p['id_cuenca']):>4}  {p['estacion_nombre'][:38]:<38} {estado}")
+
+        solidos = positivos.loc[~positivos["id_cuenca"].isin(sospechosos),
+                                "id_cuenca"].nunique()
+        print(f"\n  Positivos sin objeciones: {solidos} de "
+              f"{positivos['id_cuenca'].nunique()}")
+        if solidos == 0:
+            print("  Descontados los sospechosos, el resultado de M4 es negativo.")
 
     print(f"\n  capa    -> {salida.name}")
     print(f"  figura  -> {ruta_png.name}")
