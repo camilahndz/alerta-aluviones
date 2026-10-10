@@ -21,5 +21,11 @@ scikit-learn>=1.4
 # codigo de M3 esta escrito contra 2.x.
 osmnx>=2.0
 
+# Lluvia sub-diaria (M4 le pega directo a la API REST de VIPNET)
+# Ya venia instalado como dependencia de osmnx, pero M4 lo importa el mismo, y
+# una dependencia que se usa directo se declara: si manana osmnx deja de
+# necesitarlo, M4 se cae sin que nadie entienda por que.
+requests>=2.31
+
 # Visualizacion
 matplotlib>=3.8
