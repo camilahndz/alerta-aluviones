@@ -58,10 +58,10 @@ observados.
 | Hito | Contenido | Estado |
 |---|---|---|
 | **M0** | Andamiaje: repo, estructura, README, .gitignore, primer commit | Cerrado |
-| **M1** | Terreno: DEM, relleno de sumideros, dirección y acumulación de flujo, cuencas y red de quebradas | Cerrado y reproducible en local (corrida 2026-10-10) |
-| **M2** | Susceptibilidad: variables de terreno + quebradas rankeadas (razón de Melton) | Cerrado y reproducible en local (corrida 2026-10-10) |
-| **M3** | Exposición: cruce de trayectorias con red vial (OSM) y zonas urbanas | Cerrado y reproducible en local — 422 puntos de corte (corrida 2026-10-10, extracto OSM del 08-10) |
-| **M4** | Gatillo: lluvia sub-diaria de VIPNET + umbrales publicados aplicados | Cerrado y reproducible en local (corrida 2026-10-10). **Resultado negativo**: ninguna cuenca supera un umbral, y eso es el hallazgo |
+| **M1** | Terreno: DEM, flujo, cuencas costeras y subcuencas de confluencia | Cerrado y reproducible en local — 3.757 unidades (corrida 2026-10-10) |
+| **M2** | Susceptibilidad: variables de terreno + quebradas rankeadas (razón de Melton) | Cerrado y reproducible en local — 2.589 susceptibles (corrida 2026-10-10) |
+| **M3** | Exposición: cruce de trayectorias con red vial (OSM) y zonas urbanas | Cerrado y reproducible en local — 3.669 puntos de corte en 14 comunas (corrida 2026-10-10, extracto OSM del 08-10) |
+| **M4** | Gatillo: lluvia sub-diaria de VIPNET + umbrales publicados aplicados | Cerrado y reproducible en local (corrida 2026-10-10). 668 de 2.589 cuencas superan Caine, todas en valles interiores |
 | **M5** | Validación: matriz de confusión vs. lo ocurrido; precisión, recall, AUC ROC | No iniciado |
 | **M6** | Entrega: mapa/visor final + documentación | No iniciado |
 
@@ -154,8 +154,25 @@ Hidrología: pysheds o richdem (o GRASS GIS si se requiere `r.watershed` /
   delata es la forma: la lluvia real sube y baja, un artefacto es un escalón
   entre ceros.
 
-- **Que la unidad de análisis no coincida con el fenómeno.** M1 corta cuencas solo
-  donde el terreno termina, o sea en la costa, así que las quebradas interiores
-  quedan absorbidas en las cuencas de río y nunca se evalúan por separado. Cuatro
-  cuencas concentran el 83% de la superficie drenada y las cuatro son de clase
-  inundación. El índice funciona; lo que falla es a qué objetos se lo aplica.
+- **Que la unidad de análisis no coincida con el fenómeno.** Es el error más caro
+  que tuvo este proyecto y conviene dejarlo escrito completo. M1 cortaba cuencas
+  solo donde el terreno termina, o sea en la costa, así que las quebradas
+  interiores quedaban absorbidas en las cuencas de río y nunca se evaluaban por
+  separado. El índice funcionaba; lo que fallaba era a qué objetos se le aplicaba.
+
+  Costó tres meses detectarlo porque no producía ningún error, solo una
+  conclusión plausible: M4 reportaba que ninguna cuenca superaba ningún umbral de
+  lluvia durante el peor temporal en cuarenta años. Sonaba a hallazgo —"un umbral
+  I-D global no describe este régimen"— y era un artefacto. Las cuencas costeras
+  se emparejaban con estaciones costeras, que midieron la mitad de lluvia que las
+  del interior, y en el interior no había ninguna cuenca que evaluar.
+
+  Lo que lo delató fue cruzar el modelo contra el inventario de activaciones de
+  julio de 2026: ocho de dieciocho ocurrieron en cuatro comunas sin una sola
+  unidad de análisis. La corrección está en `src/m1_subcuencas.py`, que delinea
+  una unidad en cada confluencia con un valle. Con eso, 668 de 2.589 cuencas
+  superan Caine, todas interiores.
+
+  La moraleja es general y vale para cualquier modelo espacial: **antes de creerle
+  a un resultado agregado, conviene preguntarse sobre qué objetos se calculó y si
+  esos objetos existen donde el fenómeno ocurre.**
