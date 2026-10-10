@@ -225,33 +225,36 @@ solo en el mar, y es trabajo de M5 con el evento a la vista.
 
 ## Cómo se corre M3
 
+Dos scripts:
+
 ```bash
-python src/m3_exposicion.py
+python src/m3_preparar_osm.py    # baja el extracto de OSM (~765 MB, una sola vez)
+python src/m3_exposicion.py      # cruza quebradas con red vial y zonas urbanas
 ```
 
-Cruza el cauce principal de cada cuenca susceptible con la red vial y las zonas
-urbanas, y devuelve los puntos donde una ruta cruza el fondo de una quebrada
-capaz de generar flujo.
+El segundo cruza el cauce principal de cada cuenca susceptible con la red vial y
+las zonas urbanas, y devuelve los puntos donde una ruta cruza el fondo de una
+quebrada capaz de generar flujo.
 
-Necesita el extracto de OpenStreetMap de Chile, que se baja una vez del
-navegador y se deja descomprimido en `data/raw/osm/chile.gpkg`:
+El primero baja el extracto de Chile de
+[Geofabrik](https://download.geofabrik.de/south-america/chile.html) y lo deja en
+`data/raw/osm/chile.gpkg`. **No baja `chile-latest-free.gpkg.zip`**, que es lo
+que ofrece la página: ese archivo cambia todos los días, y dos corridas
+separadas por un mes correrían sobre mapas distintos sin que nadie se entere. El
+script pide un snapshot con fecha en el nombre y la anota en
+`data/raw/osm/PROCEDENCIA.txt`, que es la fecha que después se cita.
 
-```
-https://download.geofabrik.de/south-america/chile.html
-```
-
-El archivo es `chile-latest-free.gpkg.zip`, unos 750 MB. Si no está, el script
-consulta Overpass, pero eso no es recomendable: Overpass limita a dos consultas
-simultáneas por IP y M3 necesita del orden de cuarenta y ocho, así que la
-descarga se cae a mitad de camino. Peor aún para un proyecto que quiere ser
-reproducible, Overpass responde con el mapa de este instante: dos corridas
-separadas por un mes no son comparables. El extracto tiene fecha.
+Esa distinción es el motivo por el que M3 dejó de consultar Overpass, y no
+conviene perderla por la puerta de al lado. Overpass además limita a dos
+consultas simultáneas por IP y M3 necesita del orden de cuarenta y ocho, así que
+la descarga se cae a mitad de camino. El script todavía sabe usarlo si el
+extracto no está, pero no es el camino recomendado.
 
 ### Resultado de M3
 
 De las 444 cuencas de la región, 167 son susceptibles (21 de flujo de detritos y
 146 de crecida) y a las 167 se les trazó el cauce principal, con un largo mediano
-de 1,80 km. Contra 46.246 tramos de vía, salen **422 puntos de corte**.
+de 1,80 km. Contra 46.440 tramos de vía, salen **422 puntos de corte**.
 
 | Jerarquía de la vía | Cortes | Peso |
 |---|---|---|
@@ -554,7 +557,7 @@ documenta. Queda como el primer pendiente de M4: son dos números en
 - [x] **M0 — Andamiaje**: repo, estructura, README, primer commit.
 - [x] **M1 — Terreno**: DEM descargado; cuencas y red de quebradas delineadas.
 - [x] **M2 — Susceptibilidad**: mapa de quebradas rankeadas por peligro (razón de Melton).
-- [x] **M3 — Exposición**: cruce con red vial y zonas urbanas → 422 puntos de corte. *(Código en el repositorio; salidas pendientes de regenerar, ver abajo.)*
+- [x] **M3 — Exposición**: cruce con red vial y zonas urbanas → 422 puntos de corte.
 - [x] **M4 — Gatillo de lluvia**: 448 episodios de 30 min y umbrales publicados aplicados.
 - [ ] **M5 — Validación**: comparación contra los tres episodios de 2026 y métricas.
 - [ ] **M6 — Entrega**: mapa o visor final y documentación.
@@ -601,7 +604,9 @@ verificaciones derivadas anotadas al final. La corrida de referencia de M1, M2 y
 M4 es
 [`2026-10-10_reconstruccion_m1_m2_m4.txt`](docs/corridas/2026-10-10_reconstruccion_m1_m2_m4.txt),
 hecha en local sobre el DEM completo, con la cobertura verificada al 100% de la
-superficie regional.
+superficie regional. La de M3 es
+[`2026-10-10_m3_exposicion.txt`](docs/corridas/2026-10-10_m3_exposicion.txt),
+sobre el extracto de OSM del 8 de octubre.
 
 Esto existe porque durante un tiempo no fue así. Entre el 7 y el 23 de agosto de
 2026 el repositorio reportaba cifras de una corrida remota que no se podían

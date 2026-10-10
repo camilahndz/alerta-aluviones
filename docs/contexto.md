@@ -60,7 +60,7 @@ observados.
 | **M0** | Andamiaje: repo, estructura, README, .gitignore, primer commit | Cerrado |
 | **M1** | Terreno: DEM, relleno de sumideros, dirección y acumulación de flujo, cuencas y red de quebradas | Cerrado y reproducible en local (corrida 2026-10-10) |
 | **M2** | Susceptibilidad: variables de terreno + quebradas rankeadas (razón de Melton) | Cerrado y reproducible en local (corrida 2026-10-10) |
-| **M3** | Exposición: cruce de trayectorias con red vial (OSM) y zonas urbanas | Código cerrado — 422 puntos de corte (corrida 2026-08-23). **Salidas pendientes de regenerar**: falta volver a bajar el extracto de OSM |
+| **M3** | Exposición: cruce de trayectorias con red vial (OSM) y zonas urbanas | Cerrado y reproducible en local — 422 puntos de corte (corrida 2026-10-10, extracto OSM del 08-10) |
 | **M4** | Gatillo: lluvia sub-diaria de VIPNET + umbrales publicados aplicados | Cerrado y reproducible en local (corrida 2026-10-10). **Resultado negativo**: ninguna cuenca supera un umbral, y eso es el hallazgo |
 | **M5** | Validación: matriz de confusión vs. lo ocurrido; precisión, recall, AUC ROC | No iniciado |
 | **M6** | Entrega: mapa/visor final + documentación | No iniciado |
