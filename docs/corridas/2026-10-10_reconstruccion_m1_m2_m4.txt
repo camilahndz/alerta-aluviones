@@ -1,0 +1,326 @@
+Reconstruccion completa de data/raw y corrida M1 -> M2 -> M4
+10 de octubre de 2026, local, .venv con Python 3.12
+
+CONTEXTO
+--------
+El 19 de septiembre de 2026 se perdio todo data/raw/ y el codigo de M4, que
+nunca se habia commiteado. Esta corrida reconstruye el pipeline desde cero:
+
+  - DEM Copernicus GLO-30 bajado de nuevo (12 tiles, bbox sin cambios)
+  - limite_coquimbo.gpkg reconstruido desde la division regional de la BCN,
+    con src/m1_limite_region.py, que antes no existia
+  - M4 reescrito desde la seccion que sobrevivio en el README
+
+Orden de los comandos:
+
+  python src/m1_preparar_dem.py
+  python src/m1_limite_region.py
+  python src/m1_terreno.py --umbral-km2 0.15 --area-min-km2 0.4
+  python src/m1_recortar_region.py
+  python src/m2_susceptibilidad.py
+  python src/m4_lluvia.py
+
+AVISO SOBRE EL ORDEN REAL
+-------------------------
+m1_preparar_dem.py y m1_terreno.py se lanzaron ANTES de que existiera
+limite_coquimbo.gpkg, asi que los dos imprimieron "AVISO: falta
+limite_coquimbo.gpkg, no se puede verificar cobertura" y siguieron. La
+cobertura se verifico aparte, despues, contra el limite ya reconstruido:
+
+  dem_mosaico_wgs84.tif   100,00%  PASA
+  dem_utm19s.tif          100,00%  PASA
+
+y m1_recortar_region.py y m2_susceptibilidad.py si la verificaron en linea.
+Queda anotado porque la regla del repositorio es que ninguna cifra salga de un
+DEM sin verificar, y aqui la verificacion llego tarde aunque haya pasado.
+
+========================================================================
+PASO 0 - DEM
+========================================================================
+12 tiles con terreno (S30-S33 x W070-W072)
+mosaico     : 10800 x 14400 px en EPSG:4326
+reproyectado: 9743 x 14910 px a 30 m, EPSG:32719  (145.268.130 px, 0,40 GB)
+22.934.864 pixeles de mar marcados como sin dato
+
+Cuenta de RAM hecha antes de lanzar M1, segun pide el protocolo:
+  1 arreglo float64      1,08 GB
+  5 arreglos vivos       5,41 GB   (bajo la linea de 6 GB)
+  RAM de la maquina     11,4 GB
+  peak observado         4,8 GB    -> no hubo paginacion
+
+========================================================================
+PASO 1 - LIMITE REGIONAL
+========================================================================
+Leyendo Regional.shp desde Regiones.zip...
+  17 regiones, CRS EPSG:3857
+  columna de nombre: 'Region' -> 1 fila(s)
+
+Bbox del poligono: -71.72, -32.28, -69.81, -29.04
+
+Listo: D:\Desktop\alerta-aluviones\data\raw\limite_coquimbo.gpkg
+  area: 40,576 km2
+
+Siguiente paso:
+  python src/m1_terreno.py --umbral-km2 0.15 --area-min-km2 0.4
+
+========================================================================
+PASO 2 - M1 TERRENO
+========================================================================
+AVISO: falta limite_coquimbo.gpkg, no se puede verificar cobertura.
+DEM cargado    : D:\Desktop\alerta-aluviones\data\processed\dem_utm19s.tif
+  dimensiones  : 14910 filas x 9743 columnas
+  CRS          : EPSG:32719
+  altura min/max: 0 / 6914 m
+  pixel        : 900 m2 -> umbral = 166 pixeles
+
+Acondicionando el DEM...
+  pozos rellenados
+  depresiones rellenadas
+  planicies resueltas
+
+Calculando escurrimiento...
+  direccion de flujo (D8) lista
+  acumulacion lista (maximo: 21,178,682 pixeles)
+
+Extrayendo red de drenaje (umbral: 166 pixeles)...
+  370185 tramos, 207351.1 km de red en total
+
+Delineando cuencas...
+  1443 desembocaduras candidatas
+  493 cuencas descartadas por area < 0.4 km2
+  950 cuencas delineadas (105766.9 km2 en total)
+  la mayor: 19060.8 km2
+  2 tocan el borde del DEM: area truncada, M2 las excluye
+
+Guardando resultados...
+  la figura se dibuja tomando 1 de cada 6 pixeles
+  rasters y vectores -> D:\Desktop\alerta-aluviones\data\processed
+  figura de control  -> D:\Desktop\alerta-aluviones\outputs\m1_terreno.png
+
+Listo. Abre el PNG y revisa que las quebradas sigan los valles.
+
+[exited with code 0]
+
+========================================================================
+PASO 3 - M1 RECORTE A LA REGION
+========================================================================
+Cobertura del DEM sobre la region: 100.0%
+Limite regional  : D:\Desktop\alerta-aluviones\data\raw\limite_coquimbo.gpkg (ya estaba)
+  superficie de la region: 40,576 km2
+
+Cuencas: 950 en total -> 444 descargan en la region
+  cubren el 96% de la superficie regional
+Tramos : 370185 en total -> 134329 dentro de esas cuencas
+
+Superficie drenada por esas cuencas: 39,523 km2
+
+Las 8 cuencas mas grandes:
+ id_cuenca   area_km2
+         3 11675.1204
+         4  9408.1518
+         5  7620.3810
+         8  4051.6587
+        13   742.2291
+        14   712.9701
+        15   687.8511
+        18   537.9804
+
+  vectores -> cuencas_coquimbo.gpkg, red_quebradas_coquimbo.gpkg
+  figura   -> D:\Desktop\alerta-aluviones\outputs\m1_cuencas_coquimbo.png
+
+========================================================================
+PASO 4 - M2 SUSCEPTIBILIDAD
+========================================================================
+Cobertura del DEM sobre la region: 100.0%
+Cuencas de entrada: 444
+Leyendo el DEM y midiendo cada cuenca...
+  calculando pendientes...
+
+Clasificacion, por los dos criterios:
+                        Wilford   solo Melton
+  flujo_detritos             21            33
+  crecida_detritos          146           134
+  inundacion                277           277
+
+  12 cuencas cambian de clase segun el criterio de largo.
+  Son las mas energeticas de la region, descartadas solo por ser largas:
+ id_cuenca  area_km2  largo_km  melton
+       944      0.40      2.84    1.01
+       933      0.42      2.70    0.96
+       447      1.61      4.02    0.87
+       694      0.74      2.89    0.79
+       444      1.62      3.98    0.77
+
+  El umbral de 2.7 km viene de un estudio en la Columbia
+  Britanica. M5 va a decir si sirve para Coquimbo o hay que recalibrarlo.
+
+  380 de 444 cuencas estan dentro del rango de calibracion del indice (<= 10 km2)
+
+Las 12 cuencas mas susceptibles:
+ ranking  id_cuenca  area_km2  desnivel_m  largo_km  pend_media_g  melton            clase
+       1        944      0.40      641.26      2.84          7.64    1.01 crecida_detritos
+       2        933      0.42      625.05      2.70         14.93    0.96 crecida_detritos
+       3        914      0.43      631.71      2.43         14.44    0.96   flujo_detritos
+       4        781      0.57      659.50      1.95         20.67    0.87   flujo_detritos
+       5        447      1.61     1101.26      4.02         22.18    0.87 crecida_detritos
+       6        558      1.04      851.78      2.43         23.57    0.84   flujo_detritos
+       7        704      0.71      696.55      2.52         15.66    0.83   flujo_detritos
+       8        681      0.76      692.52      2.52         17.04    0.80   flujo_detritos
+       9        694      0.74      675.44      2.89         16.22    0.79 crecida_detritos
+      10        723      0.67      636.50      2.36         14.26    0.78   flujo_detritos
+      11        444      1.62      975.50      3.98         18.56    0.77 crecida_detritos
+      12        648      0.82      686.34      3.21         10.56    0.76 crecida_detritos
+
+  capa   -> susceptibilidad.gpkg
+  figura -> D:\Desktop\alerta-aluviones\outputs\m2_susceptibilidad.png
+
+========================================================================
+PASO 5 - M4 GATILLO DE LLUVIA
+========================================================================
+==========================================================================
+M4 - ventana 2026-06-01 a 2026-08-23, paso 30 min
+     corte seco 12 h, usando cache
+==========================================================================
+
+R1  estaciones de precipitacion en Coquimbo: 107
+
+Bajando series de precipitacion...
+  20/107
+  40/107
+  60/107
+  80/107
+  100/107
+  107/107
+
+Ajustando la isoterma 0 observada, dia a dia...
+  22 de 84 dias con isoterma ajustada
+  mediana de julio: 2643 m
+R2  estaciones descartadas: 1
+R4  estaciones descartadas: 4
+    quedan 102 de 107 estaciones
+    15 marcadas como ambiguas (no se descartan)
+
+Detectando episodios con corte seco de 12 h...
+R3  episodios descartados por hueco de transmision: 58
+R5  episodios descartados por estar sobre la isoterma 0: 7
+    quedan 448 episodios en 94 estaciones
+
+Episodios que superan cada umbral:
+  Caine (1980)                        26
+  Ben David-Novak et al. (2004)        0
+
+Sensibilidad al corte seco (cuantas horas separan dos episodios):
+   corte (h)   episodios   D mediana   superan Caine
+           6         592         7.5              33
+          12         455         9.0              26  <- el usado
+          24         359        10.0              20
+
+Sensibilidad al umbral de paso seco (que cuenta como no llover):
+   seco < mm   episodios   D mediana   superan Caine
+         0.0         455        11.5              22
+         0.1         467        11.5              23
+         0.2         455         9.0              26  <- el usado
+         0.5         424         7.2              29
+
+Cuencas de M2: 444; susceptibles (flujo_detritos + crecida_detritos): 167
+  mediana de distancia cuenca-estacion: 15.9 km
+
+Pares cuenca-episodio: 476
+  cuencas que superan Caine (1980)                        2 de 167
+  cuencas que superan Ben David-Novak et al. (2004)       0 de 167
+
+  De que se sostiene cada positivo:
+    cuenca  305  RIO CUNCUMEN ANTES JUNTA CHOAPA (CHACA estacion marcada como ambigua
+    cuenca  805  QUILIMARI                              episodio de un solo paso de 30 min
+
+  Positivos sin objeciones: 0 de 2
+  Descontados los sospechosos, el resultado de M4 es negativo.
+
+  capa    -> gatillo.gpkg
+  figura  -> m4_umbral_id.png
+  tabla   -> m4_episodios.csv
+
+========================================================================
+VERIFICACIONES DERIVADAS
+========================================================================
+
+CONTRA LA DGA (areas oficiales de las tres cuencas grandes)
+
+  cuenca     este modelo      DGA      error
+  Limari      11.675 km2   11.800     -1,1%
+  Elqui        9.408 km2    9.657     -2,6%
+  Choapa       7.620 km2    7.650     -0,4%
+
+CONTRA EL README (corrida remota del 23-08-2026)
+
+  concepto                        esta corrida    README
+  cobertura regional                       96%       96%
+  superficie drenada              39.523 km2   39.487 km2
+  cuencas que descargan en la region       444        434
+  clase flujo_detritos (Wilford)            21         21
+  Melton maximo                           1,01       1,05
+  cuencas susceptibles (M4)                167        167
+  mediana distancia cuenca-estacion    15,9 km      16 km
+  superan Ben David-Novak              0 de 167   0 de 167
+  superan Caine                        2 de 167   1 de 167
+
+CONTRA VIPNET (cifras de control de M4, reproducen al decimal)
+
+  LA SERENA (ESCUELA AGRICOLA), julio         150,9 mm
+  CUNCUMEN por alza del acumulado             409,5 mm
+  CUNCUMEN por suma de incrementos            208,0 mm
+  RIO CUNCUMEN ANTES JUNTA CHOAPA             962,0 mm
+  LAS BURRAS                                  343,5 mm
+  EL MAITEN (Mostazal)                          1,9 mm
+  desajuste de LAMBERT                         25,2 mm
+
+EL RESULTADO DE M4 SIGUE SIENDO NEGATIVO
+
+  Dos cuencas superan Caine y ninguna supera Ben David-Novak, pero las dos
+  positivas se caen al mirarlas:
+
+  - Cuenca 305, via RIO CUNCUMEN ANTES JUNTA CHOAPA. Esa estacion registra
+    962,0 mm en la ventana contra 409,5 mm de CUNCUMEN, a 2,2 km. Queda
+    marcada como ambigua y no se descarta, pero tampoco sostiene un hallazgo.
+
+  - Cuenca 805, via QUILIMARI. Su episodio es un unico paso de 30 minutos:
+    el contador salta de 1,3 a 15,5 mm y queda plano siete horas a cada lado.
+    La lluvia real no da escalones. Es un artefacto del sensor, y como la
+    duracion minima posible es media hora, cualquier paso sobre ~9,7 mm
+    supera Caine por construccion.
+
+  Descontadas las dos, ninguna cuenca de la region supera ningun umbral
+  publicado en toda la ventana, pese a que hubo activaciones documentadas.
+  Es la misma conclusion del trabajo original, por un camino independiente:
+  un umbral I-D global no describe este regimen.
+
+TRES CORRECCIONES RESPECTO DEL CODIGO PERDIDO
+
+  a) Estaciones fuera de la grilla de 30 min. Buena parte de la red transmite
+     a los :59, :22 o :13. Casar por marca de tiempo exacta las dejaba en cero
+     registros y desaparecian sin que nada fallara.
+
+  b) Slots de recuperacion contados como picos de intensidad. HURTADO salia
+     con 373,1 mm en 0,5 h, o sea 746 mm/h.
+
+  c) El filtro de cuencas susceptibles. Sin el, M4 evaluaba las 444 cuencas en
+     vez de las 167 que M2 declara capaces.
+
+DOS CONSTANTES QUE SON JUICIO, NO MEDICION
+
+  UMBRAL_SECO_MM = 0,2    resolucion de la cubeta basculante. Con cero exacto
+                          la duracion mediana de julio pasa de 53 a 113 h.
+  AMBIGUA_RAZON  = 2,0    calibrada para marcar los tres pares que el README
+                          nombra. Es la constante mas debil del archivo y esta
+                          declarada como tal en el codigo.
+
+PENDIENTE
+
+  M3 no se volvio a correr: falta el extracto de OSM de Geofabrik (~750 MB),
+  que tampoco sobrevivio. Por lo tanto puntos_corte.gpkg, trayectorias.gpkg,
+  outputs/m3_puntos_corte.csv y outputs/m3_exposicion.png NO existen, y la
+  cifra de 422 puntos de corte del README queda sin reproducir en local.
+
+  outputs/m4_control_cordura.csv tampoco se escribe todavia: el control de las
+  7 quebradas documentadas contra los umbrales depende de un inventario de
+  activaciones que no estaba en el codigo recuperable. Es trabajo de M5.
