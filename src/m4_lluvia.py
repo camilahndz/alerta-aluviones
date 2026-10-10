@@ -124,7 +124,8 @@ import requests
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from clases_cuenca import CLASES_SUSCEPTIBLES  # noqa: E402
-from m4_umbrales import UMBRALES, caine_intensidad_critica, evaluar  # noqa: E402
+from m4_umbrales import (UMBRALES, caine_intensidad_critica,  # noqa: E402
+                         evaluar, razon_critica)
 
 RAIZ = Path(__file__).resolve().parent.parent
 
@@ -622,6 +623,8 @@ def detectar_episodios(serie: pd.DataFrame, corte_seco_h: float,
             # solo paso dura media hora, no cero.
             duracion_h = (fin - inicio + 1) / PASOS_POR_HORA
             rodante = bloque.rolling(PASOS_POR_HORA, min_periods=1).sum()
+            # La segunda lectura del umbral: ver m4_umbrales.razon_critica.
+            razon_cr, dur_cr = razon_critica(bloque, PASOS_POR_HORA)
             episodios.append({
                 "inicio": mm.index[inicio],
                 "fin": mm.index[fin],
@@ -629,6 +632,8 @@ def detectar_episodios(serie: pd.DataFrame, corte_seco_h: float,
                 "lluvia_mm": total,
                 "i_media_mm_h": total / duracion_h,
                 "i_max_60min_mm_h": float(rodante.max(skipna=True)),
+                "razon_caine_critica": razon_cr,
+                "duracion_critica_h": dur_cr,
                 "pasos_sin_dato": int(bloque.isna().sum()),
                 "tiene_recuperacion": con_recuperacion,
                 "tiene_hueco": bool(con_hueco or bloque.isna().any()
@@ -961,6 +966,11 @@ def main():
                                     episodios["i_max_60min_mm_h"]).items():
         episodios[columna] = valores
 
+    # Caine leido sobre la peor ventana del episodio en vez de sobre el episodio
+    # entero. Es una columna aparte a proposito: no reemplaza la lectura
+    # literal, la acompana. Ver m4_umbrales.razon_critica.
+    episodios["supera_caine_critico"] = episodios["razon_caine_critica"] >= 1.0
+
     dir_out = RAIZ / "outputs"
     dir_out.mkdir(parents=True, exist_ok=True)
     ruta_csv = dir_out / "m4_episodios.csv"
@@ -969,6 +979,8 @@ def main():
     print("\nEpisodios que superan cada umbral:")
     for u in UMBRALES:
         print(f"  {u.nombre:<32} {int(episodios[u.columna].fillna(False).sum()):>5}")
+    print(f"  {'Caine sobre la ventana critica':<32} "
+          f"{int(episodios['supera_caine_critico'].fillna(False).sum()):>5}")
 
     # --- Sensibilidad a los dos parametros de juicio ---
     def _contar(corte, umbral_seco):
@@ -1040,6 +1052,9 @@ def main():
     for u in UMBRALES:
         n_cuencas = pares.loc[pares[u.columna].fillna(False), "id_cuenca"].nunique()
         print(f"  cuencas que superan {u.nombre:<32} {n_cuencas:>4} de {len(cuencas)}")
+    n_cr = pares.loc[pares['supera_caine_critico'].fillna(False), 'id_cuenca'].nunique()
+    print(f"  cuencas que superan {'Caine en su ventana critica':<32} "
+          f"{n_cr:>4} de {len(cuencas)}")
 
     # De que se sostiene cada positivo. Un umbral superado por una sola cuenca
     # no es un hallazgo hasta saber si el dato que lo sostiene aguanta.

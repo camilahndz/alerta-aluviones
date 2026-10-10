@@ -202,9 +202,17 @@ def main():
     unidades = gpd.read_file(ruta_susc).to_crs(CRS_METRICO)
     susceptibles = unidades[unidades["clase"].isin(CLASES_SUSCEPTIBLES)]
     gatillo = gpd.read_file(ruta_gat)
-    positivas = set(gatillo.loc[gatillo["supera_caine"].astype(bool), "id_cuenca"])
+    # Las dos lecturas del mismo umbral, que M4 guarda en columnas distintas:
+    # el episodio entero contra su peor ventana. Ver m4_umbrales.razon_critica.
+    LECTURAS = {"episodio": "supera_caine", "ventana critica": "supera_caine_critico"}
+    positivas_por_lectura = {
+        etiqueta: set(gatillo.loc[gatillo[col].astype(bool), "id_cuenca"])
+        for etiqueta, col in LECTURAS.items() if col in gatillo.columns
+    }
+    positivas = positivas_por_lectura["episodio"]
     print(f"Unidades susceptibles: {len(susceptibles):,}")
-    print(f"Unidades que superan Caine: {len(positivas):,}")
+    for etiqueta, conjunto in positivas_por_lectura.items():
+        print(f"Unidades que superan Caine ({etiqueta}): {len(conjunto):,}")
 
     print("\nUbicando cada entrada en OpenStreetMap...")
     osm = cargar_osm()
@@ -220,7 +228,8 @@ def main():
         if geo is None:
             filas.append({**entrada, "nombre": nombre, "ubicacion": como,
                           "n_susceptibles": 0, "n_positivas": 0,
-                          "veredicto": "sin_ubicar", "ids_positivas": ""})
+                          "veredicto": "sin_ubicar", "ids_positivas": "",
+                          "ids_cercanas": ""})
             continue
 
         cerca = susceptibles[susceptibles.geometry.distance(geo) <= radio_m]
@@ -257,7 +266,9 @@ def main():
                       "lluvia_max_mm": round(lluvia, 1) if lluvia == lluvia else "",
                       "duracion_h": round(duracion, 1) if duracion == duracion else "",
                       "ids_positivas": " ".join(
-                          str(int(i)) for i in acertadas["id_cuenca"].head(5))})
+                          str(int(i)) for i in acertadas["id_cuenca"].head(5)),
+                      "ids_cercanas": " ".join(
+                          str(int(i)) for i in cerca["id_cuenca"])})
 
     res = pd.DataFrame(filas)
 
@@ -283,6 +294,27 @@ def main():
 
     print("\n  La precision NO se reporta y no es un olvido: el inventario no "
           "tiene\n  negativos observados. Ver la cabecera de este archivo.")
+
+    # --- Recall bajo las dos lecturas del umbral ---
+    #
+    # M4 guarda dos columnas para Caine: el episodio entero y su peor ventana.
+    # Aca se mide cuanto cambia el recall entre una y otra, que es la unica
+    # forma de saber si la segunda lectura sirve o solo infla el conteo.
+    if len(positivas_por_lectura) > 1:
+        print("\n" + "-" * 74)
+        print("Recall segun como se lea Caine:")
+        print(f"  {'lectura':<18} {'todas':>14} {'evidencia fuerte':>18}")
+        for etiqueta, conjunto in positivas_por_lectura.items():
+            ids = {str(i) for i in conjunto}
+            linea = []
+            for grupo in (res, res[res["evidencia"].isin(EVIDENCIA_FUERTE)]):
+                ev = grupo[~grupo["veredicto"].isin(("sin_cobertura", "sin_ubicar"))]
+                aciertos = sum(1 for _, f in ev.iterrows()
+                               if set(str(f["ids_cercanas"]).split()) & ids)
+                linea.append(f"{aciertos}/{len(ev)} "
+                             f"({100 * aciertos / max(len(ev), 1):.0f}%)")
+            print(f"  {etiqueta:<18} {linea[0]:>14} {linea[1]:>18}")
+
 
     # --- Donde cayo la lluvia de las que se activaron ---
     #

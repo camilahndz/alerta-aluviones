@@ -187,6 +187,54 @@ GUZZETTI_2008_PENDIENTE = None  # alfa, sin verificar -> no se usa
 GUZZETTI_2008_EXPONENTE = None  # beta, sin verificar -> no se usa
 
 
+# Duraciones que se escanean al buscar la ventana critica de un episodio.
+# Es una escala geometrica y no un barrido completo: la curva de Caine es suave,
+# asi que mover la ventana de 24 a 25 horas no cambia nada, y escanear los 224
+# pasos de un episodio de 112 horas costaria mucho para no informar nada.
+DURACIONES_CRITICAS_H = (0.5, 1, 2, 3, 6, 12, 24, 36, 48, 72, 96, 120, 168, 240)
+
+
+def razon_critica(serie_mm, pasos_por_hora: int):
+    """La peor ventana del episodio contra Caine. Devuelve (razon, duracion_h).
+
+    POR QUE EXISTE ESTA SEGUNDA LECTURA
+
+        Caine se enuncia sobre la duracion del evento y su intensidad media, y
+        asi se aplica en `_supera_caine`. Para un chaparron de tres horas eso
+        describe bien lo que paso. Para el temporal de julio, que duro 112 horas
+        seguidas, la media diluye todo: 199 mm repartidos en 112 h dan 1,8 mm/h
+        aunque adentro haya habido un dia de 150 mm.
+
+        Esta funcion mira el mismo episodio a varias duraciones y se queda con
+        la ventana que mas se acerca al umbral. Es el analisis de duracion
+        critica que usan varios sistemas operativos, y sobre los episodios de
+        2026 sube las razones un 20%.
+
+        NO reemplaza a la lectura literal. Son dos preguntas distintas -"el
+        evento supero el umbral" contra "alguna ventana del evento lo supero"- y
+        el pipeline guarda las dos columnas, igual que M2 guarda sus dos
+        clasificaciones. Quien lea decide cual defiende.
+    """
+    import numpy as _np
+
+    mejor_razon, mejor_d = _np.nan, _np.nan
+    n = len(serie_mm)
+    for duracion in DURACIONES_CRITICAS_H:
+        pasos = int(round(duracion * pasos_por_hora))
+        if pasos < 1 or pasos > n:
+            continue
+        critica = caine_intensidad_critica(duracion)
+        if not _np.isfinite(critica):
+            continue
+        suma = serie_mm.rolling(pasos, min_periods=pasos).sum().max(skipna=True)
+        if not _np.isfinite(suma):
+            continue
+        razon = (suma / duracion) / critica
+        if not _np.isfinite(mejor_razon) or razon > mejor_razon:
+            mejor_razon, mejor_d = float(razon), float(duracion)
+    return mejor_razon, mejor_d
+
+
 def evaluar(duracion_h, intensidad_media, intensidad_max_60min) -> dict:
     """Aplica todos los umbrales y devuelve un dict columna -> arreglo de bool.
 

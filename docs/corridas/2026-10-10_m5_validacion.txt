@@ -1,13 +1,8 @@
 M5 - Validacion contra el temporal de julio de 2026
 10 de octubre de 2026, local, .venv con Python 3.12
+(segunda version: incorpora la lectura de Caine sobre la ventana critica)
 
-Comando:
-  python src/m5_validacion.py
-
-Entradas: docs/inventario_activaciones_2026-07.csv (18 activaciones documentadas)
-          data/processed/susceptibilidad.gpkg (3.757 unidades, 2.589 susceptibles)
-          data/processed/gatillo.gpkg (11.591 pares, 668 cuencas sobre Caine)
-          data/raw/osm/chile.gpkg (extracto del 08-10-2026, para geolocalizar)
+Comando: python src/m5_validacion.py
 
 ========================================================================
 ==========================================================================
@@ -16,7 +11,8 @@ M5 - Validacion contra el temporal de julio de 2026
 
 Entradas del inventario: 18
 Unidades susceptibles: 2,589
-Unidades que superan Caine: 668
+Unidades que superan Caine (episodio): 668
+Unidades que superan Caine (ventana critica): 861
 
 Ubicando cada entrada en OpenStreetMap...
 
@@ -58,6 +54,12 @@ solo evidencia fuerte: 9
   negativos observados. Ver la cabecera de este archivo.
 
 --------------------------------------------------------------------------
+Recall segun como se lea Caine:
+  lectura                     todas   evidencia fuerte
+  episodio               4/15 (27%)          1/6 (17%)
+  ventana critica        9/15 (60%)          3/6 (50%)
+
+--------------------------------------------------------------------------
 Que tan lejos estuvo el umbral en las que fallo:
   minimo 0.25 | mediana 0.75 | maximo 0.77
   10 de 11 caen entre 0,55 y 0,80 de lo que Caine pide
@@ -86,75 +88,46 @@ Recall que daria un umbral escalado (Caine multiplicado por k):
 VERIFICACIONES DERIVADAS
 ========================================================================
 
-LAS TRES ENTRADAS SIN COBERTURA NO SON ERRORES DE PREDICCION
+LA LECTURA DE CAINE SOBRE LA VENTANA CRITICA TRIPLICA LOS ACIERTOS
 
-  Cruz de Cana, Tambillos y Cajon del Romero no tienen ninguna unidad
-  susceptible a menos de 3 km. El modelo no se equivoco ahi: nunca evaluo ese
-  lugar.
+  lectura            todas        evidencia fuerte
+  episodio entero    4/15 (27%)   1/6 (17%)
+  ventana critica    9/15 (60%)   3/6 (50%)
 
-  La causa esta medida. Las tres caen en cuencas costeras de entre 195 y 538
-  km2, y m1_subcuencas.py solo delinea una subcuenca cuando el cauce receptor
-  drena al menos 200 km2. Un afluente que entra a un cauce costero de 150 km2
-  no recibe unidad.
+  No se cambio ningun coeficiente publicado. Lo que cambio es a que duracion se
+  evalua el umbral: antes al largo completo del episodio, ahora a la peor
+  ventana que el episodio contiene. Para el temporal de julio, que duro 112
+  horas seguidas, la media diluia un dia entero de 150 mm.
 
-  Bajando --valle-min-km2 a 25 aparecen bocas junto a Cruz de Cana y Tambillos.
-  NO SE HIZO, y el motivo es de metodo: bajar un parametro del modelo hasta que
-  cubra los casos de su propia validacion es ajustar contra el conjunto de
-  prueba. Queda anotado como lo primero que deberia revisar una iteracion
-  siguiente, con un inventario distinto del que se uso para detectarlo.
+  Las dos columnas conviven en gatillo.gpkg. No se elige ganador, igual que M2
+  guarda sus dos clasificaciones.
 
-EL EMPAREJAMIENTO POR CONTENCION ESTABA MAL Y HABRIA DADO UN RESULTADO FALSO
+LA CORRECCION OROGRAFICA NO SE IMPLEMENTO, Y ESO ES UN RESULTADO
 
-  La primera version buscaba la unidad que CONTIENE el punto reportado. La
-  prensa reporta donde se VIO el flujo -un cruce de ruta, un pueblo- y eso cae
-  en el fondo del valle, que pertenece a la cuenca del rio. Con contencion, el
-  aluvion del Islon calzaba con la cuenca del Elqui (9.408 km2, clase
-  inundacion) y 9 de las 18 entradas aparecian sin unidad susceptible.
+  El 92% de las cuencas susceptibles (2.092 de 2.277) esta mas alto que la
+  estacion que las representa, con 345 m de desnivel mediano y 446 cuencas a
+  mas de 1.000 m por encima. Los pluviometros se instalan en el valle; las
+  cuencas estan arriba. La hipotesis era que el modelo subestima la lluvia.
 
-  Con cercania -unidades susceptibles a menos de 3 km- quedan 3 sin cobertura
-  en vez de 9. La diferencia entre las dos versiones no es un ajuste: la
-  primera medi­a otra cosa.
+  El gradiente no se pudo estimar con esta red:
 
-LAS FALLAS SON INFORMACION, NO SOLO FALLAS
+    conjunto              n    R2      gradiente
+    todas               87    0,011    -1,7 mm/100m
+    bajo la isoterma    84    0,047    +4,5 mm/100m
+    bajo 2000 m         81    0,090    +7,4 mm/100m
+    bajo 1500 m         76    0,117    +9,8 mm/100m
+    sobre 1500 m        11    0,675   -16,6 mm/100m
 
-  Las tres quebradas con mas unidades cerca, comparadas:
+  La lectura es clara. Bajo 1.500 m hay senal orografica positiva pero debil
+  (R2 0,12). Sobre 1.500 m la relacion se invierte con fuerza (R2 0,68): esas
+  estaciones registran mucho MENOS, porque ahi nieva y un pluviometro de cubeta
+  no mide nieve. Es el mismo mecanismo que hizo a R4 descartar Glaciar Tapado.
+  Los dos efectos se cancelan y el gradiente global da cero.
 
-  quebrada              comuna      lluvia   duracion   I media   razon vs Caine
-  El Rincon (acierto)   Los Vilos   238,6 mm    52,5 h   4,54        1,44
-  Marquesa (falla)      Vicuna      198,7 mm   112,0 h   3,27        0,75
-  Tres Cruces (falla)   Paihuano    159,4 mm   111,5 h   2,34        0,67
+  Aplicar una correccion ajustada sobre R2=0,12 agregaria tanto ruido como
+  senal, y ajustada sobre el conjunto completo CORREGIRIA AL REVES. Por eso no
+  se implemento.
 
-  El Choapa recibio practicamente la misma agua que el Elqui en LA MITAD del
-  tiempo. No es que el modelo midiera mal el Elqui: el Elqui de verdad no
-  alcanzo la intensidad que Caine pide, y las quebradas se activaron igual.
-
-  Es la evidencia cuantitativa de lo que M4 ya sospechaba por otro camino: en
-  este regimen la activacion no la manda la intensidad.
-
-CUANTO SOBRA EL UMBRAL GLOBAL
-
-  De las 11 entradas evaluadas y no predichas, 10 caen entre 0,55 y 0,80 de lo
-  que Caine exige, con mediana 0,75. El recall salta de 27% a 80% entre k=0,8 y
-  k=0,7, porque ahi esta el grueso de los casos.
-
-  Lectura: el umbral de Caine queda del orden de un 30% alto para la Region de
-  Coquimbo. El escalamiento NO se adopta; ver el motivo en la salida de arriba
-  y en la cabecera de src/m5_validacion.py.
-
-LO QUE M5 NO PUEDE RESPONDER
-
-  - Precision. El inventario no tiene negativos observados: que 650 de las 668
-    cuencas marcadas no figuren en prensa no las vuelve falsos positivos.
-  - AUC, F1 y cualquier metrica que necesite la matriz completa.
-  - Independencia. Varias entradas comparten la estacion mas cercana y por eso
-    repiten exactamente la misma razon (0,747 aparece cuatro veces). Los 15
-    casos evaluados valen bastante menos de 15 observaciones.
-
-PENDIENTES QUE DEJA M5
-
-  1. Un inventario con negativos. Sin eso no hay calibracion posible, solo
-     evidencia de que el umbral global sobra.
-  2. Revisar --valle-min-km2 con datos distintos a este inventario.
-  3. La isoterma del lado de la cuenca: 452 de las 2.589 susceptibles estan
-     sobre los 2.643 m donde en julio nieva.
-  4. El umbral de largo de Wilford, que ahora decide 455 clasificaciones.
+  Queda como limite conocido del modelo, no como pendiente de codigo: para
+  resolverlo hace falta otra fuente de precipitacion -radar o satelite
+  corregido contra estaciones- o pluviometros que midan nieve.
