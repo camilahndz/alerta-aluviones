@@ -224,9 +224,17 @@ def calcular(cuencas: gpd.GeoDataFrame, red: gpd.GeoDataFrame, ruta_dem: Path):
     # --- Otras dos medidas de forma, utiles para M3 y M4 ---
     # Densidad de drenaje: cuantos km de cauce hay por km2. Alta = red muy
     # ramificada, el agua llega rapido al cauce principal.
+    #
+    # Las subcuencas de confluencia que agrega m1_subcuencas.py no estan en la
+    # red: sus tramos quedaron asignados a la cuenca costera que las contiene.
+    # Para ellas esto da NaN y no cero. La diferencia importa: cero se lee como
+    # "no tiene cauces", que de una quebrada es falso y ademas absurdo, mientras
+    # que NaN dice lo que pasa de verdad, que es que no se midio. La densidad de
+    # drenaje no entra en la clasificacion -`clasificar` solo mira melton y
+    # largo_km- asi que no tenerla no invalida nada.
     largo_red = red.groupby("id_cuenca")["largo_m"].sum() / 1000.0
     cuencas["dens_drenaje_km_km2"] = (
-        cuencas["id_cuenca"].map(largo_red).fillna(0) / cuencas["area_km2"]
+        cuencas["id_cuenca"].map(largo_red) / cuencas["area_km2"]
     )
 
     # Razon de elongacion (Schumm): 1 = cuenca redonda, cerca de 0 = alargada.
@@ -339,14 +347,31 @@ def main():
         description="M2 - Clasifica las cuencas por susceptibilidad a flujos de detritos."
     )
     ap.add_argument("--procesados", type=Path, default=RAIZ / "data" / "processed")
+    # La capa de unidades es un argumento y no una ruta fija porque hay dos
+    # juegos validos: las cuencas costeras de m1_recortar_region.py, y esas mas
+    # las subcuencas de confluencia que agrega m1_subcuencas.py. Cual se use es
+    # una decision de alcance -si el modelo cubre solo la franja costera o
+    # tambien los valles interiores- y conviene que quede escrita en el comando
+    # que genero cada corrida.
+    ap.add_argument("--cuencas", type=Path, default=None,
+                    help="Capa de unidades. Por defecto unidades_coquimbo.gpkg "
+                         "si existe, si no cuencas_coquimbo.gpkg.")
+    ap.add_argument("--red", type=Path, default=None,
+                    help="Red de quebradas. Por defecto red_quebradas_coquimbo.gpkg.")
     args = ap.parse_args()
 
-    ruta_cuencas = args.procesados / "cuencas_coquimbo.gpkg"
-    ruta_red = args.procesados / "red_quebradas_coquimbo.gpkg"
+    if args.cuencas is not None:
+        ruta_cuencas = args.cuencas
+    else:
+        con_subcuencas = args.procesados / "unidades_coquimbo.gpkg"
+        ruta_cuencas = (con_subcuencas if con_subcuencas.exists()
+                        else args.procesados / "cuencas_coquimbo.gpkg")
+    ruta_red = args.red or args.procesados / "red_quebradas_coquimbo.gpkg"
     ruta_dem = args.procesados / "dem_utm19s.tif"
     for ruta in (ruta_cuencas, ruta_red, ruta_dem):
         if not ruta.exists():
             sys.exit(f"Falta {ruta}\nCorre antes los scripts de M1.")
+    print(f"Unidades de analisis: {ruta_cuencas.name}")
 
     # El desnivel de cada cuenca sale de este DEM, y el desnivel es la H de
     # H/raiz(A). Si el DEM viene recortado, el indice sale mal por los dos

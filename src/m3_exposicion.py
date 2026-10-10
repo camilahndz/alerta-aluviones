@@ -976,9 +976,26 @@ def main():
 
     # Tanto un resultado vacio como uno desmedido son sintoma de error, no
     # hallazgo: conviene desconfiar antes de interpretar.
-    if len(puntos) > 2000:
-        print(f"\n  ATENCION: {len(puntos)} puntos de corte es mucho. "
-              "Revisa la tolerancia antes de creerle al resultado.")
+    #
+    # El control se hace **por cuenca** y no sobre el total, y la razon es un
+    # falso positivo real. El tope era 2.000 puntos absolutos, calibrado cuando
+    # M2 entregaba 167 cuencas susceptibles. Al agregar las subcuencas de
+    # confluencia pasaron a ser 2.589 y el total subio a 3.669, asi que la
+    # alarma sono sin que hubiera nada malo: los cortes por cuenca habian
+    # BAJADO de 2,5 a 1,4, que es lo esperable porque las quebradas interiores
+    # cruzan menos caminos que las costeras.
+    #
+    # Un tope absoluto mide el tamano del inventario; lo que interesa vigilar es
+    # la densidad. Ocho cortes promedio por quebrada si seria sintoma de que la
+    # tolerancia esta ensanchando el corredor y cruzando vias que no toca.
+    cortes_por_cuenca = len(puntos) / max(len(trayectorias), 1)
+    if cortes_por_cuenca > 8:
+        print(f"\n  ATENCION: {cortes_por_cuenca:.1f} cortes por cuenca es mucho "
+              f"({len(puntos)} puntos sobre {len(trayectorias)} trayectorias).\n"
+              "  Revisa la tolerancia antes de creerle al resultado.")
+    elif len(puntos) < 10:
+        print(f"\n  ATENCION: solo {len(puntos)} puntos de corte. "
+              "Revisa que las capas se solapen de verdad.")
 
     urbanas = alcance_urbano(trayectorias, urbano)
 
