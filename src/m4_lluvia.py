@@ -100,6 +100,28 @@ LIMITE CONOCIDO: EL CORTE SECO MANDA SOBRE EL RESULTADO
     tipo de fragilidad que el umbral de largo de Wilford en M2, y se declara
     igual.
 
+TRES INVIERNOS Y NO UNO (desde octubre de 2026)
+
+    La ventana va del 1 de junio de 2024 al 23 de agosto de 2026. Con un solo
+    temporal todas las observaciones son positivas y no hay con que calibrar;
+    2024 y 2025 aportan episodios donde llovio y no se reporto nada. Eso obligo
+    a tres cambios que no son de forma:
+
+        - la hora: de un desfase fijo de 4 h a la zona America/Santiago, porque
+          la ventana cruza seis cambios de hora. Ver ZONA_CHILE.
+        - el cache: una subcarpeta por ventana, porque con una carpeta plana
+          cambiar la ventana leia en silencio la serie vieja. Ver _ruta_cache.
+        - los conteos: se reportan por invierno, porque un total de tres anios
+          no dice de cual viene cada positivo.
+
+LA LLUVIA DE LA CUENCA, NO LA DE SU ESTACION (desde octubre de 2026)
+
+    A cada cuenca se le asigna la estacion mas cercana para el RELOJ de la
+    lluvia -cuando empezo, cuanto duro-, y la CANTIDAD se escala con un modelo
+    entrenado sobre latitud, longitud, altitud y distancia a la costa, si y solo
+    si le gana a la estacion cercana dejando estaciones fuera. Todo el
+    razonamiento esta en m4_interpolacion.py.
+
 Uso:
 
     python src/m4_lluvia.py              # usa el cache de data/raw/lluvia/
@@ -112,11 +134,13 @@ escribe los episodios; solo se salta el cruce con las cuencas, y lo dice.
 from __future__ import annotations
 
 import argparse
+import gzip
 import json
 import sys
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import numpy as np
 import pandas as pd
@@ -124,6 +148,7 @@ import requests
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from clases_cuenca import CLASES_SUSCEPTIBLES  # noqa: E402
+import m4_interpolacion as interp  # noqa: E402
 from m4_umbrales import (UMBRALES, caine_intensidad_critica,  # noqa: E402
                          evaluar, razon_critica)
 
@@ -142,28 +167,67 @@ TIPO_TEMPERATURA = 1
 # El codigo de region de la API, que coincide con el numero romano de Coquimbo.
 REGION_COQUIMBO = 4
 
-# La API responde fechas en UTC y recibe fetchDay/fetchHour en hora local. Se
-# usa un desfase fijo de 4 horas en vez de una libreria de zonas horarias porque
-# la ventana de trabajo cae entera en invierno austral, cuando Chile continental
-# no tiene horario de verano. `_verificar_ventana` aborta si alguien mueve la
-# ventana a un periodo donde el desfase cambia, en vez de entregar horas
-# corridas en silencio.
-DESFASE_CHILE_H = 4
-DST_CHILE_DESDE = "2026-09-06"   # primer sabado de septiembre de 2026
+# La API responde fechas en UTC y recibe fetchDay/fetchHour en hora local.
+#
+# Hasta octubre de 2026 la conversion era un desfase fijo de 4 horas, valido
+# porque la ventana caia entera en invierno austral. Con tres inviernos la
+# ventana cruza seis cambios de hora, y un desfase fijo corre una hora todo lo
+# que cae en horario de verano sin que nada falle. Ahora se usa la zona
+# 'America/Santiago' de la base IANA, que sabe cuando cambia la hora cada anio.
+#
+# La grilla vive en tiempo absoluto, no en hora de reloj. La diferencia importa
+# dos veces al anio: el dia que se adelanta la hora tiene 46 pasos de 30 minutos
+# y el dia que se atrasa tiene 50. Una grilla de hora de reloj tendria una hora
+# repetida en abril -dos lecturas peleando por la misma casilla- y una hora que
+# no existe en septiembre, que la serie veria como un hueco de transmision de
+# todas las estaciones a la vez.
+ZONA_CHILE = ZoneInfo("America/Santiago")
 
 PASO_MIN = 30
 PASOS_POR_HORA = 60 // PASO_MIN
 
 # --- Ventana de trabajo ------------------------------------------------------
-# Termina el 23 y no el 31 de agosto porque los ultimos dias todavia no existian
-# cuando se fijo la ventana. No se rellenan con ceros: ver decision 2.
-VENTANA_INICIO = "2026-06-01"
+# Tres inviernos: 2024, 2025 y 2026. La red de VIPNET tiene cobertura util desde
+# fines de junio de 2024; junio de ese anio queda casi vacio y no se rellena.
+#
+# Por que tres y no uno. Con un solo temporal todas las observaciones son
+# positivas: hay activaciones documentadas y no hay episodios en que llovio y no
+# paso nada. 2025 fue un invierno con lluvia real y solo activaciones menores, y
+# eso es lo que permite calibrar con unos inviernos y validar con otro.
+#
+# Termina el 23 y no el 31 de agosto de 2026 para que el invierno de 2026 sea el
+# mismo que valido M5 en su primera version. No se rellena con ceros: ver
+# decision 2.
+VENTANA_INICIO = "2024-06-01"
 VENTANA_FIN = "2026-08-23"
 
 # --- Constantes de las reglas ------------------------------------------------
 R2_COBERTURA_MINIMA = 0.50      # fraccion de la ventana con dato
 R3_DESAJUSTE_MAXIMO = 0.10      # |suma incrementos / alza acumulado - 1|
 R4_INCREMENTO_MAXIMO_MM = 20.0  # en 30 minutos
+
+# Salto del contador. Agregado en octubre de 2026, DESPUES de mirar los datos de
+# tres inviernos, y por eso va con la medicion que lo sostiene.
+#
+# Con la ventana larga R4 paso de botar 4 estaciones a botar 13, y la mayoria
+# no era nieve sino fallas del equipo: el 9 y 10 de abril de 2026 cinco
+# estaciones registran a la vez cientos de mm en un solo paso entre ceros
+# (Cogoti 18 589 mm, Cogoti Embalse 660, Cuncumen 598, Huintil 739, Almendral
+# 350); Pupio oscila entre 0 y 737 mm; Rio Claro y Rio Cuncumen suben y bajan
+# cientos de mm de un paso a otro. Con R4 por estacion, un salto de abril
+# botaba a Cuncumen tambien para el temporal de julio.
+#
+# La frontera no hubo que inventarla. En tres inviernos, el mayor paso de
+# 30 min que NO esta aislado entre pasos secos es de 16,0 mm (Punitaqui),
+# salvo uno de 33 mm en Angostura de Pabellon que R4 sigue tratando. Los
+# pasos aislados se separan solos en dos familias: de 22 a 81 mm (Glaciar
+# Tapado, Los Choros, La Canela, Rio Claro: lo que R4 siempre boto) y de 163 a
+# 739 mm (los saltos). Cualquier corte entre 81 y 163 da el mismo resultado;
+# 100 queda al medio.
+#
+# El paso se anula (NaN), no se borra la estacion: es exactamente el
+# tratamiento que ya tenia el salto hacia abajo, que es un reinicio.
+SALTO_CONTADOR_MM = 100.0
 
 # Isoterma 0 observada: condiciones para aceptar el ajuste del dia.
 ISO_MIN_ESTACIONES = 8
@@ -251,18 +315,26 @@ def _post(url: str, payload: dict, intentos: int = 3) -> dict:
 
 
 def _verificar_ventana(inicio: str, fin: str):
-    """Aborta si la ventana cruza el cambio de hora, donde el desfase fijo miente."""
-    if fin >= DST_CHILE_DESDE:
-        sys.exit(
-            f"La ventana termina el {fin}, y el {DST_CHILE_DESDE} empieza el "
-            "horario de verano en Chile.\n"
-            f"Este script convierte UTC a hora local con un desfase fijo de "
-            f"{DESFASE_CHILE_H} h, valido solo en invierno.\n"
-            "Para extender la ventana hay que usar zoneinfo con "
-            "'America/Santiago' en vez del desfase fijo."
-        )
+    """Aborta si la ventana esta vacia o si la base de zonas horarias no sirve.
+
+    La segunda comprobacion existe porque zoneinfo depende de una base de datos
+    que en Windows viene del paquete `tzdata`. Una base vieja no da error: da
+    las fechas de cambio de hora que Chile tenia antes, y las horas salen
+    corridas en silencio. Se exige que cada invierno de la ventana este en UTC-4
+    y cada verano en UTC-3, que es lo minimo que tiene que ser cierto.
+    """
     if inicio >= fin:
         sys.exit(f"Ventana vacia: {inicio} no es anterior a {fin}.")
+
+    for anio in range(int(inicio[:4]), int(fin[:4]) + 1):
+        for fecha, horas in ((f"{anio}-07-15", -4), (f"{anio}-01-15", -3)):
+            desfase = pd.Timestamp(fecha, tz=ZONA_CHILE).utcoffset()
+            if desfase != timedelta(hours=horas):
+                sys.exit(
+                    f"La zona America/Santiago da {desfase} el {fecha} y deberia "
+                    f"dar {horas} h.\nLa base de zonas horarias esta mala o "
+                    "vieja: pip install --upgrade tzdata"
+                )
 
 
 def descargar_catalogo(tipo: int, region: int = REGION_COQUIMBO) -> pd.DataFrame:
@@ -326,8 +398,20 @@ def descargar_serie(codigo: str, tipo: int, inicio: str, fin: str) -> list[dict]
     return datos
 
 
-def _ruta_cache(cache: Path, codigo: str, tipo: int) -> Path:
-    return cache / f"{tipo}_{codigo}.json"
+def _ruta_cache(cache: Path, codigo: str, tipo: int, inicio: str, fin: str) -> Path:
+    """Una subcarpeta por ventana, y no una carpeta plana.
+
+    Hasta octubre de 2026 el cache era `{tipo}_{codigo}.json` sin mas. Cambiar
+    la ventana y correr sin --refrescar leia la serie de la ventana vieja, y el
+    resultado salia con 84 dias de lluvia rotulados como tres anios: R2 botaba
+    por cobertura a todas las estaciones o, peor, pasaban y nadie notaba que
+    faltaba lluvia. Que la ventana este en la ruta hace imposible esa mezcla.
+
+    Va comprimido porque una serie de tres anios pesa unos 6 MB en JSON y son
+    220 series. gzip no pierde nada: lo que se lee es byte a byte lo que mando
+    la API.
+    """
+    return cache / f"{inicio}_{fin}" / f"{tipo}_{codigo}.json.gz"
 
 
 def serie_con_cache(codigo: str, tipo: int, cache: Path, refrescar: bool,
@@ -340,13 +424,15 @@ def serie_con_cache(codigo: str, tipo: int, cache: Path, refrescar: bool,
     la corrida guardada en docs/corridas/ se puede repetir. `--refrescar` es
     para cuando se quiere a proposito el dato de hoy.
     """
-    ruta = _ruta_cache(cache, codigo, tipo)
+    ruta = _ruta_cache(cache, codigo, tipo, inicio, fin)
     if ruta.exists() and not refrescar:
-        return json.loads(ruta.read_text(encoding="utf-8"))
+        with gzip.open(ruta, "rt", encoding="utf-8") as f:
+            return json.load(f)
 
     datos = descargar_serie(codigo, tipo, inicio, fin)
-    cache.mkdir(parents=True, exist_ok=True)
-    ruta.write_text(json.dumps(datos), encoding="utf-8")
+    ruta.parent.mkdir(parents=True, exist_ok=True)
+    with gzip.open(ruta, "wt", encoding="utf-8") as f:
+        json.dump(datos, f)
     return datos
 
 
@@ -354,9 +440,30 @@ def serie_con_cache(codigo: str, tipo: int, cache: Path, refrescar: bool,
 # Serie regular
 # =============================================================================
 
+def _hora_local(texto: str) -> pd.Timestamp:
+    """Una hora de reloj chilena como instante. Ver ZONA_CHILE.
+
+    `nonexistent` y `ambiguous` resuelven las dos horas raras del anio -la que no
+    existe en septiembre y la que se repite en abril- en vez de abortar. Solo
+    afectan a una ventana que empiece o termine justo ahi.
+    """
+    return pd.Timestamp(texto).tz_localize(ZONA_CHILE, ambiguous=False,
+                                           nonexistent="shift_forward")
+
+
 def grilla_regular(inicio: str, fin: str) -> pd.DatetimeIndex:
-    """Grilla de 30 minutos en hora local, de inicio 00:00 a fin 23:30."""
-    return pd.date_range(f"{inicio} 00:00", f"{fin} 23:30", freq=f"{PASO_MIN}min")
+    """Grilla de 30 minutos en tiempo absoluto, rotulada en hora de Chile.
+
+    Va de las 00:00 del dia de inicio a las 23:30 del dia de fin, hora local.
+    Los pasos son de 30 minutos reales aunque el reloj salte: ver ZONA_CHILE.
+    """
+    return pd.date_range(_hora_local(f"{inicio} 00:00"),
+                         _hora_local(f"{fin} 23:30"), freq=f"{PASO_MIN}min")
+
+
+def _fechas_api(datos: list[dict]) -> pd.Series:
+    """Las marcas de tiempo de VIPNET, en UTC, como instantes."""
+    return pd.Series(pd.to_datetime([d["fecha"]["$date"] for d in datos], utc=True))
 
 
 def _a_la_grilla(df: pd.DataFrame, grilla: pd.DatetimeIndex) -> pd.DataFrame:
@@ -371,9 +478,14 @@ def _a_la_grilla(df: pd.DataFrame, grilla: pd.DatetimeIndex) -> pd.DataFrame:
     El desfase es de pocos minutos contra un paso de 30, asi que redondear no
     mueve ningun episodio: solo decide en que casilla cae una lectura que ya
     estaba ahi.
+
+    Se redondea en UTC y despues se pasa a hora de Chile. Al reves no se puede:
+    redondear en hora local obliga a pandas a decidir que hacer con la hora que
+    se repite en abril, y aborta. Como el desfase de Chile es de horas enteras,
+    redondear a 30 minutos da la misma casilla en las dos zonas.
     """
     df = df.copy()
-    df["fecha"] = df["fecha"].dt.round(f"{PASO_MIN}min")
+    df["fecha"] = df["fecha"].dt.round(f"{PASO_MIN}min").dt.tz_convert(ZONA_CHILE)
     df = (df.drop_duplicates("fecha", keep="last")
             .set_index("fecha").sort_index()
             .reindex(grilla))
@@ -421,27 +533,29 @@ def serie_precipitacion(datos: list[dict], grilla: pd.DatetimeIndex) -> pd.DataF
     Un salto negativo del contador es un reinicio del equipo, no lluvia
     negativa. Ese paso queda en NaN: cuanto llovio mientras se reiniciaba es
     justamente lo que no se sabe, y un cero seria inventarlo.
+
+    Un salto POSITIVO aislado de mas de SALTO_CONTADOR_MM es lo mismo al reves,
+    y queda igual en NaN. Ver SALTO_CONTADOR_MM. `salto_mm` guarda el valor que
+    se anulo, para que el reporte pueda decir cuanto fue y donde.
     """
-    columnas = ["mm", "acumulado", "incremento", "recuperacion"]
+    columnas = ["mm", "acumulado", "incremento", "recuperacion", "salto_mm"]
     if not datos:
         vacio = pd.DataFrame(index=grilla, columns=columnas, dtype="float64")
         vacio["recuperacion"] = False
         return vacio
 
     df = pd.DataFrame({
-        "fecha": [pd.Timestamp(d["fecha"]["$date"]) for d in datos],
+        "fecha": _fechas_api(datos),
         "acumulado": [d.get("acumulado", np.nan) for d in datos],
         "incremento": [d.get("instantaneo", np.nan) for d in datos],
     })
-
-    # UTC -> hora local de Chile continental en invierno.
-    df["fecha"] = df["fecha"].dt.tz_localize(None) - timedelta(hours=DESFASE_CHILE_H)
     df = _a_la_grilla(df, grilla)
 
     recibidos = np.flatnonzero(df["acumulado"].notna().to_numpy())
     if len(recibidos) == 0:
         df["mm"] = np.nan
         df["recuperacion"] = False
+        df["salto_mm"] = np.nan
         return df[columnas]
 
     # La lluvia de un slot es cuanto subio el contador desde la ultima lectura.
@@ -468,6 +582,19 @@ def serie_precipitacion(datos: list[dict], grilla: pd.DatetimeIndex) -> pd.DataF
 
     mm[es_hueco] = np.nan
     mm[mm < 0] = np.nan                   # reinicio del contador
+
+    # Salto del contador hacia arriba: un paso enorme entre pasos sin lluvia
+    # (secos o sin dato). Los vecinos se miran antes de anular nada, para que
+    # una racha de saltos seguidos -Pupio oscila entre 0 y 737 mm varias veces
+    # en una tarde- se anule entera.
+    antes = np.r_[np.nan, mm[:-1]]
+    despues = np.r_[mm[1:], np.nan]
+    quieto = lambda v: ~(v >= UMBRAL_SECO_MM)   # NaN o seco  # noqa: E731
+    salto = ((mm > SALTO_CONTADOR_MM) & ~recuperacion
+             & quieto(antes) & quieto(despues))
+    df["salto_mm"] = np.where(salto, mm, np.nan)
+    mm[salto] = np.nan
+
     df["mm"] = mm
     df["recuperacion"] = recuperacion
     return df[columnas]
@@ -479,10 +606,9 @@ def serie_temperatura(datos: list[dict], grilla: pd.DatetimeIndex) -> pd.Series:
         return pd.Series(np.nan, index=grilla, dtype="float64")
 
     df = pd.DataFrame({
-        "fecha": [pd.Timestamp(d["fecha"]["$date"]) for d in datos],
+        "fecha": _fechas_api(datos),
         "t": [d.get("instantaneo", np.nan) for d in datos],
     })
-    df["fecha"] = df["fecha"].dt.tz_localize(None) - timedelta(hours=DESFASE_CHILE_H)
     return _a_la_grilla(df, grilla)["t"]
 
 
@@ -502,20 +628,27 @@ def isoterma_cero(temperaturas: dict[str, pd.Series],
     El ajuste se acepta solo si cumple las tres condiciones de arriba. Un dia
     que no las cumple queda con NaN y se cuenta: preferimos no saber la isoterma
     de un dia a inventarla con cuatro estaciones mal repartidas.
-    """
-    filas = []
-    dias = sorted({d.date() for s in temperaturas.values() for d in s.index})
 
-    for dia in dias:
-        pares = []
-        for codigo, serie in temperaturas.items():
-            alt = altitudes.get(codigo)
-            if alt is None or not np.isfinite(alt):
-                continue
-            del_dia = serie[serie.index.date == dia]
-            if del_dia.notna().sum() < PASOS_POR_HORA * 6:   # menos de 6 h de dato
-                continue
-            pares.append((float(alt), float(del_dia.mean())))
+    El dia es el dia de reloj chileno. La media diaria se saca agrupando una sola
+    vez por estacion: la version anterior filtraba la serie entera para cada
+    dia, y con tres anios eso eran miles de millones de comparaciones.
+    """
+    medias = {}
+    for codigo, serie in temperaturas.items():
+        alt = altitudes.get(codigo)
+        if alt is None or not np.isfinite(alt):
+            continue
+        dia_local = serie.index.tz_localize(None).normalize()
+        agrupado = serie.groupby(dia_local).agg(["mean", "count"])
+        # Menos de 6 h de dato en el dia no alcanza para una media diaria.
+        medias[codigo] = agrupado["mean"].where(
+            agrupado["count"] >= PASOS_POR_HORA * 6)
+    tabla = pd.DataFrame(medias)
+
+    filas = []
+    for dia, fila in tabla.iterrows():
+        validos = fila.dropna()
+        pares = [(float(altitudes[c]), float(t)) for c, t in validos.items()]
 
         motivo, altitud_0, grad, r2 = "", np.nan, np.nan, np.nan
 
@@ -654,62 +787,101 @@ def detectar_episodios(serie: pd.DataFrame, corte_seco_h: float,
     return df
 
 
+def invierno(inicio: pd.Series) -> pd.Series:
+    """El invierno al que pertenece cada fecha: de abril a marzo del anio siguiente.
+
+    Corta en abril y no en enero porque enero y febrero son justo cuando puede
+    llover en la cordillera por el invierno altiplanico, y un corte en enero
+    partiria esa temporada en dos. La lluvia frontal, que es la que interesa,
+    cae de mayo a septiembre, asi que abril la deja entera de un solo lado.
+    """
+    fechas = inicio.dt.tz_localize(None)
+    return (fechas.dt.year - (fechas.dt.month < 4)).astype(int)
+
+
 # =============================================================================
 # Reglas de seleccion
 # =============================================================================
 
-def aplicar_reglas_estacion(series: dict[str, pd.DataFrame],
-                            catalogo: pd.DataFrame) -> pd.DataFrame:
-    """R2 y R4, que se deciden mirando la estacion completa.
+def _diagnostico_estacion(serie: pd.DataFrame, contar_saltos: bool = False) -> dict:
+    """Cobertura, incremento maximo, total y desajuste de un tramo de serie."""
+    mm = serie["mm"]
+    if mm.notna().sum() == 0:
+        return {"cobertura": 0.0, "incremento_max_mm": np.nan, "total_mm": 0.0,
+                "desajuste": np.nan, "n_saltos": 0, "descartada_por": "R2"}
 
-    Devuelve el catalogo con las columnas de diagnostico y `descartada_por`, que
-    queda vacia si la estacion pasa. No se borran filas: que el reporte pueda
-    decir cual cayo por cual regla es parte del entregable.
+    cobertura = float(mm.notna().mean())
+    total = float(mm.sum(skipna=True))
+
+    # R4 pregunta si la estacion registro un incremento de 30 minutos
+    # imposible, y para eso hay que mirar solo incrementos que de verdad
+    # sean de 30 minutos. El slot con que una estacion vuelve de un corte
+    # trae horas de lluvia juntas y da valores enormes que no son picos de
+    # intensidad: CUNCUMEN llega a 201,5 mm en un slot de esos. Contarlo
+    # botaria por "nieve" justamente a las estaciones que peor transmiten,
+    # que es lo contrario de lo que la regla busca.
+    reales = mm[~serie["recuperacion"].astype(bool)]
+    if contar_saltos:
+        # La version anterior a la regla de saltos, solo para el reporte.
+        reales = reales.fillna(serie["salto_mm"])
+    incremento_max = float(reales.max(skipna=True)) if reales.notna().any() else np.nan
+
+    # El desajuste de R3 en su version antigua, por estacion. Se calcula y
+    # se guarda aunque la regla ya no se aplique aqui: es la cifra que
+    # justifica el cambio de granularidad, y sin ella el cambio es una
+    # afirmacion sin respaldo.
+    suma_incrementos = float(serie["incremento"].sum(skipna=True))
+    desajuste = abs(suma_incrementos / total - 1.0) if total > 0 else np.nan
+
+    if cobertura < R2_COBERTURA_MINIMA:
+        motivo = "R2"
+    elif incremento_max > R4_INCREMENTO_MAXIMO_MM:
+        motivo = "R4"
+    else:
+        motivo = ""
+    return {"cobertura": cobertura, "incremento_max_mm": incremento_max,
+            "total_mm": total, "desajuste": desajuste,
+            "n_saltos": int(serie["salto_mm"].notna().sum()),
+            "descartada_por": motivo}
+
+
+def aplicar_reglas_estacion(series: dict[str, pd.DataFrame], catalogo: pd.DataFrame,
+                            por_invierno: bool = True,
+                            contar_saltos: bool = False) -> pd.DataFrame:
+    """R2 y R4, por estacion e invierno.
+
+    Devuelve una fila por estacion e invierno con el diagnostico y
+    `descartada_por`, que queda vacia si pasa. No se borran filas: que el
+    reporte pueda decir cual cayo por cual regla es parte del entregable.
+
+    POR QUE POR INVIERNO Y NO POR ESTACION
+
+        Hasta octubre de 2026 las dos reglas miraban la estacion completa, y
+        con una ventana de 84 dias eso era lo mismo que mirar un invierno. Con
+        tres, una estacion pasaba a responder por toda su historia: Rio Mostazal
+        en Cuestecita tiene 99% de cobertura en 2026 y caia por R2 porque en
+        2024 no existia, y una falla de abril de 2026 botaba a Cuncumen tambien
+        para julio. El dano esta localizado en el tiempo, y la regla pasa a
+        aplicarse donde esta el dano. Es el mismo razonamiento, y el mismo
+        tipo de cambio despues de mirar los datos, que llevo a R3 de la
+        estacion al episodio. El efecto se reporta en las dos versiones.
+
+    `por_invierno=False` y `contar_saltos=True` reproducen la version anterior
+    -por estacion, sin anular los saltos del contador- y existen solo para el
+    reporte.
     """
-    diag = []
+    filas = []
     for _, est in catalogo.iterrows():
         serie = series.get(est["codigo"])
-        if serie is None or serie["mm"].notna().sum() == 0:
-            diag.append({"cobertura": 0.0, "incremento_max_mm": np.nan,
-                         "total_mm": 0.0, "desajuste": np.nan,
-                         "descartada_por": "R2"})
-            continue
-
-        mm = serie["mm"]
-        cobertura = float(mm.notna().mean())
-        total = float(mm.sum(skipna=True))
-
-        # R4 pregunta si la estacion registro un incremento de 30 minutos
-        # imposible, y para eso hay que mirar solo incrementos que de verdad
-        # sean de 30 minutos. El slot con que una estacion vuelve de un corte
-        # trae horas de lluvia juntas y da valores enormes que no son picos de
-        # intensidad: CUNCUMEN llega a 201,5 mm en un slot de esos. Contarlo
-        # botaria por "nieve" justamente a las estaciones que peor transmiten,
-        # que es lo contrario de lo que la regla busca.
-        reales = mm[~serie["recuperacion"].astype(bool)]
-        incremento_max = float(reales.max(skipna=True)) if reales.notna().any() else np.nan
-
-        # El desajuste de R3 en su version antigua, por estacion. Se calcula y
-        # se guarda aunque la regla ya no se aplique aqui: es la cifra que
-        # justifica el cambio de granularidad, y sin ella el cambio es una
-        # afirmacion sin respaldo.
-        suma_incrementos = float(serie["incremento"].sum(skipna=True))
-        desajuste = (abs(suma_incrementos / total - 1.0)
-                     if total > 0 else np.nan)
-
-        if cobertura < R2_COBERTURA_MINIMA:
-            motivo = "R2"
-        elif incremento_max > R4_INCREMENTO_MAXIMO_MM:
-            motivo = "R4"
+        if por_invierno:
+            ids = invierno(pd.Series(serie.index)).to_numpy()
+            tramos = [(a, serie[ids == a]) for a in np.unique(ids)]
         else:
-            motivo = ""
-
-        diag.append({"cobertura": cobertura, "incremento_max_mm": incremento_max,
-                     "total_mm": total, "desajuste": desajuste,
-                     "descartada_por": motivo})
-
-    return pd.concat([catalogo.reset_index(drop=True),
-                      pd.DataFrame(diag)], axis=1)
+            tramos = [(None, serie)]
+        for a, tramo in tramos:
+            filas.append({**est.to_dict(), "invierno": a,
+                          **_diagnostico_estacion(tramo, contar_saltos)})
+    return pd.DataFrame(filas)
 
 
 def marcar_ambiguas(catalogo: pd.DataFrame) -> pd.DataFrame:
@@ -720,7 +892,17 @@ def marcar_ambiguas(catalogo: pd.DataFrame) -> pd.DataFrame:
     bien. Cual de las dos esta mala no lo decide ninguna regla disponible, y
     elegir mirando cual cuadra mejor con el resultado seria elegir el resultado.
     Se marcan las dos y el que lea decide.
+
+    Se compara dentro de cada invierno: un total de tres anios mezcla una
+    estacion que reporto los tres con una que reporto uno, y la diferencia
+    saldria de la cobertura y no de la medicion.
     """
+    if "invierno" in catalogo.columns and catalogo["invierno"].notna().any():
+        return pd.concat([_marcar_ambiguas(g) for _, g in catalogo.groupby("invierno")])
+    return _marcar_ambiguas(catalogo)
+
+
+def _marcar_ambiguas(catalogo: pd.DataFrame) -> pd.DataFrame:
     cat = catalogo.copy()
     cat["ambigua"] = False
     cat["ambigua_con"] = ""
@@ -775,7 +957,9 @@ def aplicar_r5(episodios: pd.DataFrame, altitud_estacion: float,
         return pd.Series(True, index=episodios.index)
 
     def bajo_la_linea(inicio, fin):
-        dias = pd.date_range(inicio.normalize(), fin.normalize(), freq="D")
+        # Dias de reloj chileno, igual que el indice de la isoterma.
+        dias = pd.date_range(inicio.tz_localize(None).normalize(),
+                             fin.tz_localize(None).normalize(), freq="D")
         alturas = iso.reindex(dias)["altitud_0_m"].dropna()
         if alturas.empty:
             return True
@@ -820,6 +1004,145 @@ def asignar_estacion(cuencas, catalogo: pd.DataFrame):
     cercanas["distancia_km"] = cercanas["distancia_m"] / 1000.0
     return cercanas.rename(columns={"nombre": "estacion_nombre",
                                     "codigo": "estacion_codigo"})
+
+
+def interpolar_pares(pares, asignadas, validas, vale, series, eventos, iso,
+                     procesados: Path, dir_out: Path):
+    """Valida la interpolacion y, si le gana a la estacion cercana, la aplica.
+
+    Todo el razonamiento esta en m4_interpolacion.py. Aca se arman las tablas,
+    se imprime la comparacion y se escala la lluvia de cada par cuenca-episodio.
+    Si el modelo no se adopta, los pares salen con factor 1, que es exactamente
+    la asignacion por vecino mas cercano de siempre.
+    """
+    from pyproj import Transformer
+
+    print("\n" + "-" * 74)
+    print("Interpolacion de la lluvia por evento (dejando una estacion fuera)")
+    print("-" * 74)
+
+    ruta_dem = procesados / "dem_mosaico_wgs84.tif"
+    estaciones = validas[["codigo", "nombre", "lat", "lon"]].copy()
+    estaciones["altitud_m"] = pd.to_numeric(validas["altitud_m"], errors="coerce")
+    estaciones["dist_costa_km"] = interp.distancia_costa_km(
+        estaciones["lon"], estaciones["lat"], ruta_dem)
+
+    tabla = interp.lluvia_por_evento(series, eventos, estaciones["codigo"])
+
+    # La nieve fuera del entrenamiento: el criterio de R5 sobre cada evento.
+    ventanas = eventos.rename(columns={"evento": "ev"})
+    bajo = []
+    for cod, alt in zip(estaciones["codigo"], estaciones["altitud_m"]):
+        b = aplicar_r5(ventanas, alt, iso)
+        bajo.append(pd.DataFrame({"evento": ventanas["ev"], "estacion_codigo": cod,
+                                  "bajo_isoterma": b.to_numpy()}))
+    tabla = tabla.merge(pd.concat(bajo), on=["evento", "estacion_codigo"])
+
+    # Solo pares de estaciones validas en el invierno del evento (R2 y R4).
+    inv_evento = dict(zip(eventos["evento"], invierno(eventos["inicio"])))
+    tabla["vale"] = [(c, inv_evento[e]) in vale
+                     for c, e in zip(tabla["estacion_codigo"], tabla["evento"])]
+    utiles = tabla[tabla["completo"] & tabla["bajo_isoterma"] & tabla["vale"]]
+    resumen = utiles.groupby("evento")["lluvia_mm"].agg(["mean", "size"])
+    ev_validos = resumen.index[(resumen["mean"] >= interp.EVENTO_MINIMO_MM)
+                               & (resumen["size"] >= interp.EVENTO_MIN_ESTACIONES)]
+    entreno = utiles[utiles["evento"].isin(ev_validos)].reset_index(drop=True)
+
+    print(f"  eventos regionales: {len(eventos)}; con media >= "
+          f"{interp.EVENTO_MINIMO_MM:.0f} mm y >= {interp.EVENTO_MIN_ESTACIONES} "
+          f"estaciones completas: {len(ev_validos)}")
+    print(f"  pares estacion-evento para entrenar: {len(entreno)} "
+          f"({int((~tabla['bajo_isoterma'] & tabla['evento'].isin(ev_validos)).sum())} "
+          "fuera por estar sobre la isoterma 0)")
+
+    val = interp.validar_dejando_fuera(entreno, estaciones)
+    metodos = ["media regional", "estacion cercana", *interp.MODELOS]
+    res = {m: interp.metricas(val["lluvia_mm"], val[m], val["evento"])
+           for m in metodos if val[m].notna().all()}
+    print(f"\n  {'metodo':<20} {'MAE mm':>8} {'RMSE mm':>8} {'R2':>7} {'R2 evento':>10}")
+    for m, r in res.items():
+        print(f"  {m:<20} {r['MAE']:>8.1f} {r['RMSE']:>8.1f} {r['R2']:>7.3f} "
+              f"{r['R2_evento']:>10.3f}")
+    val.to_csv(dir_out / "m4_interpolacion_validacion.csv", index=False,
+               float_format="%.2f")
+
+    # La misma validacion sobre el total del invierno 2026, para comparar con el
+    # diagnostico que se hizo sobre totales.
+    t26 = []
+    for cod in estaciones["codigo"]:
+        mm = series[cod]["mm"]
+        tramo = mm[(mm.index >= _hora_local("2026-06-01 00:00"))
+                   & (mm.index < _hora_local("2026-08-24 00:00"))]
+        if len(tramo) and tramo.notna().mean() >= 0.95:
+            t26.append({"estacion_codigo": cod, "lluvia_mm": float(tramo.sum())})
+    if len(t26) >= 20:
+        tv = interp.validar_total(pd.DataFrame(t26), estaciones)
+        print(f"\n  Total del invierno 2026 (1-jun a 23-ago), {len(tv)} estaciones con "
+              ">= 95% de dato, 4 variables fijas:")
+        for m in ("media regional", "estacion cercana", "random forest"):
+            r = interp.metricas(tv["lluvia_mm"], tv[m], np.zeros(len(tv)))
+            print(f"  {m:<20} {r['MAE']:>8.1f} {r['RMSE']:>8.1f} {r['R2']:>7.3f}")
+
+    # --- La regla de adopcion ---
+    modelos = {m: res[m] for m in interp.MODELOS if m in res}
+    mejor = min(modelos, key=lambda m: modelos[m]["MAE"])
+    ref = res["estacion cercana"]
+    adoptado = (modelos[mejor]["MAE"] < ref["MAE"]) and (modelos[mejor]["RMSE"] < ref["RMSE"])
+    if adoptado:
+        print(f"\n  SE ADOPTA {mejor}: MAE {modelos[mejor]['MAE']:.1f} contra "
+              f"{ref['MAE']:.1f} mm de la estacion cercana.")
+    else:
+        print(f"\n  NO SE ADOPTA: el mejor modelo ({mejor}) no le gana a la estacion "
+              "cercana en MAE y RMSE.\n  Los pares quedan con factor 1, la asignacion "
+              "por vecino mas cercano.")
+
+    pares = pares.copy()
+    escalables = ["lluvia_mm", "i_media_mm_h", "i_max_60min_mm_h",
+                  "razon_caine_critica"] + [f"antecedente_{h}h_mm" for h in ANTECEDENTES_H]
+    for col in escalables:
+        pares[f"{col}_estacion"] = pares[col]
+    pares["factor_interpolacion"] = 1.0
+    pares["interpolada"] = False
+
+    if adoptado:
+        modelo, rasgos = interp.ajustar(entreno, estaciones, mejor)
+        a_wgs = Transformer.from_crs(asignadas.crs, "EPSG:4326", always_xy=True)
+        lon, lat = a_wgs.transform(asignadas.geometry.x.to_numpy(),
+                                   asignadas.geometry.y.to_numpy())
+        puntos = pd.DataFrame({"id": asignadas["id_cuenca"].to_numpy(),
+                               "lat": lat, "lon": lon,
+                               "altitud_m": asignadas["h_media_m"].to_numpy()})
+        puntos["dist_costa_km"] = interp.distancia_costa_km(lon, lat, ruta_dem)
+        ev_pares = sorted(set(pares["evento"]) & set(ev_validos))
+        pred = interp.predecir(modelo, rasgos, puntos, ev_pares).rename(
+            columns={"id": "id_cuenca"})
+
+        medido = tabla[["evento", "estacion_codigo", "lluvia_mm"]].rename(
+            columns={"lluvia_mm": "lluvia_evento_estacion_mm"})
+        pares = (pares.merge(pred, on=["id_cuenca", "evento"], how="left")
+                      .merge(medido, on=["evento", "estacion_codigo"], how="left"))
+        bruto = pares["lluvia_pred_mm"] / pares["lluvia_evento_estacion_mm"]
+        ok = bruto.notna() & np.isfinite(bruto)
+        factor = bruto.clip(interp.FACTOR_MIN, interp.FACTOR_MAX)
+        pares.loc[ok, "factor_interpolacion"] = factor[ok]
+        pares.loc[ok, "interpolada"] = True
+        for col in escalables:
+            pares[col] = pares[f"{col}_estacion"] * pares["factor_interpolacion"]
+
+        recortados = int((ok & ((bruto < interp.FACTOR_MIN) | (bruto > interp.FACTOR_MAX))).sum())
+        print(f"  pares interpolados: {int(ok.sum())} de {len(pares)} "
+              f"(el resto cae en eventos chicos y queda con factor 1)")
+        f_ok = pares.loc[ok, "factor_interpolacion"]
+        print(f"  factor: mediana {f_ok.median():.2f}, p10 {f_ok.quantile(.1):.2f}, "
+              f"p90 {f_ok.quantile(.9):.2f}; {recortados} recortados a "
+              f"[{interp.FACTOR_MIN}, {interp.FACTOR_MAX}]")
+
+        for columna, valores in evaluar(pares["duracion_h"], pares["i_media_mm_h"],
+                                        pares["i_max_60min_mm_h"]).items():
+            pares[columna] = valores
+        pares["supera_caine_critico"] = pares["razon_caine_critica"] >= 1.0
+
+    return pares
 
 
 # =============================================================================
@@ -919,22 +1242,50 @@ def main():
         if not julio.empty:
             print(f"  mediana de julio: {julio.median():.0f} m")
 
-    # --- R2 y R4 ---
-    catalogo = aplicar_reglas_estacion(series, catalogo)
-    catalogo = marcar_ambiguas(catalogo)
-    for regla in ("R2", "R4"):
-        n = int((catalogo["descartada_por"] == regla).sum())
-        print(f"{regla}  estaciones descartadas: {n}")
-    validas = catalogo[catalogo["descartada_por"] == ""]
-    print(f"    quedan {len(validas)} de {len(catalogo)} estaciones")
-    print(f"    {int(catalogo['ambigua'].sum())} marcadas como ambiguas "
-          "(no se descartan)")
+    # --- Saltos del contador ---
+    saltos = [(cod, t, v) for cod, s in series.items()
+              for t, v in s["salto_mm"].dropna().items()]
+    print(f"\nSaltos del contador anulados (aislados, > {SALTO_CONTADOR_MM:.0f} mm "
+          f"en 30 min): {len(saltos)} pasos en {len({c for c, _, _ in saltos})} estaciones")
+    nombres = dict(zip(catalogo["codigo"], catalogo["nombre"]))
+    for cod, t, v in saltos:
+        print(f"    {nombres[cod][:34]:<34} {str(t)[:16]}  {v:>7.1f} mm")
+
+    # --- R2 y R4, por estacion e invierno ---
+    reglas = marcar_ambiguas(aplicar_reglas_estacion(series, catalogo))
+    inviernos_r = sorted(reglas["invierno"].unique())
+    print("\nR2 y R4 por estacion e invierno:")
+    print(f"  {'':<28} " + " ".join(f"{a:>6}" for a in inviernos_r))
+    for etiqueta, sel in (("R2  descartadas", reglas["descartada_por"] == "R2"),
+                          ("R4  descartadas", reglas["descartada_por"] == "R4"),
+                          ("    validas", reglas["descartada_por"] == ""),
+                          ("    ambiguas (no se descartan)", reglas["ambigua"])):
+        print(f"  {etiqueta:<28} " + " ".join(
+            f"{int((sel & (reglas['invierno'] == a)).sum()):>6}" for a in inviernos_r))
+    antigua = aplicar_reglas_estacion(series, catalogo, por_invierno=False,
+                                      contar_saltos=True)
+    print("  Con la version anterior (por estacion sobre toda la ventana y sin "
+          "anular saltos):")
+    print(f"    R2 {int((antigua['descartada_por'] == 'R2').sum())}, "
+          f"R4 {int((antigua['descartada_por'] == 'R4').sum())}, quedan "
+          f"{int((antigua['descartada_por'] == '').sum())} de {len(antigua)} estaciones")
+
+    # Una estacion entra si es valida en algun invierno; sus episodios, solo en
+    # los inviernos donde lo es.
+    vale = set(zip(reglas.loc[reglas["descartada_por"] == "", "codigo"],
+                   reglas.loc[reglas["descartada_por"] == "", "invierno"]))
+    validas = catalogo[catalogo["codigo"].isin({c for c, _ in vale})]
+    print(f"    {len(validas)} de {len(catalogo)} estaciones validas en al menos un invierno")
 
     # --- Episodios ---
     print(f"\nDetectando episodios con corte seco de {args.corte_seco:.0f} h...")
     todos = []
     for cod in validas["codigo"]:
         eps = detectar_episodios(series[cod], args.corte_seco)
+        if eps.empty:
+            continue
+        eps["invierno"] = invierno(eps["inicio"]).to_numpy()
+        eps = eps[[(cod, a) in vale for a in eps["invierno"]]]
         if eps.empty:
             continue
         alt = pd.to_numeric(
@@ -949,6 +1300,12 @@ def main():
         sys.exit("No se detecto ningun episodio. Revisa la ventana o el cache.")
 
     episodios = pd.concat(todos, ignore_index=True)
+
+    # Los eventos regionales se arman con TODOS los episodios, antes de R3 y R5:
+    # solo dicen cuando llovio en la region. Ver m4_interpolacion.
+    eventos = interp.eventos_regionales(episodios)
+    episodios["evento"] = interp.asignar_evento(episodios, eventos)
+
     n_bruto = len(episodios)
     episodios = episodios[~episodios["tiene_hueco"]]
     n_r3 = n_bruto - len(episodios)
@@ -959,6 +1316,11 @@ def main():
     print(f"R5  episodios descartados por estar sobre la isoterma 0: {n_r5}")
     print(f"    quedan {len(episodios)} episodios en "
           f"{episodios['estacion_codigo'].nunique()} estaciones")
+    print(f"    {len(eventos)} eventos regionales")
+
+    # Con tres inviernos, el conteo agregado esconde de que anio viene cada
+    # cosa. Se separa por invierno hidrologico (abril a marzo, ver invierno()),
+    # que es la unidad con que despues se calibra y se valida.
 
     # --- Umbrales ---
     for columna, valores in evaluar(episodios["duracion_h"],
@@ -976,11 +1338,19 @@ def main():
     ruta_csv = dir_out / "m4_episodios.csv"
     episodios.to_csv(ruta_csv, index=False, float_format="%.3f")
 
-    print("\nEpisodios que superan cada umbral:")
-    for u in UMBRALES:
-        print(f"  {u.nombre:<32} {int(episodios[u.columna].fillna(False).sum()):>5}")
-    print(f"  {'Caine sobre la ventana critica':<32} "
-          f"{int(episodios['supera_caine_critico'].fillna(False).sum()):>5}")
+    print("\nEpisodios que superan cada umbral, por invierno:")
+    inviernos = sorted(episodios["invierno"].unique())
+    print(f"  {'':<32} " + " ".join(f"{a:>6}" for a in inviernos) + f" {'total':>6}")
+    print(f"  {'episodios':<32} "
+          + " ".join(f"{int((episodios['invierno'] == a).sum()):>6}" for a in inviernos)
+          + f" {len(episodios):>6}")
+    columnas = [(u.nombre, u.columna) for u in UMBRALES] + [
+        ("Caine sobre la ventana critica", "supera_caine_critico")]
+    for nombre, col in columnas:
+        sup = episodios[col].fillna(False).astype(bool)
+        print(f"  {nombre:<32} "
+              + " ".join(f"{int(sup[episodios['invierno'] == a].sum()):>6}" for a in inviernos)
+              + f" {int(sup.sum()):>6}")
 
     # --- Sensibilidad a los dos parametros de juicio ---
     def _contar(corte, umbral_seco):
@@ -989,6 +1359,7 @@ def main():
             eps = detectar_episodios(series[cod], corte, umbral_seco)
             if eps.empty:
                 continue
+            eps = eps[[(cod, a) in vale for a in invierno(eps["inicio"])]]
             eps = eps[~eps["tiene_hueco"]]
             if eps.empty:
                 continue
@@ -1029,62 +1400,81 @@ def main():
     if cuencas.empty:
         sys.exit("M2 no dejo ninguna cuenca susceptible. Revisa susceptibilidad.gpkg.")
 
-    asignadas = asignar_estacion(cuencas, catalogo)
-    print(f"  mediana de distancia cuenca-estacion: "
-          f"{asignadas['distancia_km'].median():.1f} km")
-
-    lejos = int((asignadas["distancia_km"] > DISTANCIA_MAXIMA_KM).sum())
-    if lejos:
-        print(f"  {lejos} cuencas sobre el criterio de {DISTANCIA_MAXIMA_KM:.0f} km, "
-              "marcadas en la capa")
-
-    pares = asignadas.merge(episodios, on="estacion_codigo",
-                            how="inner", suffixes=("", "_ep"))
+    # La estacion de cada cuenca se elige invierno por invierno, entre las
+    # validas de ese invierno: si la mas cercana cayo por R2 o R4 en 2025, en
+    # 2025 la cuenca usa la siguiente, en vez de quedarse sin lluvia.
+    partes, asignadas = [], None
+    for a in inviernos_r:
+        asig = asignar_estacion(cuencas, reglas[reglas["invierno"] == a])
+        if asig is None:
+            continue
+        lejos = int((asig["distancia_km"] > DISTANCIA_MAXIMA_KM).sum())
+        print(f"  invierno {a}: mediana de distancia cuenca-estacion "
+              f"{asig['distancia_km'].median():.1f} km; {lejos} cuencas sobre el "
+              f"criterio de {DISTANCIA_MAXIMA_KM:.0f} km, marcadas en la capa")
+        partes.append(asig.merge(episodios[episodios["invierno"] == a],
+                                 on="estacion_codigo", how="inner", suffixes=("", "_ep")))
+        asignadas = asig if asignadas is None else asignadas
+    pares = pd.concat(partes, ignore_index=True)
     pares["fuera_de_criterio"] = pares["distancia_km"] > DISTANCIA_MAXIMA_KM
 
+    # --- Interpolacion: la lluvia de la cuenca y no la de su estacion ---
+    pares = interpolar_pares(pares, asignadas, validas, vale, series, eventos, iso,
+                             args.procesados, dir_out)
+
+    # El GPKG guarda las fechas en UTC. Una columna en hora de Chile mezcla dos
+    # desfases (-04 y -03) y no todos los lectores de GPKG lo soportan; UTC es
+    # un instante sin ambiguedad, y quien lea lo pasa a America/Santiago.
+    capa = pares.copy()
+    for col in ("inicio", "fin"):
+        capa[col] = capa[col].dt.tz_convert("UTC")
     salida = args.procesados / "gatillo.gpkg"
-    pares.to_file(salida, layer="gatillo", driver="GPKG")
+    capa.to_file(salida, layer="gatillo", driver="GPKG")
 
     ruta_png = dir_out / "m4_umbral_id.png"
     figura(pares, ruta_png)
 
     print(f"\nPares cuenca-episodio: {len(pares)}")
-    for u in UMBRALES:
-        n_cuencas = pares.loc[pares[u.columna].fillna(False), "id_cuenca"].nunique()
-        print(f"  cuencas que superan {u.nombre:<32} {n_cuencas:>4} de {len(cuencas)}")
-    n_cr = pares.loc[pares['supera_caine_critico'].fillna(False), 'id_cuenca'].nunique()
-    print(f"  cuencas que superan {'Caine en su ventana critica':<32} "
-          f"{n_cr:>4} de {len(cuencas)}")
+    print(f"  cuencas que superan, por invierno (de {len(cuencas)}):")
+    print(f"  {'':<34} " + " ".join(f"{a:>6}" for a in inviernos))
+    for nombre, col in columnas:
+        sup = pares[col].fillna(False).astype(bool)
+        print(f"  {nombre:<34} " + " ".join(
+            f"{pares.loc[sup & (pares['invierno'] == a), 'id_cuenca'].nunique():>6}"
+            for a in inviernos))
 
     # De que se sostiene cada positivo. Un umbral superado por una sola cuenca
-    # no es un hallazgo hasta saber si el dato que lo sostiene aguanta.
-    positivos = pares[pares["supera_caine"].fillna(False)]
+    # no es un hallazgo hasta saber si el dato que lo sostiene aguanta. Con tres
+    # inviernos son miles de pares, asi que se cuentan los motivos en vez de
+    # listarlos uno por uno.
+    positivos = pares[pares["supera_caine"].fillna(False).astype(bool)].copy()
     if not positivos.empty:
-        print("\n  De que se sostiene cada positivo:")
-        sospechosos = set()
-        for _, p in positivos.iterrows():
-            motivos = []
-            if p["ambigua"]:
-                motivos.append("estacion marcada como ambigua")
-            # Un episodio de un solo paso de 30 min aislado entre horas secas no
-            # tiene forma de lluvia: es un escalon del contador. Y como la
-            # duracion minima posible es media hora, cualquier paso sobre
-            # ~9,7 mm supera Caine por construccion.
-            if p["duracion_h"] <= 0.5:
-                motivos.append("episodio de un solo paso de 30 min")
-            if p["distancia_km"] > DISTANCIA_MAXIMA_KM:
-                motivos.append(f"estacion a {p['distancia_km']:.0f} km")
-            estado = "; ".join(motivos) if motivos else "sin objeciones"
-            if motivos:
-                sospechosos.add(p["id_cuenca"])
-            print(f"    cuenca {int(p['id_cuenca']):>4}  {p['estacion_nombre'][:38]:<38} {estado}")
+        # Un episodio de un solo paso de 30 min aislado entre horas secas no
+        # tiene forma de lluvia: es un escalon del contador. Y como la duracion
+        # minima posible es media hora, cualquier paso sobre ~9,7 mm supera
+        # Caine por construccion.
+        objeciones = {
+            "estacion marcada como ambigua": positivos["ambigua"].astype(bool),
+            "episodio de un solo paso de 30 min": positivos["duracion_h"] <= 0.5,
+            f"estacion a mas de {DISTANCIA_MAXIMA_KM:.0f} km": positivos["fuera_de_criterio"],
+        }
+        print("\n  De que se sostiene cada positivo (cuencas, por invierno):")
+        print(f"  {'':<38} " + " ".join(f"{a:>6}" for a in inviernos))
+        sospechoso = np.zeros(len(positivos), dtype=bool)
+        for motivo, marca in objeciones.items():
+            marca = marca.to_numpy(dtype=bool)
+            sospechoso |= marca
+            print(f"  {motivo:<38} " + " ".join(
+                f"{positivos.loc[marca & (positivos['invierno'] == a).to_numpy(), 'id_cuenca'].nunique():>6}"
+                for a in inviernos))
+        print(f"  {'sin objeciones':<38} " + " ".join(
+            f"{positivos.loc[~sospechoso & (positivos['invierno'] == a).to_numpy(), 'id_cuenca'].nunique():>6}"
+            for a in inviernos))
 
-        solidos = positivos.loc[~positivos["id_cuenca"].isin(sospechosos),
-                                "id_cuenca"].nunique()
-        print(f"\n  Positivos sin objeciones: {solidos} de "
-              f"{positivos['id_cuenca'].nunique()}")
-        if solidos == 0:
-            print("  Descontados los sospechosos, el resultado de M4 es negativo.")
+        print("\n  Estaciones que sostienen los positivos (cuencas, todos los inviernos):")
+        top = positivos.groupby("estacion_nombre")["id_cuenca"].nunique().nlargest(10)
+        for nombre, n in top.items():
+            print(f"    {nombre[:44]:<44} {n:>5}")
 
     print(f"\n  capa    -> {salida.name}")
     print(f"  figura  -> {ruta_png.name}")
