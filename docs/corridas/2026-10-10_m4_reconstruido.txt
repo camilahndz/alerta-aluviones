@@ -1,0 +1,136 @@
+Corrida de reconstruccion de M4 - 10 de octubre de 2026
+Entorno: local, .venv, Python 3.12, cache de VIPNET en data/raw/lluvia/ (220 series)
+Comando: python src/m4_lluvia.py
+
+NOTA: el codigo de M4 se perdio el 19-09-2026 (ver docs). Esta corrida sale de
+una reescritura hecha a partir de la seccion M4 del README, que sobrevivio.
+Las cifras de control del README reproducen exacto; las de conteo no, y el
+porque esta anotado al final.
+
+========================================================================
+==========================================================================
+M4 - ventana 2026-06-01 a 2026-08-23, paso 30 min
+     corte seco 12 h, usando cache
+==========================================================================
+
+R1  estaciones de precipitacion en Coquimbo: 107
+
+Bajando series de precipitacion...
+  20/107
+  40/107
+  60/107
+  80/107
+  100/107
+  107/107
+
+Ajustando la isoterma 0 observada, dia a dia...
+  22 de 84 dias con isoterma ajustada
+  mediana de julio: 2643 m
+R2  estaciones descartadas: 1
+R4  estaciones descartadas: 4
+    quedan 102 de 107 estaciones
+    11 marcadas como ambiguas (no se descartan)
+
+Detectando episodios con corte seco de 12 h...
+R3  episodios descartados por hueco de transmision: 58
+R5  episodios descartados por estar sobre la isoterma 0: 7
+    quedan 448 episodios en 94 estaciones
+
+Episodios que superan cada umbral:
+  Caine (1980)                        26
+  Ben David-Novak et al. (2004)        0
+
+Sensibilidad al corte seco (cuantas horas separan dos episodios):
+   corte (h)   episodios   D mediana   superan Caine
+           6         592         7.5              33
+          12         455         9.0              26  <- el usado
+          24         359        10.0              20
+
+Sensibilidad al umbral de paso seco (que cuenta como no llover):
+   seco < mm   episodios   D mediana   superan Caine
+         0.0         455        11.5              22
+         0.1         467        11.5              23
+         0.2         455         9.0              26  <- el usado
+         0.5         424         7.2              29
+
+No esta susceptibilidad.gpkg: se salta el cruce con las cuencas.
+Para completarlo corre antes M1 y M2. Los episodios ya quedaron en
+  D:\Desktop\alerta-aluviones\outputs\m4_episodios.csv
+
+========================================================================
+VERIFICACIONES DERIVADAS
+========================================================================
+
+Cifras de control del README, que reproducen al decimal:
+
+  LA SERENA (ESCUELA AGRICOLA), julio 2026     150,9 mm   (README: 150,9)
+    el acumulado del sensor sube de 2,6 a 153,5 mm
+  CUNCUMEN 04703003-K, ventana completa
+    por alza del acumulado                     409,5 mm   (README: 409,5)
+    por suma de incrementos                    208,0 mm   (README: 208,0)
+  RIO CUNCUMEN ANTES JUNTA CHOAPA, ventana     962,0 mm   (README: 962)
+  LAS BURRAS, ventana                          343,5 mm   (README: 343,5)
+  RIO ILLAPEL EN LAS BURRAS, julio               1,0 mm   (README: 1,0)
+  EL MAITEN (Mostazal), ventana                  1,9 mm   (README: 1,9)
+  LAMBERT, desajuste suma vs acumulado          25,2 mm   (README: 25,2)
+  Estaciones de precipitacion en Coquimbo (R1)      107   (README: 107)
+
+Cifras de conteo, que NO reproducen exacto:
+
+  concepto                     esta corrida   README (23-08-2026)
+  estaciones que pasan R1-R4        102/107            103/107
+  episodios                             448                441
+  estaciones con episodios               94                 98
+  descartados por R3                     58                 80
+  descartados por R5                      7                  4
+  marcadas como ambiguas                 11                 19
+  isoterma 0, mediana de julio       2.643 m            2.490 m
+  sensibilidad 6 / 12 / 24 h    592 / 455 / 359    551 / 441 / 378
+
+Dos causas, ninguna de las dos es un error del codigo:
+
+  1. VIPNET rellena datos tarde. Entre la corrida original (23 de agosto) y
+     esta (10 de octubre) la API completo huecos que entonces no existian. Es
+     el mismo motivo por el que M3 abandono Overpass y por el que M4 cachea:
+     dos consultas separadas por un mes no devuelven lo mismo. A partir de
+     aqui el cache de data/raw/lluvia/ fija la corrida.
+
+  2. La regla de estaciones ambiguas es una reconstruccion. Sus dos cortes
+     (5 km de distancia, razon 10x) no estaban escritos en la documentacion
+     que sobrevivio, solo sus dos ejemplos. Reproduce LAS BURRAS y EL MAITEN
+     pero marca 11 estaciones en vez de 19.
+
+PENDIENTE DECLARADO
+
+  El cruce con las cuencas no corrio: falta data/processed/susceptibilidad.gpkg
+  porque data/raw/ se perdio entero y M1 y M2 no se han vuelto a correr. Por lo
+  tanto gatillo.gpkg, outputs/m4_umbral_id.png y outputs/m4_control_cordura.csv
+  NO existen todavia, y la afirmacion del README de que 1 de 167 cuencas supera
+  Caine queda SIN VERIFICAR en esta corrida.
+
+  A nivel de episodio, 26 de 448 superan Caine y 0 superan Ben David-Novak.
+  Esa cifra no es comparable con la del README, que esta por cuenca.
+
+DOS ERRORES ENCONTRADOS Y CORREGIDOS AL RECONSTRUIR
+
+  a) Estaciones fuera de la grilla. Buena parte de la red no transmite en
+     punto sino a los :59, :22 o :13. Casar por marca de tiempo exacta las
+     dejaba en cero registros y desaparecian sin que nada fallara. Se redondea
+     al slot de 30 min mas cercano. Afectaba, entre otras, a GLACIAR TAPADO,
+     EL MAITEN y RIO CUNCUMEN ANTES JUNTA CHOAPA.
+
+  b) Slots de recuperacion contados como picos de intensidad. El paso en que
+     una estacion vuelve de un corte trae el alza del contador de todo el
+     corte junta. HURTADO salia con 373,1 mm en 0,5 h, o sea 746 mm/h, y
+     superaba Caine por dos ordenes de magnitud. Ahora esos slots se marcan,
+     R4 los excluye del maximo de 30 minutos y R3 descarta el episodio que los
+     contenga.
+
+UN PARAMETRO DE JUICIO QUE NO ESTABA DECLARADO
+
+  Que cuenta como paso seco. Con "cero exacto", una sola basculada perdida en
+  doce horas impide el corte y pega dos temporales en uno: la duracion mediana
+  de la ventana del 17 al 22 de julio pasa de 53 a 113 horas. Se fijo en
+  0,2 mm, que es la resolucion de la cubeta basculante, y con eso la ventana
+  de julio da D mediana 53,5 h contra las 53,0 h del README. La sensibilidad
+  completa esta en la tabla de arriba.
