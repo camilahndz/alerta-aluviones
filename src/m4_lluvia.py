@@ -199,6 +199,12 @@ DISTANCIA_MAXIMA_KM = 30.0
 #
 # Son las dos mitades de una misma pregunta: M2 dice cuales pueden, M4 dice
 # cuando. Si M2 ya dijo que no puede, M4 no tiene nada que decir.
+#
+# OJO: m3_exposicion.py define la misma tupla con el nombre CLASES_OBJETIVO.
+# Tienen que coincidir -M3 y M4 hablan del mismo conjunto de cuencas- y hoy no
+# hay nada que lo garantice. No se importa de alla porque m3_exposicion arrastra
+# osmnx y matplotlib, que M4 no necesita. Es el mismo problema que motivo sacar
+# `verificar_cobertura` a cobertura.py, a menor escala y todavia sin resolver.
 CLASES_SUSCEPTIBLES = ("flujo_detritos", "crecida_detritos")
 
 # Estaciones ambiguas: pares vecinos que se contradicen.
