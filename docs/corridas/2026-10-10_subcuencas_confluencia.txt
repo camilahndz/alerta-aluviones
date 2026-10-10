@@ -1,0 +1,1033 @@
+Subcuencas de confluencia: M1 extendido -> M2 -> M3 -> M4
+10 de octubre de 2026, local, .venv con Python 3.12
+
+QUE CAMBIO
+----------
+Hasta esta corrida M1 cortaba cuencas solo en la costa, asi que las quebradas
+interiores quedaban absorbidas dentro de las cuencas de rio y nunca se evaluaban.
+El inventario de activaciones de julio de 2026 lo dejo medido: 8 de 18
+activaciones documentadas ocurrieron en Vicuna, Paihuano, Illapel y Punitaqui,
+comunas sin una sola unidad de analisis.
+
+src/m1_subcuencas.py agrega una unidad por cada boca de afluente que entra a un
+valle. No vuelve a correr la hidrologia: lee direccion_flujo.tif y
+acumulacion_flujo.tif tal como quedaron.
+
+Comandos:
+  python src/m1_subcuencas.py --sensibilidad
+  python src/m2_susceptibilidad.py
+  python src/m3_exposicion.py
+  python src/m4_lluvia.py
+
+========================================================================
+PASO 1 - SUBCUENCAS DE CONFLUENCIA
+========================================================================
+======================================================================
+M1 (extension) - Subcuencas en las confluencias
+======================================================================
+Rasters de flujo : 14910 x 9743 px, pixel 900 m2
+Cobertura del DEM sobre la region: 100.0%
+Umbral de cauce  : 0.15 km2 = 167 pixeles
+
+Buscando bocas de afluente...
+  8,136 bocas con valle >= 200 km2
+
+  Sensibilidad al umbral de valle:
+   valle (km2)   subcuencas
+            50       16,409
+           100       11,907
+           200        8,136  <- el usado
+           500        4,835
+          1000        3,294
+
+Etiquetando por duplicacion de punteros...
+  convergio en 15 pasadas
+  36,478,394 celdas asignadas (25.1% del raster)
+  vectorizando 8,136 subcuencas...
+
+Subcuencas: 8,136 -> 3,313 con la boca dentro de la region
+
+Unidades de analisis: 3,757 (444 costeras + 3,313 de confluencia)
+  area mediana de las subcuencas: 1.26 km2
+  en el rango de calibracion de Melton (0,4 a 10 km2): 2,954 de 3,313
+
+  subcuencas -> subcuencas_coquimbo.gpkg
+  unidades   -> unidades_coquimbo.gpkg
+
+Tomo 56 s
+
+Siguiente paso:
+  python src/m2_susceptibilidad.py --cuencas data/processed/unidades_coquimbo.gpkg
+
+========================================================================
+PASO 2 - M2 SUSCEPTIBILIDAD
+========================================================================
+Unidades de analisis: unidades_coquimbo.gpkg
+Cobertura del DEM sobre la region: 100.0%
+Cuencas de entrada: 3757
+Leyendo el DEM y midiendo cada cuenca...
+  calculando pendientes...
+
+Clasificacion, por los dos criterios:
+                        Wilford   solo Melton
+  flujo_detritos            959          1414
+  crecida_detritos         1630          1175
+  inundacion               1168          1168
+
+  455 cuencas cambian de clase segun el criterio de largo.
+  Son las mas energeticas de la region, descartadas solo por ser largas:
+ id_cuenca  area_km2  largo_km  melton
+    107557      0.46      2.86    2.44
+    106694      0.56      3.02    2.40
+    106765      0.55      2.70    2.27
+    106752      0.55      2.87    2.19
+    106069      0.67      2.72    2.18
+
+  El umbral de 2.7 km viene de un estudio en la Columbia
+  Britanica. M5 va a decir si sirve para Coquimbo o hay que recalibrarlo.
+
+  3334 de 3757 cuencas estan dentro del rango de calibracion del indice (<= 10 km2)
+
+Las 12 cuencas mas susceptibles:
+ ranking  id_cuenca  area_km2  desnivel_m  largo_km  pend_media_g  melton            clase
+       1     107986      0.41     1745.40      2.63         33.98    2.71   flujo_detritos
+       2     107667      0.45     1660.84      2.31         35.75    2.49   flujo_detritos
+       3     107697      0.44     1627.46      2.18         39.16    2.45   flujo_detritos
+       4     107557      0.46     1651.70      2.86         30.53    2.44 crecida_detritos
+       5     107455      0.47     1662.47      2.09         42.75    2.43   flujo_detritos
+       6     107736      0.44     1605.47      2.31         36.10    2.43   flujo_detritos
+       7     106694      0.56     1799.68      3.02         31.60    2.40 crecida_detritos
+       8     106765      0.55     1682.63      2.70         34.33    2.27 crecida_detritos
+       9     106649      0.57     1675.79      2.53         35.37    2.22   flujo_detritos
+      10     108080      0.41     1396.83      1.98         37.53    2.19   flujo_detritos
+      11     106752      0.55     1628.74      2.87         31.00    2.19 crecida_detritos
+      12     106069      0.67     1781.20      2.72         35.50    2.18 crecida_detritos
+
+  capa   -> susceptibilidad.gpkg
+  figura -> D:\Desktop\alerta-aluviones\outputs\m2_susceptibilidad.png
+
+========================================================================
+PASO 3 - M3 EXPOSICION
+========================================================================
+Cobertura del DEM sobre la region: 100.0%
+Cuencas susceptibles: 2589 de 3757
+  crecida_detritos: 1630 · flujo_detritos: 959
+
+Trazando cauces principales...
+  el cauce se corta bajo 0.15 km2 drenados (166 celdas)
+  2589 trayectorias trazadas de 2589 cuencas
+  largo del cauce: mediana 1.70 km, maximo 15.73 km
+Leyendo OSM del extracto local: chile.gpkg
+  vias: 54,256 en el recuadro -> 47,839 de los tipos que interesan
+  zonas urbanas: 1,235 de uso de suelo + 0 de localidad = 1,235 poligonos
+  red vial: 47,839 tramos | zonas urbanas: 1,235 poligonos
+
+Verificando que las capas se solapen...
+  trayectorias: X    239590-411970    Y   6435555-6774585  
+  red vial    : X    240596-421702    Y   6426190-6787835  
+  ok, ambas en EPSG:32719
+
+Bajando limites comunales...
+
+Cruzando trayectorias con la red vial...
+  3767 pares via-trayectoria se tocan
+  3669 puntos de corte tras fusionar duplicados
+
+Revisando entrada a zonas urbanas...
+  130 trayectorias entran en zona urbana
+  24 localidades con nombre alcanzadas
+
+==================================================================
+Puntos de corte: 3669
+
+Por jerarquia de via:
+  unclassified       858   (peso 0.30)
+  track              778   (peso 0.10)
+  residential        625   (peso 0.30)
+  tertiary           621   (peso 0.45)
+  secondary          275   (peso 0.60)
+  service            210   (peso 0.15)
+  primary            135   (peso 0.85)
+  motorway            94   (peso 1.00)
+  living_street       60   (peso 0.20)
+  motorway_link        5   (peso 0.15)
+  tertiary_link        4   (peso 0.15)
+  primary_link         3   (peso 0.15)
+  secondary_link       1   (peso 0.15)
+
+Las 12 vias mas afectadas:
+                                                 cortes  prioridad_max
+via_nombre                            via_tipo                        
+Ruta 5 Norte                          motorway       88          1.000
+Camino Internacional Gabriela Mistral primary        51          0.925
+Ruta D-55                             primary        34          0.925
+Ruta D-377-E                          primary         4          0.925
+Camino Internacional Gabriela Mistral secondary     122          0.800
+Ruta D-835                            secondary      33          0.800
+Ruta D-597                            secondary      23          0.800
+Ruta D-865                            secondary      20          0.800
+Ruta D-485                            secondary      18          0.800
+Ruta D-875                            secondary      13          0.800
+Ruta D-951                            secondary       9          0.800
+Eduardo Abott                         secondary       2          0.800
+
+Los 12 cortes de mayor prioridad:
+ rank  prioridad                            via_nombre via_tipo     comuna          clase  melton
+    1       1.00                          Ruta 5 Norte motorway La Higuera flujo_detritos    0.84
+    2       1.00                          Ruta 5 Norte motorway   Coquimbo flujo_detritos    0.83
+    3       1.00                          Ruta 5 Norte motorway   Coquimbo flujo_detritos    0.70
+    4       1.00                          Ruta 5 Norte motorway   Coquimbo flujo_detritos    0.68
+    5       1.00                          Ruta 5 Norte motorway   Coquimbo flujo_detritos    0.68
+    6       1.00                          Ruta 5 Norte motorway   Coquimbo flujo_detritos    0.68
+    7       1.00                          Ruta 5 Norte motorway  La Serena flujo_detritos    0.64
+    8       1.00                          Ruta 5 Norte motorway  La Serena flujo_detritos    0.64
+    9       1.00                          Ruta 5 Norte motorway  La Serena flujo_detritos    0.63
+   10       1.00                          Ruta 5 Norte motorway   Coquimbo flujo_detritos    0.61
+   11       0.93 Camino Internacional Gabriela Mistral  primary     Vicuña flujo_detritos    1.28
+   12       0.93 Camino Internacional Gabriela Mistral  primary     Vicuña flujo_detritos    1.18
+
+  capa   -> puntos_corte.gpkg, trayectorias.gpkg
+  tabla  -> m3_puntos_corte.csv
+  figura -> m3_exposicion.png
+
+[exited with code 0]
+
+========================================================================
+PASO 4 - M4 GATILLO DE LLUVIA
+========================================================================
+==========================================================================
+M4 - ventana 2026-06-01 a 2026-08-23, paso 30 min
+     corte seco 12 h, usando cache
+==========================================================================
+
+R1  estaciones de precipitacion en Coquimbo: 107
+
+Bajando series de precipitacion...
+  20/107
+  40/107
+  60/107
+  80/107
+  100/107
+  107/107
+
+Ajustando la isoterma 0 observada, dia a dia...
+  22 de 84 dias con isoterma ajustada
+  mediana de julio: 2643 m
+R2  estaciones descartadas: 1
+R4  estaciones descartadas: 4
+    quedan 102 de 107 estaciones
+    15 marcadas como ambiguas (no se descartan)
+
+Detectando episodios con corte seco de 12 h...
+R3  episodios descartados por hueco de transmision: 58
+R5  episodios descartados por estar sobre la isoterma 0: 7
+    quedan 448 episodios en 94 estaciones
+
+Episodios que superan cada umbral:
+  Caine (1980)                        26
+  Ben David-Novak et al. (2004)        0
+
+Sensibilidad al corte seco (cuantas horas separan dos episodios):
+   corte (h)   episodios   D mediana   superan Caine
+           6         592         7.5              33
+          12         455         9.0              26  <- el usado
+          24         359        10.0              20
+
+Sensibilidad al umbral de paso seco (que cuenta como no llover):
+   seco < mm   episodios   D mediana   superan Caine
+         0.0         455        11.5              22
+         0.1         467        11.5              23
+         0.2         455         9.0              26  <- el usado
+         0.5         424         7.2              29
+
+Cuencas de M2: 3757; susceptibles (flujo_detritos + crecida_detritos): 2589
+  mediana de distancia cuenca-estacion: 6.5 km
+  150 cuencas sobre el criterio de 30 km, marcadas en la capa
+
+Pares cuenca-episodio: 11591
+  cuencas que superan Caine (1980)                      668 de 2589
+  cuencas que superan Ben David-Novak et al. (2004)       0 de 2589
+
+  De que se sostiene cada positivo:
+    cuenca 107697  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 107455  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 107736  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 107936  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 106333  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 106853  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 105953  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 107729  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 107092  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 107969  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 105861  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 107194  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 105706  RIO HURTADO EN SAN AGUSTIN             sin objeciones
+    cuenca 107212  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 104668  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 107338  RIO HURTADO EN SAN AGUSTIN             sin objeciones
+    cuenca 105891  RIO HURTADO EN SAN AGUSTIN             sin objeciones
+    cuenca 107599  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 104306  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 105996  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 105020  RIO HURTADO EN SAN AGUSTIN             sin objeciones
+    cuenca 105675  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 104203  RIO COGOTI EN FRAGUITA                 sin objeciones
+    cuenca 107548  RIO HURTADO EN SAN AGUSTIN             sin objeciones
+    cuenca 104909  RIO HURTADO EN SAN AGUSTIN             sin objeciones
+    cuenca 107851  RIO HURTADO EN SAN AGUSTIN             sin objeciones
+    cuenca 106098  RIO HURTADO EN SAN AGUSTIN             sin objeciones
+    cuenca 107542  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 105537  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 105007  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 107676  RIO HURTADO EN SAN AGUSTIN             sin objeciones
+    cuenca 104198  RIO HURTADO EN SAN AGUSTIN             sin objeciones
+    cuenca 106180  RIO HURTADO EN SAN AGUSTIN             sin objeciones
+    cuenca 107701  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 107226  RIO CHOAPA EN SALAMANCA                sin objeciones
+    cuenca 103334  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 106741  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 106439  COIRON                                 sin objeciones
+    cuenca 107512  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 108092  RIO HURTADO EN SAN AGUSTIN             sin objeciones
+    cuenca 106603  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 107086  RIO HURTADO EN SAN AGUSTIN             sin objeciones
+    cuenca 104018  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 104528  RIO HURTADO EN SAN AGUSTIN             sin objeciones
+    cuenca 107933  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 103260  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 106831  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 105096  RIO HURTADO EN SAN AGUSTIN             sin objeciones
+    cuenca 107257  RIO HURTADO EN SAN AGUSTIN             sin objeciones
+    cuenca 107264  RIO HURTADO EN SAN AGUSTIN             sin objeciones
+    cuenca 107240  RIO HURTADO EN SAN AGUSTIN             sin objeciones
+    cuenca 106918  RIO HURTADO EN SAN AGUSTIN             sin objeciones
+    cuenca 106983  RIO HURTADO EN SAN AGUSTIN             sin objeciones
+    cuenca 107591  RIO HURTADO EN SAN AGUSTIN             sin objeciones
+    cuenca 102767  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 105527  RIO HURTADO EN SAN AGUSTIN             sin objeciones
+    cuenca 107352  TULAHUEN                               sin objeciones
+    cuenca 106226  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 107467  TULAHUEN                               sin objeciones
+    cuenca 103965  RIO HURTADO EN SAN AGUSTIN             sin objeciones
+    cuenca 105039  RIO CUNCUMEN ANTES JUNTA CHOAPA (CHACA estacion marcada como ambigua
+    cuenca 102811  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 106698  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 107539  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 105425  RIO HURTADO EN SAN AGUSTIN             sin objeciones
+    cuenca 107514  RIO HURTADO EN SAN AGUSTIN             sin objeciones
+    cuenca 104400  RIO HURTADO EN SAN AGUSTIN             sin objeciones
+    cuenca 107944  COIRON                                 sin objeciones
+    cuenca 104119  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 105222  RIO CUNCUMEN ANTES JUNTA CHOAPA (CHACA estacion marcada como ambigua
+    cuenca 105750  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 107481  LAS BURRAS                             estacion marcada como ambigua
+    cuenca 108053  RIO HURTADO EN SAN AGUSTIN             sin objeciones
+    cuenca 105870  RIO COGOTI EN FRAGUITA                 sin objeciones
+    cuenca 103576  RIO HURTADO EN SAN AGUSTIN             sin objeciones
+    cuenca 107916  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 105135  RIO HURTADO EN SAN AGUSTIN             sin objeciones
+    cuenca 106791  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 103137  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 108095  TULAHUEN                               sin objeciones
+    cuenca 106389  RIO COGOTI EN FRAGUITA                 sin objeciones
+    cuenca 105807  COIRON                                 sin objeciones
+    cuenca 102922  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 102867  RIO COGOTI EN FRAGUITA                 sin objeciones
+    cuenca 105943  RIO CHALINGA EN LA PALMILLA            sin objeciones
+    cuenca 102754  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 105694  RIO CHALINGA EN LA PALMILLA            sin objeciones
+    cuenca 107798  LAS BURRAS                             estacion marcada como ambigua
+    cuenca 103359  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 102348  RIO COGOTI EN FRAGUITA                 sin objeciones
+    cuenca 103954  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 107418  TULAHUEN                               sin objeciones
+    cuenca 104256  RIO HURTADO EN SAN AGUSTIN             sin objeciones
+    cuenca 103098  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 103197  RIO COGOTI EN FRAGUITA                 sin objeciones
+    cuenca 105728  RIO CHOAPA EN SALAMANCA                sin objeciones
+    cuenca 106922  RIO HURTADO EN SAN AGUSTIN             sin objeciones
+    cuenca 104512  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 103975  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 105900  LAS BURRAS                             estacion marcada como ambigua
+    cuenca 105620  RIO MOSTAZAL EN CUESTECITA             estacion marcada como ambigua
+    cuenca 102549  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 102141  RIO COGOTI EN FRAGUITA                 sin objeciones
+    cuenca 107903  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 105653  RIO COGOTI EN FRAGUITA                 sin objeciones
+    cuenca 107620  RIO HURTADO EN SAN AGUSTIN             sin objeciones
+    cuenca 103118  RIO HURTADO EN SAN AGUSTIN             sin objeciones
+    cuenca 105853  RIO HURTADO EN SAN AGUSTIN             sin objeciones
+    cuenca 103343  LA TRANQUILLA                          sin objeciones
+    cuenca 106132  LA TRANQUILLA                          sin objeciones
+    cuenca 105251  SALAMANCA                              sin objeciones
+    cuenca 108096  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 105474  RIO COGOTI EN FRAGUITA                 sin objeciones
+    cuenca 107688  COIRON                                 sin objeciones
+    cuenca 106919  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 106176  RIO MOSTAZAL EN CUESTECITA             estacion marcada como ambigua
+    cuenca 106258  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 106648  RIO HURTADO EN SAN AGUSTIN             sin objeciones
+    cuenca 102655  RIO COGOTI EN FRAGUITA                 sin objeciones
+    cuenca 105272  RIO HURTADO EN SAN AGUSTIN             sin objeciones
+    cuenca 103768  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 104411  COIRON                                 sin objeciones
+    cuenca 104822  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 105290  RIO HURTADO EN SAN AGUSTIN             sin objeciones
+    cuenca 103944  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 105411  TULAHUEN                               sin objeciones
+    cuenca 108098  TULAHUEN                               sin objeciones
+    cuenca 104345  RIO HURTADO EN SAN AGUSTIN             sin objeciones
+    cuenca 105522  LA TRANQUILLA                          sin objeciones
+    cuenca 104137  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 104831  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 102760  RIO HURTADO EN SAN AGUSTIN             sin objeciones
+    cuenca 106965  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 103672  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 101964  COIRON                                 sin objeciones
+    cuenca 107579  LAS BURRAS                             estacion marcada como ambigua
+    cuenca 103593  RIO COGOTI EN FRAGUITA                 sin objeciones
+    cuenca 105692  CAREN                                  estacion marcada como ambigua
+    cuenca 104001  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 106476  RIO COGOTI EN FRAGUITA                 sin objeciones
+    cuenca 106592  RIO COGOTI EN FRAGUITA                 sin objeciones
+    cuenca 103135  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 105703  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 105688  RIO COGOTI EN FRAGUITA                 sin objeciones
+    cuenca 106455  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 108075  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 104963  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 102188  RIO HURTADO EN SAN AGUSTIN             sin objeciones
+    cuenca 106830  CAREN                                  estacion marcada como ambigua
+    cuenca 108101  RIO CHOAPA EN SALAMANCA                sin objeciones
+    cuenca 103283  RIO CUNCUMEN ANTES JUNTA CHOAPA (CHACA estacion marcada como ambigua
+    cuenca 106909  COIRON                                 sin objeciones
+    cuenca 102853  RIO HURTADO EN SAN AGUSTIN             sin objeciones
+    cuenca 107232  CAIMANES                               sin objeciones
+    cuenca 106348  CAREN                                  estacion marcada como ambigua
+    cuenca 106215  LAS BURRAS                             estacion marcada como ambigua
+    cuenca 107307  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 105830  RIO MOSTAZAL EN CUESTECITA             estacion marcada como ambigua
+    cuenca 104927  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 107998  RIO COGOTI EN FRAGUITA                 sin objeciones
+    cuenca 103240  RIO CHALINGA EN LA PALMILLA            sin objeciones
+    cuenca 104008  RIO COGOTI EN FRAGUITA                 sin objeciones
+    cuenca 106063  CAIMANES                               sin objeciones
+    cuenca 105103  LAS BURRAS                             estacion marcada como ambigua
+    cuenca 105970  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 105777  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 106575  RIO HURTADO EN SAN AGUSTIN             sin objeciones
+    cuenca 103784  TULAHUEN                               sin objeciones
+    cuenca 107411  LAS BURRAS                             estacion marcada como ambigua
+    cuenca 105342  RIO HURTADO EN SAN AGUSTIN             sin objeciones
+    cuenca 102219  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 104752  RIO HURTADO EN SAN AGUSTIN             sin objeciones
+    cuenca 106969  RIO HURTADO EN SAN AGUSTIN             sin objeciones
+    cuenca 106214  LAS BURRAS                             estacion marcada como ambigua
+    cuenca 105792  HUINTIL                                sin objeciones
+    cuenca 104106  RIO CHALINGA EN LA PALMILLA            sin objeciones
+    cuenca 107154  RIO CHOAPA EN SALAMANCA                sin objeciones
+    cuenca 105613  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 102022  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 106361  CAIMANES                               sin objeciones
+    cuenca 108105  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 102012  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 105532  SALAMANCA                              sin objeciones
+    cuenca 105333  RIO CHALINGA EN LA PALMILLA            sin objeciones
+    cuenca 102155  RIO HURTADO EN SAN AGUSTIN             sin objeciones
+    cuenca 106628  RIO HURTADO EN SAN AGUSTIN             sin objeciones
+    cuenca 105442  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 101735  RIO COGOTI EN FRAGUITA                 sin objeciones
+    cuenca 104117  RIO MOSTAZAL EN CUESTECITA             estacion marcada como ambigua
+    cuenca 104214  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 104942  TULAHUEN                               sin objeciones
+    cuenca 104339  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 105250  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 102052  RIO MOSTAZAL EN CUESTECITA             estacion marcada como ambigua
+    cuenca 106484  LAS BURRAS                             estacion marcada como ambigua
+    cuenca 106264  RIO COGOTI EN FRAGUITA                 sin objeciones
+    cuenca 102862  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 103758  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 101740  RIO COGOTI EN FRAGUITA                 sin objeciones
+    cuenca 105168  CAIMANES                               sin objeciones
+    cuenca 105752  RIO CHALINGA EN LA PALMILLA            sin objeciones
+    cuenca 103021  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 103166  LA TRANQUILLA                          sin objeciones
+    cuenca 102125  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 106089  CAREN                                  estacion marcada como ambigua
+    cuenca 105269  CAREN                                  estacion marcada como ambigua
+    cuenca 101403  RIO HURTADO EN SAN AGUSTIN             sin objeciones
+    cuenca 106202  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 102068  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 107623  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 107509  CAIMANES                               sin objeciones
+    cuenca 104067  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 104630  RIO HURTADO EN SAN AGUSTIN             sin objeciones
+    cuenca 103974  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 104713  TULAHUEN                               sin objeciones
+    cuenca 104483  COIRON                                 sin objeciones
+    cuenca 103006  TULAHUEN                               sin objeciones
+    cuenca 107833  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 103597  RIO CHALINGA EN LA PALMILLA            sin objeciones
+    cuenca 102078  RIO MOSTAZAL EN CUESTECITA             estacion marcada como ambigua
+    cuenca 103158  COIRON                                 sin objeciones
+    cuenca 101387  RIO HURTADO EN SAN AGUSTIN             sin objeciones
+    cuenca 102369  RIO COGOTI EN FRAGUITA                 sin objeciones
+    cuenca 103303  COIRON                                 sin objeciones
+    cuenca 103655  RIO HURTADO EN SAN AGUSTIN             sin objeciones
+    cuenca 106477  POZO QUEBRADA EL ARRAYAN N°1 AC.  LIBR sin objeciones
+    cuenca 106759  HUINTIL                                sin objeciones
+    cuenca 102029  COIRON                                 sin objeciones
+    cuenca 106147  RIO CHALINGA EN LA PALMILLA            sin objeciones
+    cuenca 106066  HUINTIL                                sin objeciones
+    cuenca 107340  RIO MOSTAZAL EN CUESTECITA             estacion marcada como ambigua
+    cuenca 106715  LA TRANQUILLA                          sin objeciones
+    cuenca 101941  RIO HURTADO EN SAN AGUSTIN             sin objeciones
+    cuenca 103864  RIO CUNCUMEN ANTES JUNTA CHOAPA (CHACA estacion marcada como ambigua
+    cuenca 106901  POZO QUEBRADA EL ARRAYAN N°1 AC.  LIBR sin objeciones
+    cuenca 104379  COIRON                                 sin objeciones
+    cuenca 101433  RIO MOSTAZAL EN CUESTECITA             estacion marcada como ambigua
+    cuenca 107219  POZO QUEBRADA EL ARRAYAN N°1 AC.  LIBR sin objeciones
+    cuenca 104950  RIO COGOTI EN FRAGUITA                 sin objeciones
+    cuenca 105218  RIO MOSTAZAL EN CUESTECITA             estacion marcada como ambigua
+    cuenca 106464  HUINTIL                                sin objeciones
+    cuenca 101551  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 105167  RIO MOSTAZAL EN CUESTECITA             estacion marcada como ambigua
+    cuenca 105983  HUINTIL                                sin objeciones
+    cuenca 101931  RIO MOSTAZAL EN CUESTECITA             estacion marcada como ambigua
+    cuenca 104303  CAIMANES                               sin objeciones
+    cuenca 106890  RIO COGOTI EN FRAGUITA                 sin objeciones
+    cuenca 105791  CAREN                                  estacion marcada como ambigua
+    cuenca 105866  LAS BURRAS                             estacion marcada como ambigua
+    cuenca 103762  RIO MOSTAZAL EN CUESTECITA             estacion marcada como ambigua
+    cuenca 102807  LAS BURRAS                             estacion marcada como ambigua
+    cuenca 107732  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 104819  RIO CUNCUMEN ANTES JUNTA CHOAPA (CHACA estacion marcada como ambigua
+    cuenca 103263  RIO COGOTI EN FRAGUITA                 sin objeciones
+    cuenca 106940  RIO HURTADO ENTRADA EMB. RECOLETA      sin objeciones
+    cuenca 103269  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 102975  RIO MOSTAZAL EN CUESTECITA             estacion marcada como ambigua
+    cuenca 101245  COIRON                                 sin objeciones
+    cuenca 106787  CAIMANES                               sin objeciones
+    cuenca 100993  TULAHUEN                               sin objeciones
+    cuenca 102695  RIO CHALINGA EN LA PALMILLA            sin objeciones
+    cuenca 106877  HUINTIL                                sin objeciones
+    cuenca 108046  EL TOME                                sin objeciones
+    cuenca 101140  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 107890  COIRON                                 sin objeciones
+    cuenca 107238  HUINTIL                                sin objeciones
+    cuenca 107108  RIO CHOAPA EN SALAMANCA                sin objeciones
+    cuenca 105291  COIRON                                 sin objeciones
+    cuenca 107471  TULAHUEN                               sin objeciones
+    cuenca 101358  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 105428  CAIMANES                               sin objeciones
+    cuenca 105931  RIO CUNCUMEN ANTES JUNTA CHOAPA (CHACA estacion marcada como ambigua
+    cuenca 106678  HUINTIL                                sin objeciones
+    cuenca 101902  TULAHUEN                               sin objeciones
+    cuenca 106958  HUINTIL                                sin objeciones
+    cuenca 107532  CAIMANES                               sin objeciones
+    cuenca 105502  LOS CONDORES                           sin objeciones
+    cuenca 106187  CAREN                                  estacion marcada como ambigua
+    cuenca 104939  LAS BURRAS                             estacion marcada como ambigua
+    cuenca 104960  CAIMANES                               sin objeciones
+    cuenca 104264  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 107472  CAREN                                  estacion marcada como ambigua
+    cuenca 107839  RIO CHALINGA EN LA PALMILLA            sin objeciones
+    cuenca 101662  COIRON                                 sin objeciones
+    cuenca 105304  RIO CHOAPA EN SALAMANCA                sin objeciones
+    cuenca 106034  RIO CUNCUMEN ANTES JUNTA CHOAPA (CHACA estacion marcada como ambigua
+    cuenca 107293  RIO CUNCUMEN ANTES JUNTA CHOAPA (CHACA estacion marcada como ambigua
+    cuenca 106023  HUINTIL                                sin objeciones
+    cuenca 104690  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 104832  RIO CHOAPA EN SALAMANCA                sin objeciones
+    cuenca 102040  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 105937  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 105976  HUINTIL                                sin objeciones
+    cuenca 101969  RIO MOSTAZAL EN CUESTECITA             estacion marcada como ambigua
+    cuenca 106365  CAIMANES                               sin objeciones
+    cuenca 102142  RIO CHALINGA EN LA PALMILLA            sin objeciones
+    cuenca 101797  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 101181  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 106882  POZO QUEBRADA EL ARRAYAN N°1 AC.  LIBR sin objeciones
+    cuenca 103211  TULAHUEN                               sin objeciones
+    cuenca 101582  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 103589  TULAHUEN                               sin objeciones
+    cuenca 105988  CAREN                                  estacion marcada como ambigua
+    cuenca 105920  RIO CHALINGA EN LA PALMILLA            sin objeciones
+    cuenca 105099  LOS CONDORES                           sin objeciones
+    cuenca 100622  RIO HURTADO EN SAN AGUSTIN             sin objeciones
+    cuenca 107189  LAS BURRAS                             estacion marcada como ambigua
+    cuenca 106966  CAREN                                  estacion marcada como ambigua
+    cuenca 103781  RIO CHOAPA EN SALAMANCA                sin objeciones
+    cuenca 105594  RIO COGOTI EN FRAGUITA                 sin objeciones
+    cuenca 102958  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 103179  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 107357  LOS CONDORES                           sin objeciones
+    cuenca 103105  RIO CUNCUMEN ANTES JUNTA CHOAPA (CHACA estacion marcada como ambigua
+    cuenca 104327  EL TOME                                sin objeciones
+    cuenca 101624  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 101774  COIRON                                 sin objeciones
+    cuenca 101437  COIRON                                 sin objeciones
+    cuenca 103722  CAREN                                  estacion marcada como ambigua
+    cuenca 104985  CAREN                                  estacion marcada como ambigua
+    cuenca 105828  POZO QUEBRADA EL ARRAYAN N°1 AC.  LIBR sin objeciones
+    cuenca 103236  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 100951  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 101018  RIO MOSTAZAL EN CUESTECITA             estacion marcada como ambigua
+    cuenca 103726  LA TRANQUILLA                          sin objeciones
+    cuenca 105455  CAREN                                  estacion marcada como ambigua
+    cuenca 101858  RIO MOSTAZAL EN CUESTECITA             estacion marcada como ambigua
+    cuenca 101517  RIO COGOTI EN FRAGUITA                 sin objeciones
+    cuenca 107062  CAREN                                  estacion marcada como ambigua
+    cuenca 107691  LA TRANQUILLA                          sin objeciones
+    cuenca 103440  RIO CHALINGA EN LA PALMILLA            sin objeciones
+    cuenca 107003  CAIMANES                               sin objeciones
+    cuenca 107573  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 107752  RIO COGOTI EN FRAGUITA                 sin objeciones
+    cuenca 104901  CAIMANES                               sin objeciones
+    cuenca 101589  RIO HURTADO EN SAN AGUSTIN             sin objeciones
+    cuenca 101792  LA TRANQUILLA                          sin objeciones
+    cuenca 104827  LA TRANQUILLA                          sin objeciones
+    cuenca 105510  HUINTIL                                sin objeciones
+    cuenca 101546  LA TRANQUILLA                          sin objeciones
+    cuenca 106801  RIO CHOAPA EN SALAMANCA                sin objeciones
+    cuenca 103281  RIO COGOTI EN FRAGUITA                 sin objeciones
+    cuenca 102352  RIO CUNCUMEN ANTES JUNTA CHOAPA (CHACA estacion marcada como ambigua
+    cuenca 100865  RIO COGOTI EN FRAGUITA                 sin objeciones
+    cuenca 105293  RIO MOSTAZAL EN CUESTECITA             estacion marcada como ambigua
+    cuenca 106062  RIO CHOAPA EN SALAMANCA                sin objeciones
+    cuenca  305  RIO CUNCUMEN ANTES JUNTA CHOAPA (CHACA estacion marcada como ambigua
+    cuenca 107198  POZO QUEBRADA EL ARRAYAN N°1 AC.  LIBR sin objeciones
+    cuenca 102164  RIO HURTADO EN SAN AGUSTIN             sin objeciones
+    cuenca 104857  SALAMANCA                              sin objeciones
+    cuenca 104027  HUINTIL                                sin objeciones
+    cuenca 101248  RIO HURTADO EN SAN AGUSTIN             sin objeciones
+    cuenca 107033  RIO MOSTAZAL EN CUESTECITA             estacion marcada como ambigua
+    cuenca 101888  TULAHUEN                               sin objeciones
+    cuenca 104581  RIO CHOAPA EN SALAMANCA                sin objeciones
+    cuenca 104159  TULAHUEN                               sin objeciones
+    cuenca 100738  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 102552  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 107679  CAIMANES                               sin objeciones
+    cuenca 100750  RIO CUNCUMEN ANTES JUNTA CHOAPA (CHACA estacion marcada como ambigua
+    cuenca 107250  RIO CHOAPA EN SALAMANCA                sin objeciones
+    cuenca 101312  RIO MOSTAZAL EN CUESTECITA             estacion marcada como ambigua
+    cuenca 105264  RIO MOSTAZAL EN CUESTECITA             estacion marcada como ambigua
+    cuenca 102036  RIO CHALINGA EN LA PALMILLA            sin objeciones
+    cuenca 101665  COIRON                                 sin objeciones
+    cuenca 102390  COIRON                                 sin objeciones
+    cuenca 107228  RIO COGOTI EN FRAGUITA                 sin objeciones
+    cuenca 102542  SALAMANCA                              sin objeciones
+    cuenca 102490  TULAHUEN                               sin objeciones
+    cuenca 105034  POZO QUEBRADA EL ARRAYAN N°1 AC.  LIBR sin objeciones
+    cuenca 103699  SALAMANCA                              sin objeciones
+    cuenca 103238  COIRON                                 sin objeciones
+    cuenca 104341  CAIMANES                               sin objeciones
+    cuenca 100776  RIO HURTADO EN SAN AGUSTIN             sin objeciones
+    cuenca 103007  RIO CHOAPA EN SALAMANCA                sin objeciones
+    cuenca 103973  EL TOME                                sin objeciones
+    cuenca 106941  RIO CHALINGA EN LA PALMILLA            sin objeciones
+    cuenca 106579  CAIMANES                               sin objeciones
+    cuenca 100813  RIO COGOTI EN FRAGUITA                 sin objeciones
+    cuenca 106408  RIO CHALINGA EN LA PALMILLA            sin objeciones
+    cuenca 104697  COIRON                                 sin objeciones
+    cuenca 104142  CAIMANES                               sin objeciones
+    cuenca 106224  HUINTIL                                sin objeciones
+    cuenca 100470  TULAHUEN                               sin objeciones
+    cuenca 107057  CAIMANES                               sin objeciones
+    cuenca 105628  EL TOME                                sin objeciones
+    cuenca 107811  SALAMANCA                              sin objeciones
+    cuenca 106000  SALAMANCA                              sin objeciones
+    cuenca 107778  SALAMANCA                              sin objeciones
+    cuenca 103175  POZO QUEBRADA EL ARRAYAN N°1 AC.  LIBR sin objeciones
+    cuenca 102802  CAIMANES                               sin objeciones
+    cuenca 104902  RIO HURTADO ENTRADA EMB. RECOLETA      sin objeciones
+    cuenca 108077  TULAHUEN                               sin objeciones
+    cuenca 102957  TULAHUEN                               sin objeciones
+    cuenca 102757  RIO CHOAPA EN SALAMANCA                sin objeciones
+    cuenca 104803  RIO HURTADO EN SAN AGUSTIN             sin objeciones
+    cuenca 101634  LAS BURRAS                             estacion marcada como ambigua
+    cuenca 102980  RIO MOSTAZAL EN CUESTECITA             estacion marcada como ambigua
+    cuenca 103708  HUINTIL                                sin objeciones
+    cuenca 106597  COIRON                                 sin objeciones
+    cuenca 104440  POZO QUEBRADA EL ARRAYAN N°1 AC.  LIBR sin objeciones
+    cuenca 103815  LA TRANQUILLA                          sin objeciones
+    cuenca 105194  RIO HURTADO ENTRADA EMB. RECOLETA      sin objeciones
+    cuenca 103063  RIO CUNCUMEN ANTES JUNTA CHOAPA (CHACA estacion marcada como ambigua
+    cuenca 101234  RIO HURTADO EN SAN AGUSTIN             sin objeciones
+    cuenca 104527  RIO CHOAPA EN SALAMANCA                sin objeciones
+    cuenca 100129  LAS BURRAS                             estacion marcada como ambigua
+    cuenca 105256  CAIMANES                               sin objeciones
+    cuenca 107502  POZO QUEBRADA EL ARRAYAN N°1 AC.  LIBR sin objeciones
+    cuenca 106560  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 107061  HUINTIL                                sin objeciones
+    cuenca 107790  RIO CHOAPA EN SALAMANCA                sin objeciones
+    cuenca 103878  RIO HURTADO ENTRADA EMB. RECOLETA      sin objeciones
+    cuenca 102428  COIRON                                 sin objeciones
+    cuenca 102865  CAIMANES                               sin objeciones
+    cuenca 101139  CAREN                                  estacion marcada como ambigua
+    cuenca 106101  HUINTIL                                sin objeciones
+    cuenca 104090  POZO QUEBRADA EL ARRAYAN N°1 AC.  LIBR sin objeciones
+    cuenca 101062  RIO CUNCUMEN ANTES JUNTA CHOAPA (CHACA estacion marcada como ambigua
+    cuenca 100724  CAREN                                  estacion marcada como ambigua
+    cuenca 100969  LAS BURRAS                             estacion marcada como ambigua
+    cuenca 108120  RIO HURTADO ENTRADA EMB. RECOLETA      sin objeciones
+    cuenca 102675  CAREN                                  estacion marcada como ambigua
+    cuenca 101901  COIRON                                 sin objeciones
+    cuenca 100856  LA TRANQUILLA                          sin objeciones
+    cuenca 105459  RIO HURTADO ENTRADA EMB. RECOLETA      sin objeciones
+    cuenca 104923  LAS BURRAS                             estacion marcada como ambigua
+    cuenca 104854  POZO QUEBRADA EL ARRAYAN N°1 AC.  LIBR sin objeciones
+    cuenca 107655  RIO MOSTAZAL EN CUESTECITA             estacion marcada como ambigua
+    cuenca 104305  HUINTIL                                sin objeciones
+    cuenca 104184  LAS BURRAS                             estacion marcada como ambigua
+    cuenca 106972  LLANOS DE CHINGAY                      sin objeciones
+    cuenca 104215  HUINTIL                                sin objeciones
+    cuenca 102341  CAREN                                  estacion marcada como ambigua
+    cuenca 105202  PUNITAQUI                              sin objeciones
+    cuenca 103370  RIO CUNCUMEN ANTES JUNTA CHOAPA (CHACA estacion marcada como ambigua
+    cuenca 103003  EL TOME                                sin objeciones
+    cuenca 104970  RIO CHOAPA EN SALAMANCA                sin objeciones
+    cuenca 103837  EL TOME                                sin objeciones
+    cuenca 100463  RIO CHALINGA EN LA PALMILLA            sin objeciones
+    cuenca 103351  RIO CHOAPA EN SALAMANCA                sin objeciones
+    cuenca 104719  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 101776  SALAMANCA                              sin objeciones
+    cuenca 102840  EL TOME                                sin objeciones
+    cuenca 100946  RIO COGOTI EN FRAGUITA                 sin objeciones
+    cuenca 103854  POZO QUEBRADA EL ARRAYAN N°1 AC.  LIBR sin objeciones
+    cuenca 101633  RIO CHOAPA EN SALAMANCA                sin objeciones
+    cuenca 102562  COIRON                                 sin objeciones
+    cuenca 100267  TULAHUEN                               sin objeciones
+    cuenca 101149  EL TOME                                sin objeciones
+    cuenca 102431  HUINTIL                                sin objeciones
+    cuenca 102540  RIO CHOAPA EN SALAMANCA                sin objeciones
+    cuenca 100803  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 101769  RIO COGOTI EN FRAGUITA                 sin objeciones
+    cuenca 102169  CAIMANES                               sin objeciones
+    cuenca 103093  HUINTIL                                sin objeciones
+    cuenca 104266  LOS CONDORES                           sin objeciones
+    cuenca 102408  RIO CHOAPA EN SALAMANCA                sin objeciones
+    cuenca 107282  PUNITAQUI                              sin objeciones
+    cuenca 100418  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 104497  COIRON                                 sin objeciones
+    cuenca 103193  HUINTIL                                sin objeciones
+    cuenca 107220  RIO CHALINGA EN LA PALMILLA            sin objeciones
+    cuenca 101528  LA TRANQUILLA                          sin objeciones
+    cuenca 106336  HUINTIL                                sin objeciones
+    cuenca 107245  LLANOS DE CHINGAY                      sin objeciones
+    cuenca 102491  LLANOS DE CHINGAY                      sin objeciones
+    cuenca 103766  CAREN                                  estacion marcada como ambigua
+    cuenca 100301  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 102544  CAIMANES                               sin objeciones
+    cuenca 106018  SALAMANCA                              sin objeciones
+    cuenca 107704  HUINTIL                                sin objeciones
+    cuenca 100727  CAREN                                  estacion marcada como ambigua
+    cuenca 107979  HUINTIL                                sin objeciones
+    cuenca 106503  CAIMANES                               sin objeciones
+    cuenca 106223  HUINTIL                                sin objeciones
+    cuenca 102729  RIO CHOAPA EN SALAMANCA                sin objeciones
+    cuenca 100352  LAS BURRAS                             estacion marcada como ambigua
+    cuenca 100434  EL TOME                                sin objeciones
+    cuenca 101883  CAIMANES                               sin objeciones
+    cuenca 107055  CAREN                                  estacion marcada como ambigua
+    cuenca 102697  SALAMANCA                              sin objeciones
+    cuenca 100431  EL TOME                                sin objeciones
+    cuenca 102344  HUINTIL                                sin objeciones
+    cuenca 100395  EL TOME                                sin objeciones
+    cuenca 101837  CAIMANES                               sin objeciones
+    cuenca 107645  HUINTIL                                sin objeciones
+    cuenca 104298  TULAHUEN                               sin objeciones
+    cuenca 103720  RIO CHOAPA EN SALAMANCA                sin objeciones
+    cuenca 105318  EL TOME                                sin objeciones
+    cuenca 106172  CAIMANES                               sin objeciones
+    cuenca 104680  SALAMANCA                              sin objeciones
+    cuenca 105151  EL TOME                                sin objeciones
+    cuenca 105760  CAREN                                  estacion marcada como ambigua
+    cuenca 103255  HUINTIL                                sin objeciones
+    cuenca 102871  POZO QUEBRADA EL ARRAYAN N°1 AC.  LIBR sin objeciones
+    cuenca 104807  SALAMANCA                              sin objeciones
+    cuenca 102205  RIO COGOTI EN FRAGUITA                 sin objeciones
+    cuenca 100408  RIO CHALINGA EN LA PALMILLA            sin objeciones
+    cuenca 107421  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 100491  LA TRANQUILLA                          sin objeciones
+    cuenca 103890  EL TOME                                sin objeciones
+    cuenca 107651  LLANOS DE CHINGAY                      sin objeciones
+    cuenca 101361  RIO CHOAPA EN SALAMANCA                sin objeciones
+    cuenca 107830  HUINTIL                                sin objeciones
+    cuenca 100918  CAREN                                  estacion marcada como ambigua
+    cuenca 106933  HUINTIL                                sin objeciones
+    cuenca 104481  RIO CUNCUMEN ANTES JUNTA CHOAPA (CHACA estacion marcada como ambigua
+    cuenca 101898  RIO CHOAPA EN SALAMANCA                sin objeciones
+    cuenca 105535  EL TOME                                sin objeciones
+    cuenca 106498  EL TOME                                sin objeciones
+    cuenca 102242  PUNITAQUI                              sin objeciones
+    cuenca 100479  CAREN                                  estacion marcada como ambigua
+    cuenca 105649  RIO COGOTI EN FRAGUITA                 sin objeciones
+    cuenca 104684  POZO QUEBRADA EL ARRAYAN N°1 AC.  LIBR sin objeciones
+    cuenca 105678  RIO CHOAPA EN SALAMANCA                sin objeciones
+    cuenca 104171  COIRON                                 sin objeciones
+    cuenca 105786  CAIMANES                               sin objeciones
+    cuenca 102457  EL TOME                                sin objeciones
+    cuenca 101651  RIO CHOAPA EN SALAMANCA                sin objeciones
+    cuenca 101590  SALAMANCA                              sin objeciones
+    cuenca 106112  PUNITAQUI                              sin objeciones
+    cuenca 104409  RIO COGOTI EN FRAGUITA                 sin objeciones
+    cuenca 106850  RIO CHOAPA EN SALAMANCA                sin objeciones
+    cuenca 101959  RIO CHOAPA EN SALAMANCA                sin objeciones
+    cuenca 103646  RIO CUNCUMEN ANTES JUNTA CHOAPA (CHACA estacion marcada como ambigua
+    cuenca 106912  RIO CUNCUMEN ANTES JUNTA CHOAPA (CHACA estacion marcada como ambigua
+    cuenca 104547  RIO MOSTAZAL EN CUESTECITA             estacion marcada como ambigua
+    cuenca 100241  LA TRANQUILLA                          sin objeciones
+    cuenca 102664  RIO HURTADO ENTRADA EMB. RECOLETA      sin objeciones
+    cuenca 102810  LOS CONDORES                           sin objeciones
+    cuenca 104302  POZO QUEBRADA EL ARRAYAN N°1 AC.  LIBR sin objeciones
+    cuenca 101686  PUNITAQUI                              sin objeciones
+    cuenca 101463  RIO CUNCUMEN ANTES JUNTA CHOAPA (CHACA estacion marcada como ambigua
+    cuenca 101789  CAIMANES                               sin objeciones
+    cuenca 105074  RIO CHOAPA EN SALAMANCA                sin objeciones
+    cuenca 105353  EL TOME                                sin objeciones
+    cuenca 103504  RIO MOSTAZAL EN CUESTECITA             estacion marcada como ambigua
+    cuenca 106154  LLANOS DE CHINGAY                      sin objeciones
+    cuenca 108133  LLANOS DE CHINGAY                      sin objeciones
+    cuenca 100283  RIO HURTADO EN SAN AGUSTIN             sin objeciones
+    cuenca 103170  RIO CHOAPA EN SALAMANCA                sin objeciones
+    cuenca 102814  PUNITAQUI                              sin objeciones
+    cuenca 103911  POZO QUEBRADA EL ARRAYAN N°1 AC.  LIBR sin objeciones
+    cuenca 100312  COIRON                                 sin objeciones
+    cuenca 102831  POZO QUEBRADA EL ARRAYAN N°1 AC.  LIBR sin objeciones
+    cuenca 100726  RIO CHALINGA EN LA PALMILLA            sin objeciones
+    cuenca 104464  HUINTIL                                sin objeciones
+    cuenca 101293  RIO CHOAPA EN SALAMANCA                sin objeciones
+    cuenca 105898  COIRON                                 sin objeciones
+    cuenca 100754  TULAHUEN                               sin objeciones
+    cuenca 106300  LLANOS DE CHINGAY                      sin objeciones
+    cuenca 105985  LLANOS DE CHINGAY                      sin objeciones
+    cuenca 101688  SALAMANCA                              sin objeciones
+    cuenca 101276  HUINTIL                                sin objeciones
+    cuenca 102252  LOS CONDORES                           sin objeciones
+    cuenca 106169  HUINTIL                                sin objeciones
+    cuenca 100472  CAIMANES                               sin objeciones
+    cuenca 101275  LOS CONDORES                           sin objeciones
+    cuenca 105740  SALAMANCA                              sin objeciones
+    cuenca 101290  CAREN                                  estacion marcada como ambigua
+    cuenca 101657  RIO HURTADO ENTRADA EMB. RECOLETA      sin objeciones
+    cuenca 100681  RIO CHALINGA EN LA PALMILLA            sin objeciones
+    cuenca 101699  EL TOME                                sin objeciones
+    cuenca 101780  CAIMANES                               sin objeciones
+    cuenca 100061  RIO HURTADO EN SAN AGUSTIN             sin objeciones
+    cuenca 102106  RIO CHOAPA EN SALAMANCA                sin objeciones
+    cuenca 100834  RIO COGOTI EN FRAGUITA                 sin objeciones
+    cuenca 100956  RIO CHALINGA EN LA PALMILLA            sin objeciones
+    cuenca 101667  POZO QUEBRADA EL ARRAYAN N°1 AC.  LIBR sin objeciones
+    cuenca 102253  LA TRANQUILLA                          sin objeciones
+    cuenca 106342  RIO MOSTAZAL EN CUESTECITA             estacion marcada como ambigua
+    cuenca 105590  EL TOME                                sin objeciones
+    cuenca 101807  RIO HURTADO ENTRADA EMB. RECOLETA      sin objeciones
+    cuenca 101098  RIO CHOAPA EN SALAMANCA                sin objeciones
+    cuenca 101717  EL TOME                                sin objeciones
+    cuenca 101099  HUINTIL                                sin objeciones
+    cuenca 101397  RIO MOSTAZAL EN CUESTECITA             estacion marcada como ambigua
+    cuenca 107616  COMBARBALA                             sin objeciones
+    cuenca 104651  EL TOME                                sin objeciones
+    cuenca 104076  CAIMANES                               sin objeciones
+    cuenca 102507  POZO QUEBRADA EL ARRAYAN N°1 AC.  LIBR sin objeciones
+    cuenca 105941  EL TOME                                sin objeciones
+    cuenca 106949  PUNITAQUI                              sin objeciones
+    cuenca 101027  CAIMANES                               sin objeciones
+    cuenca 105465  COMBARBALA                             sin objeciones
+    cuenca 101030  CAIMANES                               sin objeciones
+    cuenca 107016  EL TOME                                sin objeciones
+    cuenca 101171  HUINTIL                                sin objeciones
+    cuenca 105125  EL TOME                                sin objeciones
+    cuenca 102674  SALAMANCA                              sin objeciones
+    cuenca 100548  LOS CONDORES                           sin objeciones
+    cuenca 100229  COIRON                                 sin objeciones
+    cuenca 102722  PUNITAQUI                              sin objeciones
+    cuenca 104389  EL TOME                                sin objeciones
+    cuenca 107191  PUNITAQUI                              sin objeciones
+    cuenca 100253  COMBARBALA                             sin objeciones
+    cuenca 105257  EL TOME                                sin objeciones
+    cuenca 104604  LLANOS DE CHINGAY                      sin objeciones
+    cuenca 100848  CAIMANES                               sin objeciones
+    cuenca 102111  HUINTIL                                sin objeciones
+    cuenca 101811  SALAMANCA                              sin objeciones
+    cuenca 101986  RIO HURTADO ENTRADA EMB. RECOLETA      sin objeciones
+    cuenca 107157  PUNITAQUI                              sin objeciones
+    cuenca 106378  PUNITAQUI                              sin objeciones
+    cuenca 102135  SALAMANCA                              sin objeciones
+    cuenca  805  QUILIMARI                              episodio de un solo paso de 30 min
+    cuenca 103899  POZO QUEBRADA EL ARRAYAN N°1 AC.  LIBR sin objeciones
+    cuenca 100966  RIO CHOAPA EN SALAMANCA                sin objeciones
+    cuenca 100262  RIO COGOTI EN FRAGUITA                 sin objeciones
+    cuenca 104188  PUNITAQUI                              sin objeciones
+    cuenca 104593  EL TOME                                sin objeciones
+    cuenca 108061  COIRON                                 sin objeciones
+    cuenca 104951  LLANOS DE CHINGAY                      sin objeciones
+    cuenca 106814  LAS BURRAS                             estacion marcada como ambigua
+    cuenca 104768  COMBARBALA                             sin objeciones
+    cuenca 101228  CAIMANES                               sin objeciones
+    cuenca 100202  TULAHUEN                               sin objeciones
+    cuenca 102882  RIO HURTADO ENTRADA EMB. RECOLETA      sin objeciones
+    cuenca 103601  EL TOME                                sin objeciones
+    cuenca 102902  EL TOME                                sin objeciones
+    cuenca 100924  CAIMANES                               sin objeciones
+    cuenca 101670  RIO CHOAPA EN SALAMANCA                sin objeciones
+    cuenca 105967  CAIMANES                               sin objeciones
+    cuenca 107281  EL TOME                                sin objeciones
+    cuenca 103923  EL TOME                                sin objeciones
+    cuenca 101777  SALAMANCA                              sin objeciones
+    cuenca 101305  SALAMANCA                              sin objeciones
+    cuenca 101938  RIO CHOAPA EN SALAMANCA                sin objeciones
+    cuenca 100799  HUINTIL                                sin objeciones
+    cuenca 102289  EL TOME                                sin objeciones
+    cuenca 101473  SALAMANCA                              sin objeciones
+    cuenca 101648  SALAMANCA                              sin objeciones
+    cuenca 101432  PUNITAQUI                              sin objeciones
+    cuenca 100488  LOS CONDORES                           sin objeciones
+    cuenca 101454  RIO CHOAPA EN SALAMANCA                sin objeciones
+    cuenca 105283  COMBARBALA                             sin objeciones
+    cuenca 106279  COIRON                                 sin objeciones
+    cuenca 102377  SALAMANCA                              sin objeciones
+    cuenca 101461  POZO QUEBRADA EL ARRAYAN N°1 AC.  LIBR sin objeciones
+    cuenca 103362  EL TOME                                sin objeciones
+    cuenca 101812  HUINTIL                                sin objeciones
+    cuenca 105904  PUNITAQUI                              sin objeciones
+    cuenca 100133  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 106028  LLANOS DE CHINGAY                      sin objeciones
+    cuenca 107320  COIRON                                 sin objeciones
+    cuenca 100158  SALAMANCA                              sin objeciones
+    cuenca 102448  RIO HURTADO ENTRADA EMB. RECOLETA      sin objeciones
+    cuenca 106339  LOS CONDORES                           sin objeciones
+    cuenca 100191  RIO COGOTI EN FRAGUITA                 sin objeciones
+    cuenca 101542  HUINTIL                                sin objeciones
+    cuenca 102509  LOS CONDORES                           sin objeciones
+    cuenca 104988  LLANOS DE CHINGAY                      sin objeciones
+    cuenca 106463  LLANOS DE CHINGAY                      sin objeciones
+    cuenca 102741  LLANOS DE CHINGAY                      sin objeciones
+    cuenca 106720  COMBARBALA                             sin objeciones
+    cuenca 104626  COMBARBALA                             sin objeciones
+    cuenca 100987  EL TOME                                sin objeciones
+    cuenca 100104  TULAHUEN                               sin objeciones
+    cuenca 100023  RIO CHOAPA EN CUNCUMEN                 sin objeciones
+    cuenca 104628  EL TOME                                sin objeciones
+    cuenca 101270  PUNITAQUI                              sin objeciones
+    cuenca 101997  LLANOS DE CHINGAY                      sin objeciones
+    cuenca 101426  RIO HURTADO ENTRADA EMB. RECOLETA      sin objeciones
+    cuenca 102337  LLANOS DE CHINGAY                      sin objeciones
+    cuenca 102065  EL TOME                                sin objeciones
+    cuenca 100004  RIO HURTADO EN SAN AGUSTIN             sin objeciones
+    cuenca 105337  RIO COGOTI EN FRAGUITA                 sin objeciones
+
+  Positivos sin objeciones: 577 de 668
+
+  capa    -> gatillo.gpkg
+  figura  -> m4_umbral_id.png
+  tabla   -> m4_episodios.csv
+
+========================================================================
+VERIFICACIONES DERIVADAS
+========================================================================
+
+LAS CIFRAS ANTIGUAS SE REPRODUCEN EXACTO
+
+  Lo nuevo es aditivo. Nada de lo que habia se movio:
+
+  concepto                        solo costeras   con confluencias
+  cuencas costeras                          444         444 (igual)
+  costeras clase flujo_detritos              21          21 (igual)
+  costeras clase crecida_detritos           146         146 (igual)
+  costeras clase inundacion                 277         277 (igual)
+  puntos de corte de cuencas costeras       422         422 (igual)
+
+  Las 3.313 subcuencas y los 3.247 puntos de corte nuevos son territorio que
+  el modelo no tenia, no una reinterpretacion del que ya tenia.
+
+COBERTURA POR COMUNA (puntos de corte de M3)
+
+  comuna          antes   ahora
+  Monte Patria        0     748
+  Vicuna              0     667
+  Salamanca           1     434
+  Illapel             0     295
+  La Serena          79     241
+  La Higuera         94     206
+  Rio Hurtado         0     202
+  Paihuano            0     160
+  Coquimbo          117     142
+  Combarbala          0     141
+  Canela             42     139
+  Ovalle             49     137
+  Los Vilos          40     116
+  Punitaqui           0      41
+
+  De 7 comunas a 14. Las seis que estaban en cero son los valles interiores.
+
+EL RESULTADO DE M4 SE DIO VUELTA
+
+  concepto                              solo costeras   con confluencias
+  cuencas susceptibles                            167              2.589
+  mediana distancia cuenca-estacion            15,9 km            6,5 km
+  pares cuenca-episodio                           476             11.591
+  cuencas que superan Caine                 2 (objetables)  668 (577 sin objecion)
+  cuencas que superan Ben David-Novak               0                  0
+  razon mediana I medida / I de Caine            0,35               0,19
+
+  La corrida anterior concluia que el resultado de M4 era negativo. Era un
+  artefacto de la unidad de analisis. Las 167 cuencas eran todas costeras y se
+  emparejaban con estaciones costeras, que acumularon 150 a 200 mm en julio.
+  Donde llovio fuerte fue en el interior -Combarbala 285,5 mm- y ahi no habia
+  ninguna cuenca que evaluar.
+
+  Estaciones que sostienen los positivos, por numero de cuencas:
+    RIO CHOAPA EN CUNCUMEN        116
+    RIO HURTADO EN SAN AGUSTIN     62
+    HUINTIL                        40
+    RIO COGOTI EN FRAGUITA         39
+    RIO CHOAPA EN SALAMANCA        38
+    CAIMANES                       38
+    EL TOME                        37
+    COIRON                         34
+    RIO MOSTAZAL EN CUESTECITA     26
+    TULAHUEN                       26
+  Todas interiores.
+
+POR QUE EL VUELCO NO ES UN ARTEFACTO DE LA CORRECCION
+
+  a) 666 de las 668 positivas son subcuencas nuevas; las 2 costeras son las
+     mismas de la corrida anterior.
+  b) No es un corrimiento general: los 668 son el 6% de los 11.591 pares, y la
+     razon mediana BAJO de 0,35 a 0,19 al sumar las cuencas interiores.
+  c) No es nieve: el 60% de las positivas tiene altitud media bajo 1.500 m y
+     solo el 17% queda sobre la isoterma 0 de julio (2.643 m).
+  d) No es el artefacto de media hora: la duracion mediana de los episodios
+     positivos es 115 h. Queda un solo episodio de un paso, el de QUILIMARI.
+  e) Ben David-Novak sigue en cero, coherente con lluvia frontal y no
+     convectiva.
+
+UN CONTROL DE M3 QUE HUBO QUE RECALIBRAR
+
+  m3_exposicion.py avisaba cuando pasaba de 2.000 puntos de corte. El tope
+  estaba calibrado para 167 cuencas susceptibles y con 2.589 sono sin que
+  hubiera nada malo: los cortes POR CUENCA habian bajado de 2,5 a 1,4, que es
+  lo esperable porque una quebrada interior cruza menos caminos. Se cambio por
+  un control de cortes por cuenca, con tope en 8.
+
+PENDIENTES DECLARADOS
+
+  - 452 de las 2.589 cuencas susceptibles estan sobre la isoterma 0 de julio.
+    Ahi la precipitacion cae como nieve y un flujo gatillado por lluvia es
+    implausible. R5 ya descarta episodios por isoterma del lado de la estacion;
+    falta hacerlo del lado de la cuenca. Es M5.
+
+  - El umbral de largo de Wilford (2,7 km) ahora decide la clase de 455
+    unidades, contra 12 antes. Paso de ser un detalle a ser el primer parametro
+    que M5 deberia recalibrar.
+
+  - La razon de Melton maxima subio de 1,01 a 2,71, en cabeceras andinas de
+    medio km2 con 1.700 m de desnivel. La distribucion es sana -mediana 0,65,
+    p95 1,54, solo 20 unidades sobre 2,0- pero esos valores extremos quedan
+    fuera del rango donde se suelen reportar Melton.
+
+  - outputs/m4_control_cordura.csv sigue sin escribirse. El inventario ya
+    existe en docs/inventario_activaciones_2026-07.csv; falta geolocalizar cada
+    quebrada por nombre para cruzarla con las cuencas. Es M5.
