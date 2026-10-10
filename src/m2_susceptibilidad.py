@@ -71,6 +71,7 @@ import matplotlib.patches as mpatches  # noqa: E402
 import matplotlib.pyplot as plt  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from clases_cuenca import CLASES  # noqa: E402
 from cobertura import COBERTURA_MINIMA, verificar_cobertura  # noqa: E402
 
 RAIZ = Path(__file__).resolve().parent.parent
@@ -84,8 +85,6 @@ LARGO_MAX_FLUJO_KM = 2.7   # cuencas mas largas disipan la energia en el camino
 
 # Melton se calibro en cuencas chicas. Sobre esta area el indice pierde sentido.
 AREA_VALIDA_KM2 = 10.0
-
-CLASES = ["inundacion", "crecida_detritos", "flujo_detritos"]
 
 
 def estadisticas_por_cuenca(cuencas: gpd.GeoDataFrame, ruta_dem: Path):

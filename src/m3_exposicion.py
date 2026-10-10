@@ -90,6 +90,7 @@ import osmnx as ox  # noqa: E402
 from osmnx._errors import InsufficientResponseError  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from clases_cuenca import CLASES_SUSCEPTIBLES  # noqa: E402
 from cobertura import COBERTURA_MINIMA, verificar_cobertura  # noqa: E402
 
 RAIZ = Path(__file__).resolve().parent.parent
@@ -106,10 +107,6 @@ VECINDAD = [
     ((-1, 0), 4), ((-1, 1), 8), ((0, 1), 16), ((1, 1), 32),
     ((1, 0), 64), ((1, -1), 128), ((0, -1), 1), ((-1, -1), 2),
 ]
-
-# Clases de M2 que se analizan. La clase "inundacion" queda fuera: por
-# definicion no moviliza detritos, y lo que interesa aca es el material solido.
-CLASES_OBJETIVO = ("flujo_detritos", "crecida_detritos")
 
 # --- Vias que se bajan de OSM -----------------------------------------------
 # Se define el filtro a mano en vez de usar network_type="drive" porque ese
@@ -931,7 +928,7 @@ def main():
     )
 
     cuencas = gpd.read_file(ruta_susc)
-    objetivo = cuencas[cuencas["clase"].isin(CLASES_OBJETIVO)].copy()
+    objetivo = cuencas[cuencas["clase"].isin(CLASES_SUSCEPTIBLES)].copy()
     print(f"Cuencas susceptibles: {len(objetivo)} de {len(cuencas)}")
     print("  " + " · ".join(f"{k}: {v}" for k, v in
                             objetivo["clase"].value_counts().items()))

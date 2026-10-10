@@ -123,6 +123,7 @@ import pandas as pd
 import requests
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from clases_cuenca import CLASES_SUSCEPTIBLES  # noqa: E402
 from m4_umbrales import UMBRALES, caine_intensidad_critica, evaluar  # noqa: E402
 
 RAIZ = Path(__file__).resolve().parent.parent
@@ -188,24 +189,6 @@ ANTECEDENTES_H = (24, 72, 168)
 
 # Cruce con las cuencas.
 DISTANCIA_MAXIMA_KM = 30.0
-
-# A que cuencas se les aplica el umbral.
-#
-# No a las 444 de la region, sino a las que M2 clasifico como capaces de
-# generar algo mas que agua limpia: flujo de detritos o crecida de detritos.
-# Preguntarle a una cuenca de clase inundacion si supera un umbral de flujos de
-# detritos no tiene sentido, y meteria 277 filas de ruido que bajarian cualquier
-# porcentaje que uno quiera leer en la tabla.
-#
-# Son las dos mitades de una misma pregunta: M2 dice cuales pueden, M4 dice
-# cuando. Si M2 ya dijo que no puede, M4 no tiene nada que decir.
-#
-# OJO: m3_exposicion.py define la misma tupla con el nombre CLASES_OBJETIVO.
-# Tienen que coincidir -M3 y M4 hablan del mismo conjunto de cuencas- y hoy no
-# hay nada que lo garantice. No se importa de alla porque m3_exposicion arrastra
-# osmnx y matplotlib, que M4 no necesita. Es el mismo problema que motivo sacar
-# `verificar_cobertura` a cobertura.py, a menor escala y todavia sin resolver.
-CLASES_SUSCEPTIBLES = ("flujo_detritos", "crecida_detritos")
 
 # Estaciones ambiguas: pares vecinos que se contradicen.
 #
