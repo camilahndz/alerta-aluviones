@@ -714,6 +714,103 @@ documenta. Queda como el primer pendiente de M4: son dos números en
 | `outputs/m4_control_cordura.csv` | *pendiente*: las quebradas documentadas contra los umbrales. El inventario ya existe en `docs/`; falta geolocalizarlo. Es M5 |
 ---
 
+## Cómo se corre M5
+
+```bash
+python src/m5_validacion.py
+python src/m5_validacion.py --solo-fuertes   # solo aluvión y activación
+```
+
+Cruza las activaciones documentadas del temporal de julio contra lo que el modelo
+predijo. El inventario está en
+[`docs/inventario_activaciones_2026-07.csv`](docs/inventario_activaciones_2026-07.csv),
+con 18 entradas de prensa y comunicados de SENAPRED y Carabineros, cada una con su
+URL.
+
+Las entradas traen nombres, no coordenadas, así que se ubican en el extracto de
+OpenStreetMap que M3 ya usa. Catorce calzan directo entre los cauces con nombre,
+donde las quebradas aparecen como "Quebrada X"; las otras cuatro necesitan un
+alias, y los cuatro están escritos en el código con su motivo.
+
+### Lo que M5 puede medir y lo que no
+
+Una matriz de confusión necesita saber, para cada cuenca, si se activó o no. Este
+inventario es de prensa: registra activaciones **que alguien reportó**. Una
+quebrada que bajó con fuerza en un cerro sin camino figura igual que una que no se
+movió. Hay positivos observados y **no hay negativos observados**.
+
+Entonces se puede estimar el recall —de las activaciones documentadas, cuántas
+marcó el modelo— y nada más. La precisión no es estimable: el modelo marca 668
+cuencas y el inventario tiene 18 entradas, así que las 650 que no figuran no son
+falsos positivos, son lugares donde nadie fue a mirar. Reportar una precisión
+contra ese inventario sería inventar 2.571 verdaderos negativos.
+
+Por eso este hito no entrega AUC ni F1. Un número que no se puede defender es peor
+que no tenerlo.
+
+### Resultado de M5
+
+| | Todas las entradas | Solo evidencia fuerte |
+|---|---|---|
+| Entradas | 18 | 9 |
+| Sin cobertura del modelo | 3 | 3 |
+| Evaluadas y no predichas | 11 | 5 |
+| Predichas | 4 | 1 |
+| **Recall sobre las evaluadas** | **27%** | **17%** |
+
+Las tres sin cobertura —Cruz de Caña, Tambillos y Cajón del Romero— no son errores
+de predicción. Caen en cuencas costeras de entre 195 y 538 km², y
+`m1_subcuencas.py` solo delinea una subcuenca cuando el cauce receptor drena al
+menos 200 km². El modelo nunca evaluó ese lugar.
+
+Bajando `--valle-min-km2` a 25 aparecen unidades ahí. **No se hizo**, y el motivo
+es de método: bajar un parámetro hasta que cubra los casos de su propia validación
+es ajustar contra el conjunto de prueba. Queda como lo primero que debería revisar
+una iteración siguiente, con datos distintos de los que lo detectaron.
+
+### Las fallas son el hallazgo
+
+Un recall de 17% suena a fracaso y no lo es, porque lo interesante no es cuántas
+falló sino **por cuánto**. Las tres quebradas con más unidades cerca:
+
+| Quebrada | Comuna | Lluvia | Duración | I media | Razón vs Caine | |
+|---|---|---|---|---|---|---|
+| El Rincón | Los Vilos | 238,6 mm | 52,5 h | 4,54 mm/h | **1,44** | acierto |
+| Marquesa | Vicuña | 198,7 mm | 112,0 h | 3,27 mm/h | **0,75** | falla |
+| Tres Cruces | Paihuano | 159,4 mm | 111,5 h | 2,34 mm/h | **0,67** | falla |
+
+El Choapa recibió casi la misma agua que el Elqui **en la mitad del tiempo**. No
+es que el modelo midiera mal el valle del Elqui: el Elqui no alcanzó la intensidad
+que Caine pide, y las quebradas se activaron igual.
+
+De las 11 entradas evaluadas y no predichas, **10 caen entre 0,55 y 0,80 de lo que
+Caine exige**, con mediana 0,75. Y el recall salta donde están:
+
+| Caine × k | Recall |
+|---|---|
+| 1,0 | 4/15 (27%) |
+| 0,9 | 4/15 (27%) |
+| 0,8 | 4/15 (27%) |
+| **0,7** | **12/15 (80%)** |
+| 0,6 | 13/15 (87%) |
+| 0,5 | 14/15 (93%) |
+
+O sea que el umbral global de Caine queda del orden de **un 30% alto** para la
+Región de Coquimbo. Es la medición que M4 venía pidiendo desde su resultado
+negativo, ahora con un número.
+
+**Ese escalamiento no se adopta.** Elegir el k que maximiza el recall sobre este
+mismo inventario es ajustar el modelo contra su propia validación, y el número que
+saliera después no mediría nada. Además las entradas no son independientes: varias
+comparten la estación más cercana y por eso repiten exactamente la misma razón
+—0,747 aparece cuatro veces—, así que los 15 casos valen bastante menos de 15
+observaciones.
+
+Para calibrar en serio hace falta un inventario con episodios **sin** activación
+documentada. Eso es lo que no existe hoy y es el primer pendiente del proyecto.
+
+---
+
 ## Hoja de ruta
 
 - [x] **M0 — Andamiaje**: repo, estructura, README, primer commit.
@@ -721,7 +818,7 @@ documenta. Queda como el primer pendiente de M4: son dos números en
 - [x] **M2 — Susceptibilidad**: mapa de quebradas rankeadas por peligro (razón de Melton).
 - [x] **M3 — Exposición**: cruce con red vial y zonas urbanas → 3.669 puntos de corte en 14 comunas.
 - [x] **M4 — Gatillo de lluvia**: 448 episodios de 30 min; 668 de 2.589 cuencas superan Caine.
-- [ ] **M5 — Validación**: comparación contra los tres episodios de 2026 y métricas.
+- [x] **M5 — Validación**: 18 activaciones documentadas; recall 27%, y las fallas caen a 0,75 de Caine.
 - [ ] **M6 — Entrega**: mapa o visor final y documentación.
 
 M0 a M3 forman la versión mínima mostrable (v0). M4 y M5 son calibración y

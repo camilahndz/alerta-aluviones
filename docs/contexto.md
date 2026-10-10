@@ -62,8 +62,8 @@ observados.
 | **M2** | Susceptibilidad: variables de terreno + quebradas rankeadas (razón de Melton) | Cerrado y reproducible en local — 2.589 susceptibles (corrida 2026-10-10) |
 | **M3** | Exposición: cruce de trayectorias con red vial (OSM) y zonas urbanas | Cerrado y reproducible en local — 3.669 puntos de corte en 14 comunas (corrida 2026-10-10, extracto OSM del 08-10) |
 | **M4** | Gatillo: lluvia sub-diaria de VIPNET + umbrales publicados aplicados | Cerrado y reproducible en local (corrida 2026-10-10). 668 de 2.589 cuencas superan Caine, todas en valles interiores |
-| **M5** | Validación: matriz de confusión vs. lo ocurrido; precisión, recall, AUC ROC | No iniciado |
-| **M6** | Entrega: mapa/visor final + documentación | No iniciado |
+| **M5** | Validación contra las activaciones documentadas de julio 2026 | Cerrado (corrida 2026-10-10). Recall 27%; las fallas caen a 0,75 de Caine. **No hay matriz de confusión ni AUC**: el inventario de prensa no tiene negativos observados |
+| **M6** | Entrega: visor y documentación | No iniciado |
 
 M4 cambió de contenido respecto de lo que este documento proyectaba. Decía
 "umbral I-D **calibrado**" y lo que se pudo hacer fue aplicar umbrales
@@ -72,6 +72,14 @@ calibrar una curva, y ajustarla sobre tres puntos habría sido dibujar, no
 medir. Calibrar es M5.
 
 M0–M3 = v0 mostrable. M4–M5 = v1 (calibración y validación).
+
+M5 también cambió de contenido respecto de lo proyectado. Decía "matriz de
+confusión, precisión, recall y AUC ROC" y solo el recall resultó estimable: un
+inventario armado con prensa registra lo que alguien reportó, así que tiene
+positivos observados y no negativos. Calcular precisión contra él equivaldría a
+suponer que las 650 cuencas marcadas que no salieron en el diario no se
+activaron, y eso no se sabe. La métrica que falta no es un pendiente de código
+sino de datos.
 
 ---
 
