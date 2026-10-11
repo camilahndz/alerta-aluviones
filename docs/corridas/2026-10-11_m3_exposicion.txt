@@ -1,0 +1,111 @@
+M3 - Exposicion vial con la clase inundacion y el area en el orden
+11 de octubre de 2026, local, .venv con Python 3.12
+
+Comando:
+  python src/m3_exposicion.py
+
+Extracto de OSM: el mismo de la corrida del 10-10 (chile-261008-free.gpkg.zip).
+
+Por que se corrio de nuevo: m5_cortes.py mostro que la lista anterior no le
+ganaba al azar dentro de cada ruta, y que los cortes sin candidato caian en
+cuencas de clase inundacion. Dos cambios, explicados en la cabecera de
+m3_exposicion.py y de clases_cuenca.py:
+  - el universo suma la clase inundacion, sin los cauces que OSM llama "Rio";
+  - la prioridad pasa de (clase + via) / 2 a (clase + via + area drenada) / 3.
+
+Los 4.846 puntos de la corrida anterior siguen identicos: 2822 + 847 + 1177 de
+crecida, flujo y tronco, igual que antes. Los 4.578 nuevos son de inundacion.
+
+========================================================================
+Cobertura del DEM sobre la region: 100.0%
+Cuencas que pueden cortar una via (CLASES_EXPOSICION): 3850 de 3850
+  crecida_detritos: 1630 · inundacion: 1168 · flujo_detritos: 959 · tronco: 93
+
+Trazando cauces principales...
+  el cauce se corta bajo 0.15 km2 drenados (166 celdas)
+  3850 trayectorias trazadas de 3850 cuencas
+  largo del cauce: mediana 1.97 km, maximo 234.86 km
+Leyendo OSM del extracto local: chile.gpkg
+  vias: 55,543 en el recuadro -> 49,028 de los tipos que interesan
+  zonas urbanas: 1,261 de uso de suelo + 0 de localidad = 1,261 poligonos
+  red vial: 49,028 tramos | zonas urbanas: 1,261 poligonos
+
+Excluyendo rios de la clase inundacion...
+  1168 trayectorias de inundacion, 766 con nombre en OSM, 261 son rios:
+  Río Chalinga, Río Choapa, Río Cogotí, Río Combarbalá, Río Elqui, Río Grande, Río Grande (Limarí), Río Guatulame, Río Hurtado, Río Illapel, Río Limarí, Río Mostazal, Río Ponio, Río Quilimarí, Río Rapel
+
+Verificando que las capas se solapen...
+  trayectorias: X    239590-411970    Y   6435555-6783825  
+  red vial    : X    240596-429094    Y   6419038-6795641  
+  ok, ambas en EPSG:32719
+
+Bajando limites comunales...
+
+Cruzando trayectorias con la red vial...
+  9989 pares via-trayectoria se tocan
+  9424 puntos de corte tras fusionar duplicados
+
+Revisando entrada a zonas urbanas...
+  254 trayectorias entran en zona urbana
+  79 localidades con nombre alcanzadas
+
+==================================================================
+Puntos de corte: 9424
+
+Por jerarquia de via:
+  track             2039   (peso 0.10)
+  unclassified      1937   (peso 0.30)
+  residential       1615   (peso 0.30)
+  tertiary          1194   (peso 0.45)
+  service            858   (peso 0.15)
+  secondary          478   (peso 0.60)
+  motorway           419   (peso 1.00)
+  primary            380   (peso 0.85)
+  living_street      349   (peso 0.20)
+  trunk               60   (peso 1.00)
+  motorway_link       42   (peso 0.15)
+  primary_link        25   (peso 0.15)
+  trunk_link          12   (peso 0.15)
+  secondary_link       9   (peso 0.15)
+  tertiary_link        7   (peso 0.15)
+
+Por clase de cuenca:
+  inundacion        4578   area en el cruce: mediana 2.4 km2, maxima 3861
+  crecida_detritos  2822   area en el cruce: mediana 1.5 km2, maxima 49
+  tronco            1177   area en el cruce: mediana 70.6 km2, maxima 1368
+  flujo_detritos     847   area en el cruce: mediana 0.5 km2, maxima 3
+
+Las 12 vias mas afectadas:
+                                                 cortes  prioridad_max
+via_nombre                            via_tipo                        
+Ruta 45                               trunk           4         0.8500
+Ruta D-71                             primary        64         0.8000
+Concepción Godoy                      primary         2         0.8000
+Ruta 43                               motorway       60         0.7913
+Ruta 5 Norte                          motorway      359         0.7825
+Camino Internacional Gabriela Mistral primary        78         0.7780
+Ruta D-55                             primary        54         0.7477
+Ruta D-605                            primary        42         0.7399
+Ruta D-377-E                          primary        14         0.7299
+Ruta D-201                            secondary      16         0.7167
+Ruta D-751                            secondary      15         0.7167
+Camino Internacional Gabriela Mistral secondary     125         0.7141
+
+Los 12 cortes de mayor prioridad:
+ rank  prioridad       via_nombre via_tipo comuna  clase  area_cruce_km2
+    1       0.85          Ruta 45    trunk Ovalle tronco         1258.37
+    2       0.80        Ruta D-71  primary Canela tronco         1045.50
+    3       0.80 Concepción Godoy  primary Canela tronco         1018.72
+    4       0.80        Ruta D-71  primary Canela tronco         1018.72
+    5       0.79          Ruta 43 motorway Ovalle tronco          211.98
+    6       0.79          Ruta 43 motorway Ovalle tronco          211.97
+    7       0.79          Ruta 43 motorway Ovalle tronco          203.54
+    8       0.79          Ruta 43 motorway Ovalle tronco          201.00
+    9       0.79          Ruta 43 motorway Ovalle tronco          194.14
+   10       0.79          Ruta 43 motorway Ovalle tronco          194.02
+   11       0.79          Ruta 43 motorway Ovalle tronco          194.02
+   12       0.79          Ruta 43 motorway Ovalle tronco          191.06
+
+  capa   -> puntos_corte.gpkg, trayectorias.gpkg
+  tabla  -> m3_puntos_corte.csv
+  figura -> m3_exposicion.png

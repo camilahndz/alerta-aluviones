@@ -52,6 +52,23 @@ pregunta conservadora: es una pregunta mal planteada, y ademas meteria 277 filas
 de ruido que bajarian cualquier porcentaje que uno quiera leer en las tablas. Si
 M2 ya dijo que la cuenca no puede, M3 y M4 no tienen nada que decir sobre ella.
 
+EXCEPTO PARA LA EXPOSICION, DESDE OCTUBRE DE 2026
+-------------------------------------------------
+
+El argumento de arriba vale para M4: un umbral de flujos de detritos no tiene
+nada que decir sobre una cuenca que no los produce. Para M3 resulto mal
+planteado, y lo mostro la prueba contra los cortes reales (m5_cortes.py). De 11
+cortes de ruta con la via nombrada en 2024-2026, cuatro caen en cuencas de clase
+inundacion y M3 no tenia ningun candidato ahi. La prensa describe agua, no
+barro: "aumento de caudal" en la D-427, una crecida que "sobrepaso la calzada"
+de la misma ruta un anio antes, un socavon en la D-697. O sea que M2 acerto el
+proceso, y M3 se equivocaba de pregunta: la que importa para una via no es "que
+flujo de detritos la corta" sino "que agua la corta".
+
+Por eso M3 usa CLASES_EXPOSICION, que suma la inundacion con un peso menor, y
+M4 sigue usando CLASES_SUSCEPTIBLES. La regla se tomo de la validacion, asi que
+las cifras de m5_cortes con la clase nueva no son validacion independiente.
+
 Las cuencas marcadas `borde_truncado` por M2 tampoco estan aca, y es por otro
 motivo: no son una clase de susceptibilidad sino cuencas cuya area quedo cortada
 por el borde del DEM, o sea un dato que no se puede evaluar. Quedan fuera por no
@@ -76,15 +93,21 @@ CLASES = ("inundacion", "crecida_detritos", "flujo_detritos", "tronco")
 # con que filtrarlos, no porque se sepa que son susceptibles.
 CLASES_SUSCEPTIBLES = ("flujo_detritos", "crecida_detritos", "tronco")
 
+# El universo de M3: todo lo que puede cortar una via con agua o con barro. Ver
+# "EXCEPTO PARA LA EXPOSICION" en la cabecera. M3 excluye ademas los rios, con la
+# misma regla que m1_troncos.py: su peligro es el desborde, otro fenomeno.
+CLASES_EXPOSICION = CLASES_SUSCEPTIBLES + ("inundacion",)
+
 # Que el subconjunto este contenido en el total no es decorativo: es lo que hace
 # que esta unificacion sirva de algo. Un error de tipeo en cualquiera de las dos
 # tuplas, o una clase que M2 renombre sin avisar, deja a M3 y M4 filtrando por un
 # valor que no existe en la columna `clase` y devolviendo cero cuencas sin que
 # nada falle. Mejor reventar al importar, antes de calcular, que entregar una
 # tabla vacia que se lee como "ninguna cuenca cumple".
-_sobrantes = set(CLASES_SUSCEPTIBLES) - set(CLASES)
+_sobrantes = (set(CLASES_SUSCEPTIBLES) | set(CLASES_EXPOSICION)) - set(CLASES)
 if _sobrantes:
     raise AssertionError(
-        f"CLASES_SUSCEPTIBLES nombra clases que no estan en CLASES: {_sobrantes}. "
-        "Las dos tuplas tienen que describir la misma clasificacion de M2."
+        f"CLASES_SUSCEPTIBLES o CLASES_EXPOSICION nombran clases que no estan en "
+        f"CLASES: {_sobrantes}. Las tuplas tienen que describir la misma "
+        "clasificacion de M2."
     )

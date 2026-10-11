@@ -52,6 +52,31 @@ Es tolerancia de posicion, no distancia de propagacion. Si alguien lo lee como
 lo segundo, esta leyendo mal el modelo.
 
 ---------------------------------------------------------------------------
+LO QUE CAMBIO EN OCTUBRE DE 2026, Y POR QUE
+---------------------------------------------------------------------------
+
+m5_cortes.py probo esta lista contra los 11 cortes de ruta con la via nombrada
+de 2024-2026. Con la version anterior habia candidato en 7, pero poniendo la
+misma ventana al azar sobre las mismas rutas se esperaban 5,3: la lista sabia
+que rutas cruzan quebradas, no en que punto. Y los cuatro cortes sin candidato
+caian en cuencas de clase inundacion, que M3 no miraba.
+
+De ahi dos cambios, los dos motivados por esa prueba:
+
+* **El universo suma la clase inundacion** (clases_cuenca.CLASES_EXPOSICION),
+  sin los rios: un cauce cuyo nombre en OSM empieza con "Rio" se excluye con la
+  misma regla de m1_troncos.py, porque su peligro es el desborde, otro
+  fenomeno. Ver la cabecera de clases_cuenca.py.
+
+* **La prioridad suma el area drenada en el cruce.** Con dos terminos -clase y
+  via- todos los candidatos de una misma ruta empataban o casi, y la lista no
+  podia decir cual vigilar primero. El area drenada en el punto del cruce es la
+  medida fisica de cuanta agua llega ahi: el caudal de una crecida crece con
+  ella. Entra en logaritmo, de 0 en el cauce mas chico que M1 traza (0,15 km2)
+  a 1 en 1.000 km2, el tamanio de los troncos mas grandes. La formula se fijo
+  antes de evaluarla, para no ajustarla mirando los cortes.
+
+---------------------------------------------------------------------------
 LOS CINCO PASOS
 ---------------------------------------------------------------------------
 
@@ -90,7 +115,7 @@ import osmnx as ox  # noqa: E402
 from osmnx._errors import InsufficientResponseError  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from clases_cuenca import CLASES_SUSCEPTIBLES  # noqa: E402
+from clases_cuenca import CLASES_EXPOSICION  # noqa: E402
 from cobertura import COBERTURA_MINIMA, verificar_cobertura  # noqa: E402
 
 RAIZ = Path(__file__).resolve().parent.parent
@@ -146,16 +171,29 @@ PESO_VIA_DEFECTO = 0.15
 # lo esperable es eso, una crecida cargada de sedimento -el aluvion del Islon
 # bajo por un tronco de 1.073 km2-, y no hay indice calibrado a esa escala que
 # permita afirmar mas. Es el mismo juicio, aplicado a la clase nueva.
+#
+# La inundacion (desde octubre de 2026) sigue la misma escala hacia abajo: agua
+# sin carga solida importante, que corta la via mientras pasa y la socava, pero
+# no la arrasa. Pesa la mitad que una crecida de detritos.
 PESO_CLASE = {
     "flujo_detritos": 1.00,
     "crecida_detritos": 0.55,
     "tronco": 0.55,
+    "inundacion": 0.30,
 }
 
-# Cuanto pesa cada mitad en la prioridad final. 50/50 porque no hay evidencia
+# --- Area drenada en el cruce -------------------------------------------------
+# Ver "LO QUE CAMBIO EN OCTUBRE DE 2026" en la cabecera. El piso es el umbral
+# con que M1 traza la red; el tope, el tamanio de los troncos mas grandes.
+AREA_PISO_KM2 = 0.15
+AREA_TOPE_KM2 = 1000.0
+
+# Cuanto pesa cada termino en la prioridad final. Tercios porque no hay evidencia
 # para inclinarlo: es explicitamente el parametro mas discutible del script.
-PONDERADOR_CLASE = 0.5
-PONDERADOR_VIA = 0.5
+# Hasta octubre de 2026 eran dos mitades, clase y via.
+PONDERADOR_CLASE = 1 / 3
+PONDERADOR_VIA = 1 / 3
+PONDERADOR_AREA = 1 / 3
 
 # --- Extracto local de OpenStreetMap -----------------------------------------
 # Fuente preferida para la red vial y las zonas urbanas: el extracto de Chile
@@ -637,6 +675,47 @@ def trazar_trayectorias(cuencas: gpd.GeoDataFrame, ruta_fdir: Path,
     return gdf
 
 
+def sin_rios(trayectorias: gpd.GeoDataFrame, ruta_extracto: Path, bbox):
+    """Saca las trayectorias de clase inundacion que son rios.
+
+    Ver "LO QUE CAMBIO EN OCTUBRE DE 2026" en la cabecera. Solo se mira la
+    clase nueva: las cuencas de los rios grandes caen todas en inundacion por
+    su Melton bajo, y aplicar la regla a las clases de antes cambiaria sin
+    motivo una lista que ya fue evaluada.
+
+    El nombre se lee en OSM con la funcion de m1_troncos.py, la misma que
+    decidio que troncos eran rios. Necesita el extracto: sin el, la corrida se
+    detiene en vez de seguir con los rios adentro.
+    """
+    from m1_troncos import es_rio, nombre_osm
+
+    inundacion = trayectorias["clase"] == "inundacion"
+    if not inundacion.any():
+        return trayectorias
+    if not ruta_extracto.exists():
+        sys.exit(f"Falta {ruta_extracto}: la exclusion de los rios lee los nombres de "
+                 "los cauces del extracto de OSM. Bajalo antes de correr M3.")
+
+    cauces = gpd.read_file(ruta_extracto, layer="gis_osm_waterways_free", bbox=bbox,
+                           columns=["name"], engine="pyogrio").to_crs(CRS_METRICO)
+    cauces = cauces[cauces["name"].notna()].reset_index(drop=True)
+
+    nombres = {}
+    for i, linea in trayectorias.loc[inundacion, "geometry"].items():
+        # Un prefiltro con el indice espacial: nombre_osm compara contra todos
+        # los cauces que le pasen, y son decenas de miles.
+        cerca = cauces.iloc[cauces.sindex.query(linea.buffer(200))]
+        nombres[i] = nombre_osm(linea, cerca)
+    nombres = pd.Series(nombres, dtype=object)
+    rios = nombres[nombres.map(es_rio)]
+
+    print(f"\nExcluyendo rios de la clase inundacion...")
+    print(f"  {int(inundacion.sum())} trayectorias de inundacion, {nombres.notna().sum()} "
+          f"con nombre en OSM, {len(rios)} son rios:")
+    print("  " + ", ".join(sorted(set(rios))))
+    return trayectorias.drop(index=rios.index).reset_index(drop=True)
+
+
 # ===========================================================================
 # Verificacion previa al cruce
 # ===========================================================================
@@ -734,6 +813,28 @@ def puntos_de_corte(trayectorias, vias, comunas, tolerancia_m: float):
     return puntos
 
 
+def area_en_cruce(puntos: gpd.GeoDataFrame, trayectorias: gpd.GeoDataFrame,
+                  ruta_acc: Path) -> np.ndarray:
+    """Area drenada en cada punto de corte, en km2, leida en el pixel del cauce.
+
+    El punto de corte es el centro del trozo de via dentro del corredor, y
+    puede quedar a un pixel del cauce. Leer el raster ahi daria el area de una
+    ladera, o la de un rio que pasa al lado: en el valle del Elqui, un pixel de
+    distancia separa una quebrada de 2 km2 de un rio de 6.000. Por eso se lee
+    en el vertice del cauce mas cercano, porque los vertices de la trayectoria
+    son centros de pixel del propio cauce.
+    """
+    lineas = trayectorias.set_index("id_cuenca").geometry
+    xy = []
+    for cid, p in zip(puntos["id_cuenca"], puntos.geometry):
+        v = np.asarray(lineas.loc[cid].coords)
+        xy.append(tuple(v[np.argmin(np.hypot(v[:, 0] - p.x, v[:, 1] - p.y))]))
+    with rasterio.open(ruta_acc) as src:
+        celdas = np.array([valor[0] for valor in src.sample(xy)], dtype=float)
+        m2_pixel = abs(src.transform.a * src.transform.e)
+    return celdas * m2_pixel / 1e6
+
+
 def _fusionar_cercanos(puntos: gpd.GeoDataFrame, radio_m: float):
     """Colapsa puntos de la misma cuenca y misma via que caen casi encima."""
     puntos = puntos.copy()
@@ -756,11 +857,12 @@ def priorizar(puntos: gpd.GeoDataFrame):
     cuenca de clase media que corta la Ruta 5 pesa mas que una de clase alta que
     corta una huella, porque la troncal aisla a mucha mas gente.
 
-    prioridad = 0,5 x peligro_de_la_cuenca + 0,5 x importancia_de_la_via
+    prioridad = (peligro_de_la_cuenca + importancia_de_la_via + area_drenada) / 3
 
-    Los dos terminos van de 0 a 1, asi que la prioridad tambien. Ninguno de los
+    Los tres terminos van de 0 a 1, asi que la prioridad tambien. Ninguno de los
     pesos esta calibrado: son juicios explicitos, puestos arriba como constantes
-    para poder discutirlos y moverlos.
+    para poder discutirlos y moverlos. El area entro en octubre de 2026; ver la
+    cabecera.
     """
     puntos = puntos.copy()
     # Una clase sin peso detiene el script. La version anterior le ponia cero
@@ -771,9 +873,13 @@ def priorizar(puntos: gpd.GeoDataFrame):
         sys.exit(f"Clases sin peso en PESO_CLASE: {sin_peso}. Agregalas antes de priorizar.")
     puntos["peso_clase"] = puntos["clase"].map(PESO_CLASE)
     puntos["peso_via"] = puntos["via_tipo"].map(PESO_VIA).fillna(PESO_VIA_DEFECTO)
+    puntos["peso_area"] = np.clip(
+        np.log10(puntos["area_cruce_km2"].clip(lower=AREA_PISO_KM2) / AREA_PISO_KM2)
+        / np.log10(AREA_TOPE_KM2 / AREA_PISO_KM2), 0.0, 1.0).round(4)
     puntos["prioridad"] = (
         PONDERADOR_CLASE * puntos["peso_clase"]
         + PONDERADOR_VIA * puntos["peso_via"]
+        + PONDERADOR_AREA * puntos["peso_area"]
     ).round(4)
 
     puntos = puntos.sort_values(
@@ -898,7 +1004,7 @@ def figura(cuencas, trayectorias, vias, puntos, ruta_png: Path):
 
 def main():
     ap = argparse.ArgumentParser(
-        description="M3 - Cruza las quebradas susceptibles con la red vial y urbana."
+        description="M3 - Cruza los cauces que pueden cortar una via con la red vial y urbana."
     )
     ap.add_argument("--procesados", type=Path, default=RAIZ / "data" / "processed")
     ap.add_argument("--cache-osm", type=Path, default=RAIZ / "data" / "raw" / "osm")
@@ -940,8 +1046,8 @@ def main():
     )
 
     cuencas = gpd.read_file(ruta_susc)
-    objetivo = cuencas[cuencas["clase"].isin(CLASES_SUSCEPTIBLES)].copy()
-    print(f"Cuencas susceptibles: {len(objetivo)} de {len(cuencas)}")
+    objetivo = cuencas[cuencas["clase"].isin(CLASES_EXPOSICION)].copy()
+    print(f"Cuencas que pueden cortar una via (CLASES_EXPOSICION): {len(objetivo)} de {len(cuencas)}")
     print("  " + " · ".join(f"{k}: {v}" for k, v in
                             objetivo["clase"].value_counts().items()))
 
@@ -977,6 +1083,8 @@ def main():
         vias, urbano = descargar_osm(bbox, args.cache_osm, args.paso_tile, zona_util_geo)
     print(f"  red vial: {len(vias):,} tramos | zonas urbanas: {len(urbano):,} poligonos")
 
+    trayectorias = sin_rios(trayectorias, args.extracto_osm, bbox)
+
     verificar_solape(trayectorias, vias)
 
     print("\nBajando limites comunales...")
@@ -984,6 +1092,7 @@ def main():
     comunas = comunas.rename(columns={"shapeName": "comuna"})
 
     puntos = puntos_de_corte(trayectorias, vias, comunas, args.tolerancia_m)
+    puntos["area_cruce_km2"] = area_en_cruce(puntos, trayectorias, ruta_acc).round(3)
     puntos = priorizar(puntos)
 
     # Tanto un resultado vacio como uno desmedido son sintoma de error, no
@@ -1022,8 +1131,8 @@ def main():
                          layer="trayectorias", driver="GPKG")
 
     columnas_csv = ["rank", "prioridad", "via_nombre", "via_tipo", "comuna",
-                    "clase", "melton", "area_cuenca_km2", "id_cuenca",
-                    "lat", "lon", "utm_x", "utm_y"]
+                    "clase", "melton", "area_cuenca_km2", "area_cruce_km2",
+                    "id_cuenca", "lat", "lon", "utm_x", "utm_y"]
     puntos[columnas_csv].to_csv(dir_outputs / "m3_puntos_corte.csv",
                                 index=False, encoding="utf-8-sig")
     if not urbanas.empty:
@@ -1040,6 +1149,13 @@ def main():
     for tipo, n in puntos["via_tipo"].value_counts().items():
         print(f"  {tipo:<16} {n:>5}   (peso {PESO_VIA.get(tipo, PESO_VIA_DEFECTO):.2f})")
 
+    print("\nPor clase de cuenca:")
+    for clase, n in puntos["clase"].value_counts().items():
+        sel = puntos[puntos["clase"] == clase]
+        print(f"  {clase:<16} {n:>5}   area en el cruce: mediana "
+              f"{sel['area_cruce_km2'].median():.1f} km2, maxima "
+              f"{sel['area_cruce_km2'].max():.0f}")
+
     print("\nLas 12 vias mas afectadas:")
     top = (puntos.groupby(["via_nombre", "via_tipo"])
            .agg(cortes=("rank", "size"), prioridad_max=("prioridad", "max"))
@@ -1047,7 +1163,8 @@ def main():
     print(top.to_string())
 
     print("\nLos 12 cortes de mayor prioridad:")
-    cols = ["rank", "prioridad", "via_nombre", "via_tipo", "comuna", "clase", "melton"]
+    cols = ["rank", "prioridad", "via_nombre", "via_tipo", "comuna", "clase",
+            "area_cruce_km2"]
     print(puntos[cols].head(12).to_string(index=False,
                                           float_format=lambda v: f"{v:.2f}"))
 

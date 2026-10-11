@@ -458,6 +458,11 @@ def main():
     print("=" * 74)
 
     cauces = gpd.read_file(args.procesados / "trayectorias.gpkg").to_crs(CRS_METRICO)
+    # Desde octubre de 2026 M3 traza tambien la clase inundacion, que este
+    # detector no se diseno para mirar.
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from clases_cuenca import CLASES_SUSCEPTIBLES
+    cauces = cauces[cauces["clase"].isin(CLASES_SUSCEPTIBLES)].reset_index(drop=True)
     print(f"\nCauces principales de cuencas susceptibles (M3): {len(cauces)}")
 
     bbox = cauces.to_crs(4326).total_bounds
