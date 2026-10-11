@@ -1276,6 +1276,132 @@ Tres cosas que conviene decir con la misma claridad que las cifras:
 
 ---
 
+## M6: la alerta en vivo
+
+```bash
+python src/m6_alerta_en_vivo.py                                # ahora, contra VIPNET
+python src/m6_alerta_en_vivo.py --momento "2026-07-18 12:00"   # como si fuera ese momento
+python src/m6_alerta_en_vivo.py --repasar                      # el final de cada temporal, contra M5
+python src/m6_alerta_en_vivo.py --cronologia "2026-07-15 12:00" "2026-07-18 00:00" 3
+```
+
+Corrida: [`2026-10-11_m6_alerta_en_vivo.txt`](docs/corridas/2026-10-11_m6_alerta_en_vivo.txt).
+
+Es la primera parte de M6, y la que convierte el modelo en algo que se usa. Baja
+de VIPNET la lluvia, la temperatura y la nieve de la región y arma el temporal en
+curso. Con eso emite un boletín por provincia, que escribe en
+`outputs/alerta_en_vivo.json` (lo que leerá el visor) y en
+`outputs/boletines/boletin_AAAA-MM-DD_HHMM.md`. El boletín trae:
+
+* el nivel, la probabilidad y la lluvia del temporal en la estación más mojada;
+* **cuántos milímetros faltan para el nivel siguiente** y en qué estación;
+* el aviso de deshielo;
+* los tramos de ruta a vigilar en las provincias con alerta: el primer cruce de
+  cada quebrada con cada vía, de la lista de M3;
+* las estaciones que están transmitiendo. Con menos de 3 en una provincia, el
+  boletín dice "datos insuficientes" en vez de "sin alerta".
+
+**Usa exactamente las mismas reglas que la calibración.** Las funciones de M4 y
+M5 se reutilizan sin reescribir, y el modelo está congelado en el código, con la
+fecha de su calibración. Así, el invierno de 2027 se va a evaluar contra una regla
+que no se movió. La comprobación: corrida al final de cada temporal regional de
+tres inviernos, **da el mismo nivel que M5 en 41 de 41 provincias-temporal.**
+
+**Cuándo habría avisado**, hora a hora, en el temporal de julio de 2026:
+
+| Hora | Elqui | Limarí | Choapa |
+|---|---|---|---|
+| 16-07, 21:00 | amarilla | amarilla | — |
+| 17-07, 00:00 | naranja | naranja | amarilla |
+| 17-07, 03:00 | naranja | **roja** | naranja |
+| 17-07, 06:00 | naranja | roja | **roja** |
+| 17-07, 09:00 | **roja** | roja | roja |
+
+Las primeras activaciones reportadas son del 17 de julio, con fecha y sin hora,
+así que la anticipación exacta no se puede medir. El aluvión de Santa Gracia, en
+Elqui, fue el 20: la provincia llevaba casi tres días en roja. En el bloque de
+deshielo de agosto, Limarí estaba en naranja desde la medianoche del 13 y en
+roja desde la del 15, el día de las activaciones. Elqui llegó a naranja el 15 al
+mediodía, y Choapa solo a amarilla, el 16. El aviso de deshielo estuvo activo
+todo el bloque.
+
+**Probada en vivo el 11 de octubre de 2026.** La primera corrida contra la API
+encontró un temporal real en curso desde el 5 de octubre: la DMC había emitido
+la alerta AA174/2026 por lluvias para el 6 y el 7. El boletín de las 14:30 dio
+Choapa en naranja (94 mm en Río Cuncumén, 30% de su normal) y Limarí en amarilla,
+con el aviso de deshielo activo: había 148 cm de nieve en altura y la isoterma
+estaba a 3.545 m. Que llueva en Los Vilos y en Quilimarí, al nivel del mar,
+descarta que sea nieve derretida dentro de los pluviómetros altos.
+
+**Cómo dejarla corriendo sola.** En Windows, una tarea programada cada hora. La
+primera corrida baja 40 días de 230 series (unos 7 MB); las siguientes bajan
+solo lo que falta, con 24 horas de solape porque VIPNET a veces completa datos
+tarde. El almacén queda en `data/raw/vivo/`.
+
+**Lo que todavía no hace:** mirar hacia adelante. Avisa con la lluvia que ya
+cayó: en julio, la alerta subió durante la noche del 16, horas antes del día de
+las primeras activaciones reportadas. Para avisar con uno a tres días hay que
+sumar el pronóstico, que es el paso siguiente.
+
+### El visor: Vigía de quebradas
+
+```bash
+python src/m6_visor.py      # prepara visor/datos/: relieve, capas y repasos (~25 min)
+```
+
+El visor es la parte del proyecto pensada para alguien que no va a leer este
+README. Es un mapa en relieve de la región, mirado desde el mar hacia la
+cordillera, con cada provincia pintada del color de su nivel. Se pueden repasar
+temporales reales hora a hora, y las activaciones que reportó la prensa aparecen
+en el mapa el día en que ocurrieron. El panel explica cada momento en palabras
+simples: qué nivel tiene cada provincia, cuánta lluvia lleva y cuánta falta para
+el nivel siguiente, qué tramos de ruta vigilar y qué quebradas se activaron. Un
+botón explica cómo funciona, qué tan confiable es y qué no hace.
+
+Trae cinco escenarios. Los cuatro repasos se eligieron para contar tanto lo que
+el modelo hace como lo que no:
+
+* **Hoy**: el boletín en vivo del momento en que se generaron los datos.
+* **Julio de 2026**: el peor temporal en cuarenta años.
+* **Agosto de 2026**: el bloque de deshielo.
+* **Fines de julio de 2025**: otro acierto, en otro invierno.
+* **Junio de 2025**: donde falló, con una falsa alarma el 11 y una falla el 16.
+
+Cada hora del repaso es lo que la alerta en vivo (`m6_alerta_en_vivo.evaluar`)
+habría dicho a esa hora, no lo que se supo después.
+
+**Por qué el mapa base sale del DEM del proyecto.** El visor se publica como una
+página que no puede pedir nada a servidores ajenos, ni siquiera teselas de
+OpenStreetMap. El relieve se arma entonces con Copernicus GLO-30, que además es
+el terreno sobre el que se calcularon las cuencas, en tres imágenes de la misma
+grilla:
+
+* la altura en terrain-RGB;
+* un sombreado con tonos de tierra;
+* el número de provincia de cada píxel, para teñirla del color de su nivel.
+
+La malla 3D se arma en el navegador, con el relieve exagerado tres veces en
+altura. Está hecho con deck.gl, sin servidor, y en un teléfono usa la mitad de
+resolución.
+
+**Una verificación que vale la pena contar.** La primera versión mostraba Los
+Vilos sobre el mar: la textura estaba invertida de norte a sur, y con las tres
+provincias en rojo no se notaba. Se vio al mirar un paso con niveles distintos
+por provincia.
+
+Para verlo en local:
+
+```bash
+python -m http.server 8765 --directory visor
+```
+
+Se abre en `http://localhost:8765/_local.html`, una envoltura que genera
+`m6_visor.py`: `index.html` no trae `<!doctype>` porque el servicio donde se
+publica la agrega. Para publicarlo se sube `index.html` con `app.js` y
+`datos/`.
+
+---
+
 ## Hoja de ruta
 
 - [x] **M0 — Andamiaje**: repo, estructura, README, primer commit.
@@ -1288,10 +1414,12 @@ Tres cosas que conviene decir con la misma claridad que las cifras:
 - [x] **M3/M5 — La prueba de una autoridad**: 11 cortes de ruta reales contra la lista de exposición, y la alerta por provincia y temporal. Con la clase inundación y el área drenada, el 3% de arriba de la lista cubre 4 cortes contra 1,0 al azar. Caine dice bien *cuándo* (precisión 0,80 por temporal) y mal *dónde* (en Elqui no se activa nunca).
 - [x] **Indicador de deshielo (experimental)**: nieve de VIPNET e isoterma 0 desde las estaciones altas. Ve el bloque de agosto de 2026 y no se activa nunca en 2024 ni 2025; con un solo evento, no está validado.
 - [x] **Niveles de alerta por provincia**: lluvia del temporal como fracción de la normal de CR2MET; amarilla 21%, naranja 27%, roja 35%. Probados en 2026 sin un error de orden; en validación cruzada, AUC 0,95 contra 0,88 de Caine.
+- [x] **M6 — Alerta en vivo**: boletín por provincia con datos de VIPNET, mismas reglas que la calibración (41 de 41 niveles iguales al repasar tres inviernos). Probada contra el temporal real del 6 de octubre de 2026.
+- [ ] **Pronóstico**: la lluvia esperada para los próximos 1 a 3 días, para que la alerta sea anticipada y no solo en curso.
 - [ ] **Atacama como prueba independiente**: los niveles de Coquimbo aplicados a otra región, con su propio inventario de prensa. VIPNET tiene 68 estaciones allí y el temporal de julio de 2026 activó quebradas en Huasco y Copiapó.
 - [ ] **Lluvia antecedente**: la segunda variable de los niveles, cuando haya positivos para ajustarla.
 - [ ] **Lluvia con resolución espacial**: radar o satélite corregido contra estaciones. Es hoy el límite del modelo.
-- [ ] **M6 — Entrega**: mapa o visor final y documentación.
+- [x] **M6 — Visor**: Vigía de quebradas, un mapa en relieve con las provincias del color de su nivel, repaso de cuatro temporales reales hora a hora, fichas y una explicación para cualquier persona.
 
 M0 a M3 forman la versión mínima mostrable (v0). M4 y M5 son calibración y
 validación (v1).
