@@ -64,11 +64,17 @@ from __future__ import annotations
 # susceptibilidad.gpkg, en orden de menos a mas energetica. El orden es parte de
 # la constante: M2 recorre la lista al reves para imprimir el resumen de la mas
 # critica a la menos.
-CLASES = ("inundacion", "crecida_detritos", "flujo_detritos")
+#
+# `tronco` va al final y fuera de esa escala. Desde octubre de 2026 M1 agrega
+# las quebradas de mas de 50 km2 (m1_troncos.py), y a esa escala la razon de
+# Melton no esta calibrada: M2 no las clasifica por energia, las marca como
+# tronco. Ver la cabecera de m1_troncos.py.
+CLASES = ("inundacion", "crecida_detritos", "flujo_detritos", "tronco")
 
 # El subconjunto que M3 y M4 analizan: las cuencas capaces de mover algo mas que
-# agua limpia. Hoy son 167 de las 444.
-CLASES_SUSCEPTIBLES = ("flujo_detritos", "crecida_detritos")
+# agua limpia, mas los troncos. Los troncos entran todos porque no hay indice
+# con que filtrarlos, no porque se sepa que son susceptibles.
+CLASES_SUSCEPTIBLES = ("flujo_detritos", "crecida_detritos", "tronco")
 
 # Que el subconjunto este contenido en el total no es decorativo: es lo que hace
 # que esta unificacion sirva de algo. Un error de tipeo en cualquiera de las dos
