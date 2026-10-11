@@ -1228,34 +1228,47 @@ Corridas: [`2026-10-11_m4_climatologia.txt`](docs/corridas/2026-10-11_m4_climato
 y [`2026-10-11_m5_niveles.txt`](docs/corridas/2026-10-11_m5_niveles.txt).
 
 Una autoridad no emite "supera Caine": emite amarilla, naranja o roja por
-provincia. El modelo nuevo usa una sola variable: **la lluvia del temporal en la
-estación más mojada de la provincia, como fracción de lo que llueve ahí en un año
-normal.** La normal es la de CR2MET 1991-2020: 91 mm en La Serena, 211 en
-Illapel. No se bajan los 2,5 GB del producto, solo los 360 meses de la normal,
-leídos por rangos dentro del zip. La probabilidad sale de una logística sobre esa
-variable. Los niveles se fijaron antes de ajustar: 0,25, 0,50 y 0,75 de
-probabilidad.
+provincia. El modelo nuevo usa una sola variable: **la lluvia del temporal como
+fracción de lo que llueve en un año normal, medida en la segunda estación más
+mojada de la provincia.**
 
-| Prueba | Lluvia / normal | Lluvia en mm | Caine publicado |
-|---|---|---|---|
-| Entrenado en 2024-2025, probado en 2026 (AUC) | **1,00** | 0,95 | 0,68 |
-| Un temporal fuera a la vez, tres inviernos (AUC) | **0,95** | 0,94 | 0,88 |
-| Ídem, solo temporales regionales | 0,87 | 0,87 | 0,78 |
-| Ídem, solo Elqui | 0,94 | 0,92 | 0,91 |
+* **La normal** es la de CR2MET 1991-2020: 91 mm en La Serena, 211 en Illapel.
+  No se bajan los 2,5 GB del producto, solo los 360 meses de la normal, leídos
+  por rangos dentro del zip.
+* **La segunda estación, y no la más mojada**, porque así hacen falta dos
+  pluviómetros que lo digan. La primera versión usaba la más mojada, y la
+  auditoría encontró que el boletín en vivo ponía a Choapa en naranja por una
+  sola estación que M4 ya tenía marcada como ambigua.
+* **La probabilidad** sale de una logística sobre esa variable. Los niveles se
+  fijaron antes de ajustar: 0,25, 0,50 y 0,75 de probabilidad.
+
+| Prueba | Segunda estación | Estación más mojada | Lluvia en mm | Caine publicado |
+|---|---|---|---|---|
+| Entrenado en 2024-2025, probado en 2026 (AUC) | 0,97 | 1,00 | 0,95 | 0,68 |
+| Un temporal fuera a la vez, tres inviernos (AUC) | **0,96** | 0,95 | 0,95 | 0,88 |
+| Ídem, solo temporales regionales | 0,89 | 0,87 | 0,86 | 0,78 |
 
 En 2026, sin haberlo visto, las 9 provincias-temporal que quedaron sin nivel no
-tuvieron activaciones, y las 4 en naranja o roja tuvieron todas.
+tuvieron activaciones, y las 5 en naranja o roja tuvieron todas.
 
 **Los niveles para operar**, ajustados con los tres inviernos, se leen así: en
-alguna estación de la provincia, el temporal deja
+al menos dos estaciones de la provincia, el temporal deja
 
 | Nivel | Lluvia del temporal | Probabilidad de activaciones en la provincia |
 |---|---|---|
-| Amarilla | 21% de la normal anual | 1 de cada 4 |
-| Naranja | 27% | 1 de cada 2 |
-| Roja | 35% | 3 de cada 4 |
+| Amarilla | 16% de la normal anual | 1 de cada 4 |
+| Naranja | 23% | 1 de cada 2 |
+| Roja | 32% | 3 de cada 4 |
 
-Tres cosas que conviene decir con la misma claridad que las cifras:
+**Lo que estas cifras no dicen.** Las 12 provincias-temporal positivas salen de
+solo **5 temporales**, y las provincias de un mismo temporal no son
+independientes. Remuestreando temporales enteros, el corte de roja tiene un
+intervalo del 90% que va de 23 a 49%. Al modelo que deja fuera 2025 le quedan
+casi solo los temporales enormes de 2026, y sale casi en escalón (19, 20 y 22%).
+Son cortes para operar con cuidado y revisar con más datos, no cortes estimados
+con precisión. Conseguir esos datos es el paso siguiente: ver la hoja de ruta.
+
+Tres cosas más:
 
 * **Normalizar por el clima aporta poco dentro de Coquimbo.** Con milímetros
   absolutos, la validación cruzada da casi lo mismo. La mejora viene de contar la
@@ -1264,15 +1277,15 @@ Tres cosas que conviene decir con la misma claridad que las cifras:
   Se usa la fracción igual por el argumento físico, y porque es la única forma
   de llevar los niveles a un clima más seco. **Atacama es la prueba**, con normales
   de 19 mm en Copiapó.
-* **El bloque de deshielo de agosto de 2026 queda en naranja o roja sin el
-  indicador de deshielo.** Medido como temporal entero, llovió entre el 30 y el
-  42% de la normal. Los 4,6 mm de mediana que lo hacían parecer seco eran por
-  cuenca y por episodio.
-* **Lo que falla es un par de temporales.** El 11 de junio de 2025 llovió entre
-  el 26 y el 33% de la normal y no hubo reportes (falsa alarma). El 16 de junio
-  llovió entre el 21 y el 23% y sí hubo activaciones (falla). Es la firma de la
-  lluvia antecedente: el segundo cayó sobre el suelo que mojó el primero. Con 12
-  positivos no se puede agregar una segunda variable sin sobreajustar.
+* **El bloque de deshielo de agosto de 2026 queda en alerta en las tres
+  provincias sin el indicador de deshielo.** Medida como temporal entero, la
+  lluvia fue mucho más de lo que hacían parecer los 4,6 mm de mediana por cuenca
+  y por episodio.
+* **Lo que falla es un par de temporales.** El 11 de junio de 2025 llovió sobre
+  el corte y no hubo reportes (falsa alarma). El 16 de junio llovió menos y sí
+  hubo activaciones (falla). Es la firma de la lluvia antecedente: el segundo
+  cayó sobre el suelo que mojó el primero. Con 12 positivos de 5 temporales no
+  se puede agregar una segunda variable sin sobreajustar.
 
 ---
 
@@ -1305,33 +1318,47 @@ curso. Con eso emite un boletín por provincia, que escribe en
 M5 se reutilizan sin reescribir, y el modelo está congelado en el código, con la
 fecha de su calibración. Así, el invierno de 2027 se va a evaluar contra una regla
 que no se movió. La comprobación: corrida al final de cada temporal regional de
-tres inviernos, **da el mismo nivel que M5 en 41 de 41 provincias-temporal.**
+tres inviernos, **da el mismo nivel que M5 en 41 de 41 provincias-temporal**, con
+la regla de la estación más mojada y otra vez con la de la segunda.
 
-**Cuándo habría avisado**, hora a hora, en el temporal de julio de 2026:
+**Cuándo habría avisado**, en el temporal de julio de 2026. El repaso usa el
+modelo ajustado sin 2026 (cortes de 17, 25 y 38%), así que muestra lo que el
+sistema habría dicho de verdad. Es la primera hora, en pasos de 3, en que cada
+provincia llegó a cada nivel:
 
-| Hora | Elqui | Limarí | Choapa |
+| Provincia | Amarilla | Naranja | Roja |
 |---|---|---|---|
-| 16-07, 21:00 | amarilla | amarilla | — |
-| 17-07, 00:00 | naranja | naranja | amarilla |
-| 17-07, 03:00 | naranja | **roja** | naranja |
-| 17-07, 06:00 | naranja | roja | **roja** |
-| 17-07, 09:00 | **roja** | roja | roja |
+| Elqui | 16-07, 21:00 | 17-07, 06:00 | 17-07, 18:00 |
+| Limarí | 16-07, 21:00 | 17-07, 03:00 | 17-07, 06:00 |
+| Choapa | 16-07, 21:00 | 17-07, 03:00 | 17-07, 09:00 |
 
 Las primeras activaciones reportadas son del 17 de julio, con fecha y sin hora,
 así que la anticipación exacta no se puede medir. El aluvión de Santa Gracia, en
-Elqui, fue el 20: la provincia llevaba casi tres días en roja. En el bloque de
-deshielo de agosto, Limarí estaba en naranja desde la medianoche del 13 y en
-roja desde la del 15, el día de las activaciones. Elqui llegó a naranja el 15 al
-mediodía, y Choapa solo a amarilla, el 16. El aviso de deshielo estuvo activo
-todo el bloque.
+Elqui, fue el 20: la provincia llevaba más de dos días en roja.
+
+En el bloque de deshielo de agosto, Elqui y Limarí llegaron a naranja el 15, el
+día de las activaciones, y Choapa recién llegó a amarilla el 17: tarde para el
+corte de Llimpo del 15. En junio de 2025, el temporal del 11 aparece en roja en
+las tres provincias y no tuvo activaciones reportadas. Es la falsa alarma de la
+calibración, y el visor la muestra.
 
 **Probada en vivo el 11 de octubre de 2026.** La primera corrida contra la API
 encontró un temporal real en curso desde el 5 de octubre: la DMC había emitido
-la alerta AA174/2026 por lluvias para el 6 y el 7. El boletín de las 14:30 dio
-Choapa en naranja (94 mm en Río Cuncumén, 30% de su normal) y Limarí en amarilla,
-con el aviso de deshielo activo: había 148 cm de nieve en altura y la isoterma
-estaba a 3.545 m. Que llueva en Los Vilos y en Quilimarí, al nivel del mar,
-descarta que sea nieve derretida dentro de los pluviómetros altos.
+la alerta AA174/2026 por lluvias para el 6 y el 7. Que llueva en Los Vilos y en
+Quilimarí, al nivel del mar, descarta que sea nieve derretida dentro de los
+pluviómetros altos.
+
+El boletín de las 14:30 dio Choapa en naranja por una sola estación, Río
+Cuncumén antes junta Choapa, con 94 mm. Sus dos vecinas, a uno o dos
+kilómetros, medían 37 y 42 mm, y M4 ya la tenía marcada como ambigua. Desde
+ese día el nivel lo fija la segunda estación más mojada, recalibrada. El
+boletín de las 17:00 da:
+
+* **Choapa en naranja**, ahora con dos estaciones que lo confirman: Río Cuncumén
+  y Quilimarí, en la costa, con 60 mm, el 26% de su normal.
+* **Limarí en amarilla.**
+* **El aviso de deshielo activo:** había 148 cm de nieve en altura y la isoterma
+  estaba a 3.545 m.
 
 **Cómo dejarla corriendo sola.** En Windows, una tarea programada cada hora. La
 primera corrida baja 40 días de 230 series (unos 7 MB); las siguientes bajan
@@ -1361,14 +1388,29 @@ botón explica cómo funciona, qué tan confiable es y qué no hace.
 Trae cinco escenarios. Los cuatro repasos se eligieron para contar tanto lo que
 el modelo hace como lo que no:
 
-* **Hoy**: el boletín en vivo del momento en que se generaron los datos.
+* **El boletín del momento en que se generaron los datos.** El botón lleva la
+  fecha y la hora, porque es una foto y no se actualiza sola. La primera versión
+  lo rotulaba "Hoy", con un punto rojo de "en vivo".
 * **Julio de 2026**: el peor temporal en cuarenta años.
 * **Agosto de 2026**: el bloque de deshielo.
 * **Fines de julio de 2025**: otro acierto, en otro invierno.
 * **Junio de 2025**: donde falló, con una falsa alarma el 11 y una falla el 16.
 
 Cada hora del repaso es lo que la alerta en vivo (`m6_alerta_en_vivo.evaluar`)
-habría dicho a esa hora, no lo que se supo después.
+habría dicho a esa hora, no lo que se supo después. **Y con un modelo que no
+conoció ese invierno**: `m5_niveles.py` guarda tres modelos, cada uno ajustado
+sin un invierno. La primera versión repasaba todo con el modelo final, ajustado
+con esos mismos temporales, y mostraba un acierto que el sistema no habría tenido.
+
+Las activaciones reportadas se dibujan según cuánto se sabe de dónde fueron:
+
+* **Un punto**, si es un corte de ruta o un caserío del mismo nombre. Son 28.
+* **El cauce completo de la quebrada**, si solo se conoce su nombre. Son 19.
+* **Solo en la lista**, si la fuente da apenas la comuna o nada. Son 30.
+
+La primera versión ponía un punto en cualquier parte del cauce, en el centro de
+la comuna o en el primer homónimo de la región, y eso en un mapa es inventar un
+lugar.
 
 **Por qué el mapa base sale del DEM del proyecto.** El visor se publica como una
 página que no puede pedir nada a servidores ajenos, ni siquiera teselas de
@@ -1400,6 +1442,40 @@ Se abre en `http://localhost:8765/_local.html`, una envoltura que genera
 publica la agrega. Para publicarlo se sube `index.html` con `app.js` y
 `datos/`.
 
+### La auditoría del 11 de octubre de 2026
+
+El mismo día en que se publicó el visor se auditaron el código y los supuestos,
+buscando lo que estuviera mal y no lo que estuviera bien.
+
+**Errores encontrados y corregidos ese día:**
+
+| Error | Corrección |
+|---|---|
+| Una sola estación ambigua ponía a Choapa en naranja en el boletín en vivo | El nivel lo fija la segunda estación más mojada, recalibrada |
+| Los repasos de 2026 usaban un modelo ajustado con 2026 | Cada repaso usa el modelo que deja fuera su invierno |
+| El escenario "Hoy" era una foto fija con un punto de "en vivo" | Se rotula con la fecha y hora del boletín |
+| Activaciones dibujadas en lugares inventados (el centro de la comuna, un punto cualquiera del cauce, el primer homónimo) | Punto solo si el lugar se conoce; si no, el cauce entero o solo la lista |
+| La textura del relieve, invertida de norte a sur | Corregida antes de publicar |
+
+**Debilidades que siguen ahí, dichas sin adorno:**
+
+* **Hay pocos datos.** Hay 12 provincias-temporal positivas, de 5 temporales.
+  El corte de roja tiene un intervalo del 90% que va de 23 a 49%, y el "AUC 0,97
+  en 2026" se calculó sobre 17 casos de 4 temporales. Es evidencia de que el
+  método sirve, no una calibración precisa. Conseguir más datos es el paso
+  siguiente.
+* **Las etiquetas salen de inventarios de prensa** armados para este proyecto,
+  sin verificación independiente, y los negativos son supuestos.
+* **No anticipa.** Avisa con la lluvia que ya cayó.
+* **Los tramos a vigilar son siempre los mismos en cada provincia.** No
+  dependen de dónde llovió.
+* **El aviso de deshielo dice, en la práctica, "este año hay mucha nieve".**
+  Estuvo activo desde julio hasta octubre de 2026.
+* **No hay pruebas automáticas** en unas 13 mil líneas de Python.
+* **Ningún comando corre todo:** cada script lee los CSV del anterior, y el
+  orden está en los registros de corrida.
+* **La alerta en vivo no avisa si falla.**
+
 ---
 
 ## Hoja de ruta
@@ -1413,8 +1489,10 @@ publica la agrega. Para publicarlo se sube `index.html` con `app.js` y
 - [x] **M1 — Unidades troncales**: 93 quebradas de más de 50 km² como segunda clase de unidad. El satélite confirma que son el objeto que se activa; la lluvia de pluviómetros no las distingue entre sí.
 - [x] **M3/M5 — La prueba de una autoridad**: 11 cortes de ruta reales contra la lista de exposición, y la alerta por provincia y temporal. Con la clase inundación y el área drenada, el 3% de arriba de la lista cubre 4 cortes contra 1,0 al azar. Caine dice bien *cuándo* (precisión 0,80 por temporal) y mal *dónde* (en Elqui no se activa nunca).
 - [x] **Indicador de deshielo (experimental)**: nieve de VIPNET e isoterma 0 desde las estaciones altas. Ve el bloque de agosto de 2026 y no se activa nunca en 2024 ni 2025; con un solo evento, no está validado.
-- [x] **Niveles de alerta por provincia**: lluvia del temporal como fracción de la normal de CR2MET; amarilla 21%, naranja 27%, roja 35%. Probados en 2026 sin un error de orden; en validación cruzada, AUC 0,95 contra 0,88 de Caine.
+- [x] **Niveles de alerta por provincia**: lluvia del temporal como fracción de la normal de CR2MET, en al menos dos estaciones; amarilla 16%, naranja 23%, roja 32%. En validación cruzada, AUC 0,96 contra 0,88 de Caine. Con 5 temporales positivos, los cortes tienen mucha incertidumbre.
 - [x] **M6 — Alerta en vivo**: boletín por provincia con datos de VIPNET, mismas reglas que la calibración (41 de 41 niveles iguales al repasar tres inviernos). Probada contra el temporal real del 6 de octubre de 2026.
+- [ ] **Más datos (lo más importante)**: DesInventar (Naciones Unidas) tiene 94 temporales con daños en Coquimbo y Atacama entre 1970 y 2014; CR2MET tiene su lluvia diaria; la tesis de Mardones (2019, U. de Chile) trae un catastro de flujos de detritos de SERNAGEOMIN. Calibrar con la historia y probar en 2024-2026.
+- [ ] **Pruebas automáticas y un comando que corra todo.**
 - [ ] **Pronóstico**: la lluvia esperada para los próximos 1 a 3 días, para que la alerta sea anticipada y no solo en curso.
 - [ ] **Atacama como prueba independiente**: los niveles de Coquimbo aplicados a otra región, con su propio inventario de prensa. VIPNET tiene 68 estaciones allí y el temporal de julio de 2026 activó quebradas en Huasco y Copiapó.
 - [ ] **Lluvia antecedente**: la segunda variable de los niveles, cuando haya positivos para ajustarla.

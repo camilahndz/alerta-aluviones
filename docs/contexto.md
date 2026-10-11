@@ -190,6 +190,17 @@ Hidrología: pysheds o richdem (o GRASS GIS si se requiere `r.watershed` /
   quebradas respondan con menos lluvia. La literatura lo resuelve normalizando
   la lluvia por la precipitación media anual de cada lugar.
 
+- **Que un solo sensor decida por todos.** La alerta por provincia usaba la
+  estación más mojada, y el 11 de octubre de 2026 puso a Choapa en naranja por
+  un pluviómetro que medía más del doble que sus dos vecinas a 2 km, y que M4 ya
+  tenía marcado como ambiguo. Un máximo es la estadística más sensible a un
+  dato malo. Ahora el nivel lo fija la segunda estación: hacen falta dos.
+
+- **Mostrar un acierto con el modelo que ya vio el evento.** El visor repasaba
+  julio de 2026 con niveles ajustados incluyendo julio de 2026. Un repaso tiene
+  que usar el modelo que no conoció ese invierno; si no, es una demostración
+  disfrazada de prueba.
+
 - **Suponer que todo lo que se activa lo gatilla la lluvia.** El bloque del 13
   al 17 de agosto de 2026 activó 20 zonas con una lluvia mediana de 4,6 mm, y
   el AUC de Caine sobre ese evento es 0,27: se activaron donde menos llovió. La
