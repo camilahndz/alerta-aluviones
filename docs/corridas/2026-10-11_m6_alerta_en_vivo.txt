@@ -1,0 +1,247 @@
+M6 - Alerta en vivo por provincia
+11 de octubre de 2026, local, .venv con Python 3.12
+
+Comandos, en este orden:
+  python src/m6_alerta_en_vivo.py --repasar
+  python src/m6_alerta_en_vivo.py --cronologia "2026-07-15 12:00" "2026-07-18 00:00" 3
+  python src/m6_alerta_en_vivo.py --cronologia "2026-08-11 12:00" "2026-08-16 12:00" 12
+  python src/m6_alerta_en_vivo.py --momento "2026-07-18 12:00"
+  python src/m6_alerta_en_vivo.py            # ahora, contra la API de VIPNET
+
+Modelo congelado: b0 = 5,568862, b1 = 9,776656, de m5_niveles.py (corrida
+2026-10-11_m5_niveles.txt). El repaso y las cronologias leen el cache de M4 y
+no le piden nada a VIPNET. La ultima corrida es en vivo: bajo 40 dias de 230
+series (6,5 MB en data/raw/vivo/) en 1 min 40 s.
+
+Dos correcciones hechas durante estas corridas, antes de escribir este registro:
+  - La lista de tramos a vigilar repetia el mismo tronco nueve veces sobre la
+    Ruta 43. Ahora deja el primer cruce de cada quebrada con cada via.
+  - El aviso de deshielo se apagaba cada medianoche: a las 00:00 el "dia de
+    hoy" tiene una lectura, la mas fria. Ahora mira el ultimo dia completo.
+    Ademas, las cuatro estaciones de nieve de referencia quedaron fijadas por
+    codigo en m4_deshielo.ESTACIONES_NIEVE: en vivo, con 40 dias, entraban ocho
+    y la mediana dejaba de ser la que fijo el corte de 50 cm.
+Las cifras de abajo son con las dos correcciones.
+
+La corrida en vivo encontro un temporal real en curso: la DMC emitio la alerta
+AA174/2026 por lluvias de hasta 55 mm entre Coquimbo y O'Higgins para el 6 y
+7 de octubre (Radio Agricultura, 06-10-2026,
+https://www.radioagricultura.cl/noticias/nacional/alerta-por-intensas-lluvias-en-cuatro-regiones-hasta-55-mm-podrian-caer-por-sistema-frontal_20261006/).
+Las estaciones costeras de Choapa (Los Vilos 55 mm, Quilimari 61 mm) confirman
+que es lluvia y no nieve derretida en los pluviometros altos.
+
+########################################################################
+# 1. --repasar
+########################################################################
+
+Repaso: el final de cada temporal regional, contra m5_niveles (nivel con el modelo de los tres inviernos)
+  temporal     Elqui                     Limari                    Choapa                    
+  01-08-2024   ! roja     (excluida)     ! roja     (excluida)     ! roja     (excluida)     
+  06-10-2024   = ninguna  (ninguna)      = ninguna  (ninguna)      = ninguna  (ninguna)      
+  11-06-2025   = naranja  (naranja)      = naranja  (naranja)      = amarilla (amarilla)     
+  16-06-2025   = amarilla (amarilla)     = amarilla (amarilla)     = amarilla (amarilla)     
+  22-06-2025   = ninguna  (ninguna)      = ninguna  (ninguna)      = ninguna  (ninguna)      
+  31-07-2025   = roja     (roja)         = roja     (roja)         = roja     (roja)         
+  18-08-2025   = naranja  (naranja)      = ninguna  (ninguna)      = ninguna  (ninguna)      
+  21-08-2025   = ninguna  (ninguna)      = ninguna  (ninguna)      = ninguna  (ninguna)      
+  26-09-2025   = ninguna  (ninguna)      = ninguna  (ninguna)      = ninguna  (ninguna)      
+  06-11-2025   = ninguna  (ninguna)      = ninguna  (ninguna)      = ninguna  (ninguna)      
+  05-12-2025   = ninguna  (ninguna)      = ninguna  (ninguna)      = ninguna  (ninguna)      
+  10-06-2026   = ninguna  (ninguna)      = ninguna  (ninguna)      = ninguna  (ninguna)      
+  15-07-2026   = roja     (roja)         ! roja     (excluida)     = roja     (roja)         
+  30-07-2026   = naranja  (naranja)      = amarilla (amarilla)     = amarilla (amarilla)     
+  11-08-2026   = naranja  (naranja)      = roja     (roja)         = naranja  (naranja)      
+
+  mismo nivel en 41 de 41 provincias-temporal
+
+########################################################################
+# 2. --cronologia, julio de 2026
+########################################################################
+
+15-07-2026 12:00  (sin temporal en curso; 106 estaciones transmitiendo; cache de M4 (repaso))
+  Elqui   -         P 0.00     0% de la normal
+  Limari  -         P 0.00     0% de la normal
+  Choapa  -         P 0.00     0% de la normal
+
+15-07-2026 15:00  (temporal desde 15-07 14:00; 106 estaciones transmitiendo; cache de M4 (repaso))
+  Elqui   -         P 0.00     0% de la normal
+  Limari  -         P 0.00     0% de la normal
+  Choapa  -         P 0.00     6% de la normal
+
+15-07-2026 18:00  (temporal desde 15-07 14:00; 107 estaciones transmitiendo; cache de M4 (repaso))
+  Elqui   -         P 0.00     0% de la normal
+  Limari  -         P 0.00     0% de la normal
+  Choapa  -         P 0.00     6% de la normal
+
+15-07-2026 21:00  (temporal desde 15-07 14:00; 66 estaciones transmitiendo; cache de M4 (repaso))
+  Elqui   -         P 0.00     0% de la normal
+  Limari  -         P 0.00     0% de la normal
+  Choapa  -         P 0.00     6% de la normal
+
+16-07-2026 00:00  (temporal desde 15-07 14:00; 65 estaciones transmitiendo; cache de M4 (repaso))
+  Elqui   -         P 0.00     0% de la normal
+  Limari  -         P 0.00     0% de la normal
+  Choapa  -         P 0.00     6% de la normal
+
+16-07-2026 03:00  (temporal desde 15-07 14:00; 65 estaciones transmitiendo; cache de M4 (repaso))
+  Elqui   -         P 0.00     0% de la normal
+  Limari  -         P 0.00     0% de la normal
+  Choapa  -         P 0.00     6% de la normal
+
+16-07-2026 06:00  (temporal desde 15-07 14:00; 66 estaciones transmitiendo; cache de M4 (repaso))
+  Elqui   -         P 0.00     0% de la normal
+  Limari  -         P 0.00     0% de la normal
+  Choapa  -         P 0.00     6% de la normal
+
+16-07-2026 09:00  (temporal desde 15-07 14:00; 66 estaciones transmitiendo; cache de M4 (repaso))
+  Elqui   -         P 0.00     0% de la normal
+  Limari  -         P 0.00     0% de la normal
+  Choapa  -         P 0.00     6% de la normal
+
+16-07-2026 12:00  (temporal desde 15-07 14:00; 105 estaciones transmitiendo; cache de M4 (repaso))
+  Elqui   -         P 0.00     1% de la normal
+  Limari  -         P 0.00     3% de la normal
+  Choapa  -         P 0.00     6% de la normal
+
+16-07-2026 15:00  (temporal desde 15-07 14:00; 106 estaciones transmitiendo; cache de M4 (repaso))
+  Elqui   -         P 0.00     1% de la normal
+  Limari  -         P 0.00     6% de la normal
+  Choapa  -         P 0.01     9% de la normal
+
+16-07-2026 18:00  (temporal desde 15-07 14:00; 101 estaciones transmitiendo; cache de M4 (repaso))
+  Elqui   -         P 0.01     8% de la normal
+  Limari  -         P 0.02    10% de la normal
+  Choapa  -         P 0.06    14% de la normal
+
+16-07-2026 21:00  (temporal desde 15-07 14:00; 99 estaciones transmitiendo; cache de M4 (repaso))
+  Elqui   AMARILLA  P 0.47    26% de la normal
+  Limari  AMARILLA  P 0.27    21% de la normal
+  Choapa  -         P 0.21    20% de la normal
+
+17-07-2026 00:00  (temporal desde 15-07 14:00; 99 estaciones transmitiendo; cache de M4 (repaso))
+  Elqui   NARANJA   P 0.51    27% de la normal
+  Limari  NARANJA   P 0.73    34% de la normal
+  Choapa  AMARILLA  P 0.43    25% de la normal
+
+17-07-2026 03:00  (temporal desde 15-07 14:00; 98 estaciones transmitiendo; cache de M4 (repaso))
+  Elqui   NARANJA   P 0.68    32% de la normal
+  Limari  ROJA      P 0.78    36% de la normal
+  Choapa  NARANJA   P 0.68    32% de la normal
+
+17-07-2026 06:00  (temporal desde 15-07 14:00; 97 estaciones transmitiendo; cache de M4 (repaso))
+  Elqui   NARANJA   P 0.73    34% de la normal
+  Limari  ROJA      P 0.90    46% de la normal
+  Choapa  ROJA      P 0.85    40% de la normal
+
+17-07-2026 09:00  (temporal desde 15-07 14:00; 96 estaciones transmitiendo; cache de M4 (repaso))
+  Elqui   ROJA      P 0.89    44% de la normal
+  Limari  ROJA      P 0.96    56% de la normal
+  Choapa  ROJA      P 0.92    48% de la normal
+
+17-07-2026 12:00  (temporal desde 15-07 14:00; 97 estaciones transmitiendo; cache de M4 (repaso))
+  Elqui   ROJA      P 0.93    49% de la normal
+  Limari  ROJA      P 0.97    64% de la normal
+  Choapa  ROJA      P 0.95    55% de la normal
+
+17-07-2026 15:00  (temporal desde 15-07 14:00; 97 estaciones transmitiendo; cache de M4 (repaso))
+  Elqui   ROJA      P 0.94    51% de la normal
+  Limari  ROJA      P 0.99    79% de la normal
+  Choapa  ROJA      P 0.97    64% de la normal
+
+17-07-2026 18:00  (temporal desde 15-07 14:00; 96 estaciones transmitiendo; cache de M4 (repaso))
+  Elqui   ROJA      P 0.96    58% de la normal
+  Limari  ROJA      P 0.99    90% de la normal
+  Choapa  ROJA      P 0.98    71% de la normal
+
+17-07-2026 21:00  (temporal desde 15-07 14:00; 94 estaciones transmitiendo; cache de M4 (repaso))
+  Elqui   ROJA      P 0.98    65% de la normal
+  Limari  ROJA      P 1.00   102% de la normal
+  Choapa  ROJA      P 0.99    78% de la normal
+
+18-07-2026 00:00  (temporal desde 15-07 14:00; 94 estaciones transmitiendo; cache de M4 (repaso))
+  Elqui   ROJA      P 0.99    82% de la normal
+  Limari  ROJA      P 1.00   108% de la normal
+  Choapa  ROJA      P 0.99    82% de la normal
+
+########################################################################
+# 3. --cronologia, agosto de 2026
+########################################################################
+
+11-08-2026 12:00  (sin temporal en curso; 95 estaciones transmitiendo; cache de M4 (repaso))
+  Elqui   -         P 0.00     0% de la normal
+  Limari  -         P 0.00     0% de la normal
+  Choapa  -         P 0.00     0% de la normal
+  deshielo (experimental): ACTIVO
+
+12-08-2026 00:00  (temporal desde 11-08 18:00; 95 estaciones transmitiendo; cache de M4 (repaso))
+  Elqui   -         P 0.00     3% de la normal
+  Limari  -         P 0.00     0% de la normal
+  Choapa  -         P 0.00     0% de la normal
+  deshielo (experimental): ACTIVO
+
+12-08-2026 12:00  (temporal desde 11-08 17:30; 94 estaciones transmitiendo; cache de M4 (repaso))
+  Elqui   -         P 0.06    14% de la normal
+  Limari  AMARILLA  P 0.40    24% de la normal
+  Choapa  -         P 0.00     0% de la normal
+  deshielo (experimental): ACTIVO
+
+13-08-2026 00:00  (temporal desde 11-08 17:30; 94 estaciones transmitiendo; cache de M4 (repaso))
+  Elqui   -         P 0.14    18% de la normal
+  Limari  NARANJA   P 0.67    32% de la normal
+  Choapa  -         P 0.00     4% de la normal
+  deshielo (experimental): ACTIVO
+
+13-08-2026 12:00  (temporal desde 11-08 17:30; 95 estaciones transmitiendo; cache de M4 (repaso))
+  Elqui   -         P 0.14    18% de la normal
+  Limari  NARANJA   P 0.67    32% de la normal
+  Choapa  -         P 0.00     4% de la normal
+  deshielo (experimental): ACTIVO
+
+14-08-2026 00:00  (temporal desde 11-08 17:30; 94 estaciones transmitiendo; cache de M4 (repaso))
+  Elqui   -         P 0.19    19% de la normal
+  Limari  NARANJA   P 0.70    33% de la normal
+  Choapa  -         P 0.00     4% de la normal
+  deshielo (experimental): ACTIVO
+
+14-08-2026 12:00  (temporal desde 11-08 17:30; 96 estaciones transmitiendo; cache de M4 (repaso))
+  Elqui   AMARILLA  P 0.31    22% de la normal
+  Limari  NARANJA   P 0.73    34% de la normal
+  Choapa  -         P 0.00     4% de la normal
+  deshielo (experimental): ACTIVO
+
+15-08-2026 00:00  (temporal desde 11-08 17:30; 96 estaciones transmitiendo; cache de M4 (repaso))
+  Elqui   AMARILLA  P 0.32    22% de la normal
+  Limari  ROJA      P 0.78    36% de la normal
+  Choapa  -         P 0.00     4% de la normal
+  deshielo (experimental): ACTIVO
+
+15-08-2026 12:00  (temporal desde 11-08 17:30; 97 estaciones transmitiendo; cache de M4 (repaso))
+  Elqui   NARANJA   P 0.52    27% de la normal
+  Limari  ROJA      P 0.86    41% de la normal
+  Choapa  -         P 0.02    10% de la normal
+  deshielo (experimental): ACTIVO
+
+16-08-2026 00:00  (temporal desde 11-08 17:30; 98 estaciones transmitiendo; cache de M4 (repaso))
+  Elqui   NARANJA   P 0.62    30% de la normal
+  Limari  ROJA      P 0.86    42% de la normal
+  Choapa  AMARILLA  P 0.42    25% de la normal
+  deshielo (experimental): ACTIVO
+
+16-08-2026 12:00  (temporal desde 11-08 17:30; 98 estaciones transmitiendo; cache de M4 (repaso))
+  Elqui   NARANJA   P 0.62    30% de la normal
+  Limari  ROJA      P 0.86    42% de la normal
+  Choapa  AMARILLA  P 0.42    25% de la normal
+  deshielo (experimental): ACTIVO
+
+########################################################################
+# 4. en vivo, 11-10-2026
+########################################################################
+
+11-10-2026 14:30  (temporal desde 05-10 12:00; 107 estaciones transmitiendo; VIPNET en vivo)
+  Elqui   -         P 0.07    15% de la normal
+  Limari  AMARILLA  P 0.33    23% de la normal
+  Choapa  NARANJA   P 0.62    30% de la normal
+  deshielo (experimental): ACTIVO
+
+  json    -> outputs/alerta_en_vivo.json
+  boletin -> outputs/boletines/boletin_2026-10-11_1430.md
