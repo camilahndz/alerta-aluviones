@@ -384,12 +384,65 @@ def ajustar(tabla: pd.DataFrame, estaciones: pd.DataFrame, nombre: str):
     return modelo, rasgos
 
 
+PUNTOS_POR_TRONCO = 25
+
+
+def puntos_de_prediccion(cuencas, ruta_dem_utm) -> pd.DataFrame:
+    """Donde se le pide la lluvia al modelo, para cada cuenca.
+
+    Una unidad chica -mediana de 1 km2- se representa con su centroide y su
+    altitud media: a esa escala la lluvia no cambia adentro.
+
+    Un tronco no. Santa Gracia mide 1.073 km2 y va de la costa a mas de 3.000 m;
+    la lluvia que baja por su cauce es la de toda la cuenca, y un solo punto en
+    el centroide la representaria tan mal como la estacion cercana que se quiso
+    reemplazar. Para los troncos se usa una grilla regular de unos 25 puntos
+    dentro del poligono, cada uno con su altitud leida del DEM, y la lluvia del
+    tronco es el promedio. Es la lluvia areal, que es la que entra a un tronco.
+    """
+    import rasterio
+    from pyproj import Transformer
+    from shapely.geometry import Point
+
+    a_wgs = Transformer.from_crs(CRS_METRICO, "EPSG:4326", always_xy=True)
+    filas = []
+    es_tronco = (cuencas["origen"] == "tronco") if "origen" in cuencas.columns \
+        else pd.Series(False, index=cuencas.index)
+
+    for (_, c), tronco in zip(cuencas.iterrows(), es_tronco):
+        g = c.geometry
+        if not tronco:
+            p = g.centroid
+            filas.append({"id": c["id_cuenca"], "x": p.x, "y": p.y, "altitud_m": c["h_media_m"]})
+            continue
+        paso = np.sqrt(g.area / PUNTOS_POR_TRONCO)
+        x0, y0, x1, y1 = g.bounds
+        xs, ys = np.meshgrid(np.arange(x0 + paso / 2, x1, paso), np.arange(y0 + paso / 2, y1, paso))
+        dentro = [(x, y) for x, y in zip(xs.ravel(), ys.ravel()) if g.contains(Point(x, y))]
+        if not dentro:
+            dentro = [(g.centroid.x, g.centroid.y)]
+        for x, y in dentro:
+            filas.append({"id": c["id_cuenca"], "x": x, "y": y, "altitud_m": np.nan})
+
+    puntos = pd.DataFrame(filas)
+    falta = puntos["altitud_m"].isna()
+    if falta.any():
+        with rasterio.open(ruta_dem_utm) as dem:
+            vals = np.array([v[0] for v in dem.sample(zip(puntos.loc[falta, "x"],
+                                                          puntos.loc[falta, "y"]))], dtype=float)
+            vals[vals == dem.nodata] = np.nan
+        puntos.loc[falta, "altitud_m"] = vals
+    puntos["lon"], puntos["lat"] = a_wgs.transform(puntos["x"].to_numpy(), puntos["y"].to_numpy())
+    return puntos
+
+
 def predecir(modelo, rasgos: pd.DataFrame, puntos: pd.DataFrame,
              eventos) -> pd.DataFrame:
-    """Lluvia predicha en cada punto para cada evento, en mm.
+    """Lluvia predicha para cada id y evento, en mm.
 
-    `puntos` trae un id y las cuatro variables fijas. Sale una fila por punto y
-    evento.
+    `puntos` trae un id y las cuatro variables fijas, y puede traer varias
+    filas por id (los troncos, ver puntos_de_prediccion): la lluvia del id es
+    el promedio de sus puntos.
     """
     salida = []
     for ev in eventos:

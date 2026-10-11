@@ -1006,7 +1006,7 @@ def asignar_estacion(cuencas, catalogo: pd.DataFrame):
                                     "codigo": "estacion_codigo"})
 
 
-def interpolar_pares(pares, asignadas, validas, vale, series, eventos, iso,
+def interpolar_pares(pares, asignadas, cuencas, validas, vale, series, eventos, iso,
                      procesados: Path, dir_out: Path):
     """Valida la interpolacion y, si le gana a la estacion cercana, la aplica.
 
@@ -1015,7 +1015,6 @@ def interpolar_pares(pares, asignadas, validas, vale, series, eventos, iso,
     Si el modelo no se adopta, los pares salen con factor 1, que es exactamente
     la asignacion por vecino mas cercano de siempre.
     """
-    from pyproj import Transformer
 
     print("\n" + "-" * 74)
     print("Interpolacion de la lluvia por evento (dejando una estacion fuera)")
@@ -1106,16 +1105,19 @@ def interpolar_pares(pares, asignadas, validas, vale, series, eventos, iso,
 
     if adoptado:
         modelo, rasgos = interp.ajustar(entreno, estaciones, mejor)
-        a_wgs = Transformer.from_crs(asignadas.crs, "EPSG:4326", always_xy=True)
-        lon, lat = a_wgs.transform(asignadas.geometry.x.to_numpy(),
-                                   asignadas.geometry.y.to_numpy())
-        puntos = pd.DataFrame({"id": asignadas["id_cuenca"].to_numpy(),
-                               "lat": lat, "lon": lon,
-                               "altitud_m": asignadas["h_media_m"].to_numpy()})
-        puntos["dist_costa_km"] = interp.distancia_costa_km(lon, lat, ruta_dem)
+        # Un punto por unidad chica; una grilla de ~25 por tronco, cuya lluvia
+        # es el promedio. Ver interp.puntos_de_prediccion.
+        puntos = interp.puntos_de_prediccion(cuencas, procesados / "dem_utm19s.tif")
+        puntos["dist_costa_km"] = interp.distancia_costa_km(
+            puntos["lon"], puntos["lat"], ruta_dem)
+        n_tr = int(cuencas["origen"].eq("tronco").sum()) if "origen" in cuencas.columns else 0
+        if n_tr:
+            print(f"  lluvia areal: {len(puntos) - (len(cuencas) - n_tr)} puntos "
+                  f"para {n_tr} troncos")
         ev_pares = sorted(set(pares["evento"]) & set(ev_validos))
-        pred = interp.predecir(modelo, rasgos, puntos, ev_pares).rename(
-            columns={"id": "id_cuenca"})
+        pred = (interp.predecir(modelo, rasgos, puntos, ev_pares)
+                .groupby(["id", "evento"], as_index=False)["lluvia_pred_mm"].mean()
+                .rename(columns={"id": "id_cuenca"}))
 
         medido = tabla[["evento", "estacion_codigo", "lluvia_mm"]].rename(
             columns={"lluvia_mm": "lluvia_evento_estacion_mm"})
@@ -1419,8 +1421,8 @@ def main():
     pares["fuera_de_criterio"] = pares["distancia_km"] > DISTANCIA_MAXIMA_KM
 
     # --- Interpolacion: la lluvia de la cuenca y no la de su estacion ---
-    pares = interpolar_pares(pares, asignadas, validas, vale, series, eventos, iso,
-                             args.procesados, dir_out)
+    pares = interpolar_pares(pares, asignadas, cuencas, validas, vale, series, eventos,
+                             iso, args.procesados, dir_out)
 
     # El GPKG guarda las fechas en UTC. Una columna en hora de Chile mezcla dos
     # desfases (-04 y -03) y no todos los lectores de GPKG lo soportan; UTC es
