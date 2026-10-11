@@ -93,10 +93,6 @@ a { color: var(--agua); }
   color: var(--texto-2);
 }
 #escenarios button[aria-pressed="true"] { background: var(--texto); color: var(--fondo); border-color: var(--texto); }
-#escenarios button .vivo {
-  display: inline-block; width: 7px; height: 7px; border-radius: 50%;
-  background: var(--roja); margin-right: 6px; vertical-align: 1px;
-}
 .acciones { display: flex; gap: 8px; flex-wrap: wrap; }
 .boton-texto {
   background: none; border: none; padding: 0;
@@ -344,7 +340,7 @@ a { color: var(--agua); }
       <span><i style="background: var(--elqui)"></i>Elqui</span>
       <span><i style="background: var(--limari)"></i>Limarí</span>
       <span><i style="background: var(--choapa)"></i>Choapa</span>
-      <span><i style="background: var(--texto-3)"></i>cortes 21 %, 27 % y 35 %</span>
+      <span><i style="background: var(--texto-3)"></i><span id="clave-cortes">cortes</span></span>
     </div>
   </section>
 
@@ -370,11 +366,12 @@ a { color: var(--agua); }
         <div><h3>Dónde pueden bajar</h3><p>Con el relieve satelital de 30 metros se dibujaron <b id="n-cuencas">3.850</b> quebradas, y se clasificó cuáles pueden traer barro y bloques, cuáles sedimento y cuáles solo agua.</p></div>
         <div><h3>Dónde cortan rutas</h3><p>Sus cauces se cruzaron con la red vial: <b id="n-cruces">9.424</b> cruces, ordenados por la importancia de la ruta, el tipo de quebrada y cuánta agua llega a cada cruce.</p></div>
         <div><h3>Cuánto llueve</h3><p>Cada 30 minutos, <b id="n-estaciones">107</b> pluviómetros de la red VIPNET del Ministerio de Obras Públicas. Lo que importa es cuánto es esa lluvia para ese lugar: 40 mm en La Serena son casi medio año de lluvia, y en Illapel, una quinta parte.</p></div>
-        <div><h3>El nivel de alerta</h3><p>Cada provincia toma el nivel de su estación más mojada, según qué parte de un año normal de lluvia ya cayó en el temporal.</p></div>
+        <div><h3>El nivel de alerta</h3><p>Según qué parte de un año normal de lluvia ya cayó en el temporal. Cada provincia sube de nivel cuando al menos dos de sus estaciones lo confirman: una sola no basta, porque un pluviómetro puede fallar.</p></div>
       </div>
       <div class="niveles-tabla" id="tabla-niveles"></div>
       <div>
         <h3>Qué tan confiable es</h3>
+        <p>Los repasos de temporales usan un modelo que no conoció ese invierno, para mostrar lo que el sistema habría dicho de verdad. Por eso sus cortes pueden ser distintos de los de esta tabla.</p>
         <p id="confianza">Los cortes salen de tres inviernos de activaciones reales (2024-2026). En 2026, que el modelo no conocía al ajustarse, de las provincias que puso en naranja o roja todas tuvieron quebradas activadas, y de las que dejó sin alerta, ninguna.</p>
       </div>
       <div>

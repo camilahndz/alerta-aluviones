@@ -27,8 +27,16 @@ LOS REPASOS
     Cada temporal se recorre en pasos de 3 horas con m6_alerta_en_vivo.evaluar,
     la misma funcion que emite el boletin en vivo, sobre el cache de M4. Lo que
     el visor muestra en cada hora es lo que la alerta habria dicho a esa hora,
-    no lo que se supo despues. El ultimo escenario es el boletin de ahora,
-    pedido a VIPNET en el momento de correr este script.
+    no lo que se supo despues.
+
+    Y con un modelo que no conocia ese invierno. La primera version repasaba
+    todo con el modelo final, que se ajusto con estos mismos temporales: el
+    repaso de julio de 2026 mostraba un acierto que el sistema no habria tenido
+    en julio de 2026. Ahora cada repaso usa el modelo que m5_niveles.py ajusta
+    dejando fuera su invierno, con sus propios cortes.
+
+    El primer escenario es el boletin del momento en que se corre este script,
+    pedido a VIPNET. Es una foto: el visor no se actualiza solo, y lo dice.
 
     Los cuatro temporales se eligieron para contar lo que el modelo hace y lo
     que no: julio de 2026 (el peor en 40 anios), el bloque de deshielo de
@@ -261,35 +269,58 @@ def activaciones(comunas):
         warnings.simplefilter("ignore")
         osm = m5.cargar_osm()
     vias = mc.leer_vias()
-    centro_comuna = comunas.set_index("clave").geometry.representative_point()
 
-    filas = []
+    # Como se dibuja cada una depende de cuanto se sabe de donde fue:
+    #   punto   un corte de ruta (m5_cortes) o un caserio con el nombre: el
+    #           lugar se conoce con un error de poco mas de un kilometro;
+    #   cauce   se ubico por el nombre de la quebrada en OSM: se dibuja el
+    #           cauce entero, porque un punto en cualquier parte de un cauce de
+    #           60 km dice mas de lo que se sabe;
+    #   lista   solo se sabe la comuna, o ni eso: va a la lista del panel y no
+    #           al mapa. La primera version las ponia en el centro de la comuna,
+    #           o en el primer homonimo de la region si no traian comuna, y
+    #           eso en un mapa es inventar un lugar.
+    import geopandas as gpd
+
+    filas, como_va = [], {"punto": 0, "cauce": 0, "lista": 0}
     for _, e in inv.iterrows():
-        punto, precision = None, None
+        dibujo, punto, lineas, precision = "lista", None, None, None
+        tiene_comuna = bool(m5._texto(e["comuna"]))
         if e["id"] in mc.CORTES:
             ref, capa, clave, _ = mc.CORTES[e["id"]]
             ruta = vias.loc[vias["ref"] == ref].geometry.union_all()
             geo = mc.localizar(capa, clave, e["comuna"], osm, comunas)
-            punto, precision = nearest_points(ruta, geo)[0], "corte de ruta"
-        elif m5._texto(e["quebrada"]) or m5._texto(e["sector"]):
+            punto, dibujo, precision = nearest_points(ruta, geo)[0], "punto", "corte de ruta"
+        elif tiene_comuna and (m5._texto(e["quebrada"]) or m5._texto(e["sector"])):
             geo, como = m5.ubicar(e.to_dict(), osm, comunas)
             if geo is not None and "FUERA DE COMUNA" not in como:
-                punto, precision = geo.representative_point(), "quebrada (aprox.)"
-        if punto is None and m5._texto(e["comuna"]):
-            clave = m5.sin_tildes(e["comuna"])
-            if clave in centro_comuna.index:
-                punto, precision = centro_comuna[clave], "solo la comuna"
-        if punto is None:
-            continue
-        lon, lat = gpd_a_lonlat(punto)
-        filas.append({"id": e["id"], "fecha": e["fecha"],
-                      "quebrada": m5._texto(e["quebrada"]) or None,
-                      "comuna": m5._texto(e["comuna"]) or None,
-                      "evidencia": e["evidencia"], "via": m5._texto(e["via_afectada"]) or None,
-                      "fuente": m5._texto(e["fuente"]) or None,
-                      "url": m5._texto(e["fuente_url"]) or None,
-                      "precision": precision, "lon": round(lon, 5), "lat": round(lat, 5)})
-    print(f"  activaciones ubicadas: {len(filas)} de {len(inv)}")
+                if como.startswith("lugar"):
+                    punto, dibujo, precision = geo.representative_point(), "punto", "caserio"
+                else:
+                    lineas, dibujo, precision = geo, "cauce", "cauce"
+        if dibujo == "lista":
+            precision = "comuna" if tiene_comuna else "ninguna"
+        como_va[dibujo] += 1
+        fila = {"id": e["id"], "fecha": e["fecha"],
+                "quebrada": m5._texto(e["quebrada"]) or None,
+                "comuna": m5._texto(e["comuna"]) or None,
+                "evidencia": e["evidencia"], "via": m5._texto(e["via_afectada"]) or None,
+                "fuente": m5._texto(e["fuente"]) or None,
+                "url": m5._texto(e["fuente_url"]) or None,
+                "dibujo": dibujo, "precision": precision}
+        if punto is not None:
+            lon, lat = gpd_a_lonlat(punto)
+            fila.update(lon=round(lon, 5), lat=round(lat, 5))
+        if lineas is not None:
+            g = gpd.GeoSeries([lineas], crs=m5.CRS_METRICO).to_crs(4326).iloc[0]
+            g = g.simplify(SIMPLIFICAR_GRADOS)
+            partes = [q for q in getattr(g, "geoms", [g]) if not q.is_empty]
+            fila["lineas"] = [[round(x, 4) for xy in q.coords for x in xy[:2]] for q in partes]
+            x0, y0, x1, y1 = g.bounds
+            fila.update(lon=round((x0 + x1) / 2, 5), lat=round((y0 + y1) / 2, 5))
+        filas.append(fila)
+    print(f"  activaciones: {len(filas)}; en el mapa como punto {como_va['punto']}, como cauce "
+          f"{como_va['cauce']}; solo en la lista {como_va['lista']}")
     guardar("activaciones.json", filas)
 
 
@@ -307,10 +338,14 @@ def paso(r: dict, indice_est: dict) -> dict:
     prov = {}
     for p, v in r["provincias"].items():
         s = v["siguiente_nivel"] or {}
+        # [nivel, prob, fraccion (segunda), mm (segunda), segunda estacion,
+        #  siguiente nivel, mm que faltan, en que estacion, transmitiendo,
+        #  datos insuficientes, la mas mojada, sus mm]
         prov[p] = [NIVELES.index(v["nivel"]), v["probabilidad"], v["fraccion_normal"],
-                   v["lluvia_temporal_mm"], v["estacion_mas_mojada"],
+                   v["lluvia_temporal_mm"], v["estacion_que_fija"],
                    s.get("nivel"), s.get("falta_mm"), s.get("estacion"),
-                   v["estaciones_transmitiendo"], int(v["datos_insuficientes"])]
+                   v["estaciones_transmitiendo"], int(v["datos_insuficientes"]),
+                   v["estacion_mas_mojada"], v["lluvia_mas_mojada_mm"]]
     est = [[indice_est[e["codigo"]], e["lluvia_mm"], e["fraccion_normal"]]
            for e in r.get("lluvia_por_estacion", []) if e["codigo"] in indice_est]
     t = r["temporal"]
@@ -322,21 +357,32 @@ def escenarios(fijo, con_vivo: bool):
     print("\nRepasos (pasos de 3 horas, con la alerta en vivo sobre el cache de M4)...")
     indice_est = {c: i for i, c in enumerate(fijo["catalogos"]["lluvia"]["codigo"])}
     cache = vivo.CacheM4()
+    # Cada repaso usa el modelo ajustado SIN su invierno (m5_niveles.py los
+    # guarda). Con el modelo final, que se ajusto con estos mismos temporales,
+    # el repaso mostraria un acierto que el sistema no habria tenido.
+    modelos = json.loads((RAIZ / "outputs" / "m5_niveles_modelo.json").read_text())["sin_invierno"]
     salida = []
     for esc in ESCENARIOS:
         t0 = time.time()
         momento, hasta = vivo.momento_de(esc["desde"]), vivo.momento_de(esc["hasta"])
+        desde = pd.Timestamp(esc["desde"])
+        invierno = int(desde.year - (desde.month < 4))
+        modelo = tuple(modelos[str(invierno)])
+        umbrales = {n: round(vivo.fraccion_para(u, modelo), 3) for n, u in vivo.niv.NIVELES}
         pasos = []
         while momento <= hasta:
-            pasos.append(paso(vivo.evaluar(momento, cache, fijo), indice_est))
+            pasos.append(paso(vivo.evaluar(momento, cache, fijo, modelo), indice_est))
             momento += pd.Timedelta(hours=PASO_H)
-        salida.append({**esc, "pasos": pasos})
-        print(f"  {esc['titulo']:<24} {len(pasos):>3} pasos  ({time.time() - t0:.0f} s)")
+        salida.append({**esc, "invierno_excluido": invierno, "umbrales": umbrales, "pasos": pasos})
+        cortes = ", ".join(f"{n} {v:.0%}" for n, v in umbrales.items())
+        print(f"  {esc['titulo']:<24} {len(pasos):>3} pasos, modelo sin {invierno} "
+              f"({cortes})  ({time.time() - t0:.0f} s)")
     if con_vivo:
         r = vivo.evaluar(vivo.momento_de(None), vivo.AlmacenVivo(), fijo)
         m = pd.Timestamp(r["momento"])
-        salida.insert(0, {"id": "hoy", "titulo": "Hoy", "desde": r["momento"][:16],
-                          "hasta": r["momento"][:16], "vivo": True,
+        umbrales = {n: round(vivo.fraccion_para(u), 3) for n, u in vivo.niv.NIVELES}
+        salida.insert(0, {"id": "boletin", "titulo": "Boletin", "desde": r["momento"][:16],
+                          "hasta": r["momento"][:16], "vivo": True, "umbrales": umbrales,
                           "resumen": f"El boletin del {m:%d-%m-%Y a las %H:%M}, con los datos de VIPNET.",
                           "pasos": [paso(r, indice_est)]})
         print(f"  Hoy: boletin de las {m:%H:%M}")

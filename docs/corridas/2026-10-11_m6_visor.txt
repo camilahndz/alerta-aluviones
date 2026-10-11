@@ -1,43 +1,23 @@
 M6 - Datos del visor (Vigia de quebradas)
 11 de octubre de 2026, local, .venv con Python 3.12
 
-Comandos:
-  python src/m6_visor.py --solo-escenarios   # los cuatro repasos y el boletin de hoy
-  python src/m6_visor.py --solo-capas        # relieve y capas, con la version final del script
+Comando:
+  python src/m6_visor.py
 
-Es lo mismo que `python src/m6_visor.py` en dos partes: los repasos se corrieron
-primero, en segundo plano, mientras se ajustaban los colores del relieve; las
-capas se regeneraron al final. El boletin de "Hoy" es el de las 16:00 del
-11-10-2026, pedido a VIPNET en vivo.
+Corrida hecha despues de la auditoria del mismo dia:
+  - cada repaso usa el modelo de m5_niveles.py que deja fuera su invierno;
+  - las activaciones se dibujan como punto, como cauce o solo en la lista,
+    segun cuanto se sabe de donde fueron;
+  - el primer escenario es el boletin de las 17:00, rotulado con su fecha.
 
-Publicado como artifact: https://claude.ai/artifact/5LN3yzAV84FuzayntDyLLt
-(index.html, app.js y datos/).
+Publicado como artifact (version 2): https://claude.ai/artifact/5LN3yzAV84FuzayntDyLLt
 
-Verificado en local en escritorio (1366 x 768) y telefono (375 x 812). Un error
-encontrado asi: la textura del relieve estaba invertida de norte a sur (Los
-Vilos caia sobre el mar); con las tres provincias en rojo no se notaba, y se
-vio en un paso con niveles distintos por provincia.
+Verificado en local en escritorio (1366 x 768) y telefono (375 x 812). La
+primera version tenia la textura del relieve invertida de norte a sur (Los
+Vilos caia sobre el mar); se vio en un paso con niveles distintos por
+provincia.
 
-########################################################################
-# 1. --solo-escenarios
-########################################################################
-==========================================================================
-M6 - Datos del visor -> visor/datos/
-==========================================================================
-
-Repasos (pasos de 3 horas, con la alerta en vivo sobre el cache de M4)...
-  Julio de 2026             63 pasos  (349 s)
-  Agosto de 2026            59 pasos  (320 s)
-  Fines de julio de 2025    67 pasos  (339 s)
-  Junio de 2025             57 pasos  (274 s)
-  Hoy: boletin de las 16:00
-  escenarios.json          0.30 MB
-
-  total visor/datos/: 5.7 MB
-
-########################################################################
-# 2. --solo-capas
-########################################################################
+========================================================================
 ==========================================================================
 M6 - Datos del visor -> visor/datos/
 ==========================================================================
@@ -52,9 +32,17 @@ Relieve...
   cruces.json              0.87 MB
   estaciones.json          0.01 MB
   localidades.json         0.00 MB
-  activaciones ubicadas: 72 de 77
-  activaciones.json        0.03 MB
+  activaciones: 77; en el mapa como punto 28, como cauce 19; solo en la lista 30
+  activaciones.json        0.05 MB
   resumen.json             0.00 MB
 
-  total visor/datos/: 5.7 MB
+Repasos (pasos de 3 horas, con la alerta en vivo sobre el cache de M4)...
+  Julio de 2026             63 pasos, modelo sin 2026 (amarilla 17%, naranja 25%, roja 38%)  (381 s)
+  Agosto de 2026            59 pasos, modelo sin 2026 (amarilla 17%, naranja 25%, roja 38%)  (323 s)
+  Fines de julio de 2025    67 pasos, modelo sin 2025 (amarilla 19%, naranja 20%, roja 22%)  (335 s)
+  Junio de 2025             57 pasos, modelo sin 2025 (amarilla 19%, naranja 20%, roja 22%)  (272 s)
+  Hoy: boletin de las 17:00
+  escenarios.json          0.31 MB
+
+  total visor/datos/: 5.8 MB
   para verlo: python -m http.server 8765 --directory visor, y abrir http://localhost:8765/_local.html

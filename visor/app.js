@@ -35,6 +35,24 @@
     tronco: "quebrada grande, de más de 50 km²",
     inundacion: "crecida de agua",
   };
+  const UBICACION = {
+    "corte de ruta": "En el mapa, el punto donde se cortó la ruta.",
+    caserio: "En el mapa, el caserío del mismo nombre: el lugar exacto puede estar a un par de kilómetros.",
+    cauce: "En el mapa se marca el cauce completo de la quebrada, porque la fuente no dice en qué punto bajó.",
+    comuna: "La fuente solo dice la comuna, así que no aparece en el mapa.",
+    ninguna: "La fuente no dice dónde fue, así que no aparece en el mapa.",
+  };
+  // El inventario se escribió sin tildes; en pantalla las comunas van bien escritas.
+  const COMUNA = {
+    "La Serena": "La Serena", Coquimbo: "Coquimbo", Andacollo: "Andacollo", "La Higuera": "La Higuera",
+    Paihuano: "Paihuano", Vicuna: "Vicuña", Ovalle: "Ovalle", Combarbala: "Combarbalá",
+    "Monte Patria": "Monte Patria", Punitaqui: "Punitaqui", "Rio Hurtado": "Río Hurtado",
+    Illapel: "Illapel", Canela: "Canela", "Los Vilos": "Los Vilos", Salamanca: "Salamanca",
+  };
+  const comuna = (c) => COMUNA[c] || c || "";
+  // "Estero de Punitaqui" no es "Quebrada Estero de Punitaqui".
+  const nombreQuebrada = (q) => !q ? "Quebrada sin nombre"
+    : /^(quebrada|estero|r[ií]o)\b/i.test(q) ? q : `Quebrada ${q}`;
   const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 
   const $ = (id) => document.getElementById(id);
@@ -182,7 +200,19 @@
     todosLosCruces = x.lon.map((lon, i) => ({ i, position: [lon, x.lat[i], alto(lon, x.lat[i])] }));
     const e = datos.estaciones;
     datos.est = e.codigo.map((c, i) => ({ i, position: [e.lon[i], e.lat[i], alto(e.lon[i], e.lat[i]) + 40] }));
-    datos.act = datos.activaciones.map((a) => ({ ...a, position: [a.lon, a.lat, alto(a.lon, a.lat) + 60] }));
+    // Cada activación se dibuja según cuánto se sabe de dónde fue: un punto
+    // si es un corte de ruta o un caserío, el cauce entero si solo se conoce
+    // la quebrada, y nada en el mapa si solo se conoce la comuna.
+    datos.act = datos.activaciones.map((a) => {
+      const o = { ...a };
+      if (a.lon != null) o.position = [a.lon, a.lat, alto(a.lon, a.lat) + 60];
+      if (a.lineas) o.paths = a.lineas.map((c) => {
+        const path = [];
+        for (let i = 0; i < c.length; i += 2) path.push([c[i], c[i + 1], alto(c[i], c[i + 1]) + 80]);
+        return path;
+      });
+      return o;
+    });
     const l = datos.localidades;
     datos.loc = l.nombre.map((n, i) => ({ nombre: n, position: [l.lon[i], l.lat[i], alto(l.lon[i], l.lat[i]) + 300] }));
   }
@@ -212,8 +242,10 @@
     return datos.act.filter((a) => a.fecha >= desde && a.fecha <= hasta && a.fecha <= hoy);
   }
 
+  const cortes = () => estado.esc.umbrales || datos.resumen.umbrales;
+
   function colorFraccion(f) {
-    const u = datos.resumen.umbrales;
+    const u = cortes();
     if (f == null || f < 0.05) return [150, 160, 160, 200];
     if (f < u.amarilla) return [210, 210, 190, 230];
     if (f < u.naranja) return [...COLOR_NIVEL[1], 255];
@@ -226,6 +258,10 @@
     const lluvia = new Map(paso.est.map(([i, mm, f]) => [i, { mm, f }]));
     const vigilar = tramosAVigilar(paso);
     const reportes = reportesHasta(paso);
+    const puntos = reportes.filter((a) => a.dibujo === "punto");
+    const cauces = reportes.filter((a) => a.dibujo === "cauce").flatMap((a) => a.paths.map((path) => ({ path, a })));
+    const colorReporte = (a) => a.evidencia === "aluvion" || a.evidencia === "activacion" ? [229, 72, 77]
+      : a.evidencia === "activacion_menor" ? [240, 138, 60] : [140, 150, 152];
     const ver = (id) => $(id).checked;
     return [
       // _instanced: false hace que las posiciones de la malla sean
@@ -271,12 +307,15 @@
         getFillColor: (d) => { const v = lluvia.get(d.i); return v ? colorFraccion(v.f) : [110, 120, 122, 160]; },
         pickable: true, updateTriggers: { getRadius: estado.i, getFillColor: estado.i },
       }),
+      new PathLayer({
+        id: "reportes-cauce", data: cauces, visible: ver("capa-reportes"), getPath: (d) => d.path,
+        getColor: (d) => [...colorReporte(d.a), 230], widthUnits: "pixels", getWidth: 4 * K,
+        capRounded: true, jointRounded: true, pickable: true, updateTriggers: { getColor: estado.i },
+      }),
       new ScatterplotLayer({
-        id: "reportes", data: reportes, visible: ver("capa-reportes"), getPosition: (d) => d.position,
+        id: "reportes", data: puntos, visible: ver("capa-reportes"), getPosition: (d) => d.position,
         radiusUnits: "pixels", getRadius: 7 * K, stroked: true, lineWidthUnits: "pixels", getLineWidth: 2.5 * K,
-        getLineColor: [255, 255, 255, 255],
-        getFillColor: (d) => d.evidencia === "aluvion" || d.evidencia === "activacion" ? [229, 72, 77, 255]
-          : d.evidencia === "activacion_menor" ? [240, 138, 60, 255] : [120, 130, 132, 255],
+        getLineColor: [255, 255, 255, 255], getFillColor: (d) => [...colorReporte(d), 255],
         pickable: true, updateTriggers: { getFillColor: estado.i },
       }),
       new TextLayer({
@@ -303,14 +342,16 @@
   }
 
   function tarjetas(paso) {
-    const u = datos.resumen.umbrales, tope = Math.max(0.5, u.roja * 1.6);
+    const u = cortes(), tope = Math.max(0.5, u.roja * 1.6);
     $("provincias").innerHTML = PROVINCIAS.map((p) => {
-      const [nv, prob, frac, mm, estacion, sig, falta, estSig, transm, insuf] = paso.prov[p];
+      const [nv, prob, frac, mm, estacion, sig, falta, estSig, transm, insuf, est1, mm1] = paso.prov[p];
       const ancho = Math.min(100, (frac || 0) / tope * 100);
       const marcas = ["amarilla", "naranja", "roja"].map((n, k) =>
         `<span class="corte" style="left:${u[n] / tope * 100}%;background:rgb(${COLOR_NIVEL[k + 1].join(",")})"></span>`).join("");
-      let detalle = mm == null ? "Sin lluvia en el temporal." :
-        `${fmtNum(mm)} mm en ${esc(estacion)}: el ${fmtPct(frac)} de un año normal.`;
+      // El nivel lo fija la segunda estación más mojada: hacen falta dos.
+      let detalle = est1 == null ? "Sin lluvia en el temporal."
+        : estacion == null ? `Solo llueve en ${esc(est1)} (${fmtNum(mm1)} mm): con una estación no basta para subir de nivel.`
+        : `Al menos dos estaciones llevan el ${fmtPct(frac)} de un año normal: ${esc(est1)} (${fmtNum(mm1)} mm) y ${esc(estacion)} (${fmtNum(mm)} mm).`;
       if (sig && falta != null && paso.temporal) detalle += ` Faltan ${fmtNum(falta)} mm para ${sig}.`;
       if (insuf) detalle += " Pocas estaciones transmitiendo.";
       return `<div class="prov nivel-${nv}">
@@ -325,7 +366,9 @@
 
   function panel(paso) {
     const e = estado.esc;
-    $("etiqueta-hora").textContent = e.vivo ? "Último boletín" : `${e.titulo} · repaso, paso ${estado.i + 1} de ${e.pasos.length}`;
+    $("etiqueta-hora").textContent = e.vivo
+      ? "Boletín guardado · no se actualiza solo"
+      : `${e.titulo} · repaso ${estado.i + 1} de ${e.pasos.length}, con un modelo que no conoció ${e.invierno_excluido}`;
     $("hora").textContent = fecha(paso.t);
     $("relato").textContent = relato(paso);
     tarjetas(paso);
@@ -347,9 +390,9 @@
     const rep = reportesHasta(paso).slice().sort((a, b) => b.fecha.localeCompare(a.fecha));
     $("reportes").innerHTML = rep.length ? rep.slice(0, 6).map((a, k) => `
       <li><button type="button" data-reporte="${datos.act.indexOf(a)}">
-        <span class="principal">${esc(a.quebrada ? `Quebrada ${a.quebrada}` : "Quebrada sin nombre")}</span>
+        <span class="principal">${esc(nombreQuebrada(a.quebrada))}</span>
         <span class="fecha">${fecha(a.fecha, false)}</span>
-        <span class="secundario">${EVIDENCIA[a.evidencia] || a.evidencia} · ${esc(a.comuna || "")}${a.via ? " · " + esc(a.via) : ""}</span>
+        <span class="secundario">${EVIDENCIA[a.evidencia] || a.evidencia}${a.comuna ? " · " + esc(comuna(a.comuna)) : ""}${a.via ? " · " + esc(a.via) : ""}</span>
       </button></li>`).join("") + (rep.length > 6 ? `<li class="vacio">Y ${rep.length - 6} más en el mapa.</li>` : "")
       : `<li class="vacio">${e.vivo ? "Este boletín es de hoy: las activaciones se conocen después." : "Ninguna reportada hasta este momento del temporal."}</li>`;
   }
@@ -359,7 +402,7 @@
     const e = estado.esc, svg = $("grafico");
     const w = Math.max(200, svg.clientWidth), h = 70;
     svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
-    const u = datos.resumen.umbrales, n = e.pasos.length;
+    const u = cortes(), n = e.pasos.length;
     const max = Math.max(0.5, ...e.pasos.flatMap((p) => PROVINCIAS.map((q) => p.prov[q][2] || 0)));
     const y = (v) => h - 4 - Math.sqrt(Math.max(0, v) / max) * (h - 12);
     const x = (i) => n === 1 ? w / 2 : 4 + i / (n - 1) * (w - 8);
@@ -386,6 +429,7 @@
     }
     s += `<line id="cursor" x1="${x(estado.i)}" x2="${x(estado.i)}" y1="0" y2="${h}" stroke="#ebe6dc" stroke-width="1.5"/>`;
     svg.innerHTML = s;
+    $("clave-cortes").textContent = `cortes ${["amarilla", "naranja", "roja"].map((k) => Math.round(u[k] * 100)).join(" %, ")} %`;
     const ej = n === 1 ? [e.pasos[0].t] : [e.pasos[0].t, e.pasos[Math.floor(n / 2)].t, e.pasos[n - 1].t];
     $("ejes").innerHTML = ej.map((t) => `<span>${fecha(t)}</span>`).join("");
   }
@@ -419,9 +463,9 @@
       <p>${v ? `En este temporal: ${fmtNum(v[1], 1)} mm, el ${fmtPct(v[2])} de un año normal.` : "En este temporal no ha registrado lluvia válida."}</p>`;
   }
   function fichaReporte(a) {
-    return `<h3>${esc(a.quebrada ? `Quebrada ${a.quebrada}` : "Quebrada sin nombre")}${a.comuna ? `, ${esc(a.comuna)}` : ""}</h3>
+    return `<h3>${esc(nombreQuebrada(a.quebrada))}${a.comuna ? `, ${esc(comuna(a.comuna))}` : ""}</h3>
       <p>${fecha(a.fecha, false)}. ${EVIDENCIA[a.evidencia] || a.evidencia}${a.via ? `, ${esc(a.via)}` : ""}.</p>
-      <p>Ubicación: ${esc(a.precision)}.${a.url ? ` <a href="${esc(a.url)}" target="_blank" rel="noopener">Ver la fuente${a.fuente ? ` (${esc(a.fuente)})` : ""}</a>` : ""}</p>`;
+      <p>${UBICACION[a.precision] || ""}${a.url ? ` <a href="${esc(a.url)}" target="_blank" rel="noopener">Ver la fuente${a.fuente ? ` (${esc(a.fuente)})` : ""}</a>` : ""}</p>`;
   }
   function fichaQuebrada(d) {
     const clase = CLASE[d.clase] || d.clase;
@@ -435,6 +479,7 @@
     if (layer.id === "cruces" || layer.id === "vigilar") ficha(fichaCruce(object.i));
     else if (layer.id === "estaciones") ficha(fichaEstacion(object.i, paso));
     else if (layer.id === "reportes") ficha(fichaReporte(object));
+    else if (layer.id === "reportes-cauce") ficha(fichaReporte(object.a));
     else if (layer.id === "grandes" || layer.id === "chicas") ficha(fichaQuebrada(object));
     else if (layer.id === "rutas") ficha(`<h3>${esc(object.name || "Ruta sin nombre")}</h3><p>${TIPO_VIA[object.highway] || object.highway}.</p>`);
   }
@@ -444,7 +489,10 @@
     let t = null;
     if (layer.id === "cruces" || layer.id === "vigilar") t = datos.cruces.via[object.i] || "Camino sin nombre";
     else if (layer.id === "estaciones") t = datos.estaciones.nombre[object.i];
-    else if (layer.id === "reportes") t = `${object.quebrada ? "Quebrada " + object.quebrada : "Quebrada sin nombre"} · ${fecha(object.fecha, false)}`;
+    else if (layer.id === "reportes" || layer.id === "reportes-cauce") {
+      const a = object.a || object;
+      t = `${nombreQuebrada(a.quebrada)} · ${fecha(a.fecha, false)}`;
+    }
     else if (layer.id === "grandes") t = object.nombre_osm || "Quebrada grande";
     if (!t) return null;
     return { text: t, style: { background: "#121a1e", color: "#ebe6dc", font: "13px Atkinson Hyperlegible, sans-serif", border: "1px solid #263239", borderRadius: "6px", padding: "4px 8px" } };
@@ -527,7 +575,7 @@
     $("confianza").textContent = `Los cortes salen de tres inviernos (2024-2026), en los que ${resumen.positivos_calibracion} veces una provincia tuvo quebradas activadas durante un temporal. En 2026, que el modelo no conocía al ajustarse, de las ${pr.naranja_o_roja} provincias que puso en naranja o roja, ${pr.con_activaciones} tuvieron quebradas activadas; de las ${pr.sin_nivel} que dejó sin alerta, ${pr.sin_nivel_con_activaciones === 0 ? "ninguna" : pr.sin_nivel_con_activaciones}. Con tan pocos casos, es una herramienta de apoyo y no un pronóstico.`;
 
     $("escenarios").innerHTML = escenarios.map((e) =>
-      `<button type="button" data-id="${e.id}" aria-pressed="false" title="${esc(e.resumen)}">${e.vivo ? '<span class="vivo"></span>' : ""}${esc(e.titulo)}</button>`).join("");
+      `<button type="button" data-id="${e.id}" aria-pressed="false" title="${esc(e.resumen)}">${e.vivo ? `Boletín ${fecha(e.desde)}` : esc(e.titulo)}</button>`).join("");
     $("escenarios").addEventListener("click", (ev) => { const b = ev.target.closest("button"); if (b) elegir(b.dataset.id); });
 
     vistaActual = TELEFONO
@@ -557,7 +605,11 @@
       if (!b) return;
       if (b.classList.contains("cerrar")) { ficha(""); return; }
       if (b.dataset.cruce) { const i = +b.dataset.cruce; ficha(fichaCruce(i)); volarA(todosLosCruces[i].position); }
-      if (b.dataset.reporte) { const a = datos.act[+b.dataset.reporte]; ficha(fichaReporte(a)); volarA(a.position, 9.6); }
+      if (b.dataset.reporte) {
+        const a = datos.act[+b.dataset.reporte];
+        ficha(fichaReporte(a));
+        if (a.position) volarA(a.position, a.dibujo === "cauce" ? 9 : 10);
+      }
     });
     $("abrir-explicacion").addEventListener("click", () => {
       $("explicacion").hidden = false;
