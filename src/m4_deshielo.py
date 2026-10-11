@@ -12,10 +12,11 @@ POR QUE EXISTE
 
 LO QUE MIDE, DIA POR DIA
 
-    nieve_cm       La mediana de la altura de nieve en las estaciones de
-                   nieve con dato en al menos el 80% de los dias. Son cuatro:
-                   Cerro Olivares, Glaciar Tapado, Quebrada Larga y El
-                   Soldado, de 3.293 a 4.065 m, de Elqui a Choapa. Las otras
+    nieve_cm       La mediana de la altura de nieve en las cuatro estaciones
+                   de nieve con dato en al menos el 80% de los dias de
+                   2024-2026, fijadas por codigo en ESTACIONES_NIEVE: Cerro
+                   Olivares, Glaciar Tapado, Quebrada Larga y El Soldado, de
+                   3.293 a 4.065 m, de Elqui a Choapa. Las otras
                    seis empezaron a transmitir en 2025 o 2026, y una mediana
                    sobre un conjunto que cambia de un anio a otro compara
                    redes, no inviernos.
@@ -102,6 +103,17 @@ GRADIENTE_C_KM = 6.5          # atmosfera estandar (ICAO)
 ALTITUD_ALTA_M = 3000.0
 COBERTURA_NIEVE_MIN = 0.80
 NIEVE_MIN_CM = 50.0
+
+# Las cuatro estaciones con registro completo en 2024-2026, fijadas por codigo.
+# El corte de 50 cm se refiere a la mediana de estas cuatro: si despues la red
+# crece y entran otras, el umbral tiene que seguir midiendo lo mismo. Sin fijarlas,
+# m6_alerta_en_vivo.py, que mira 40 dias, tomaba ocho estaciones y comparaba otra
+# mediana contra el mismo corte. COBERTURA_NIEVE_MIN queda como control: si una
+# de las cuatro baja de ahi, el reporte lo dice.
+ESTACIONES_NIEVE = ("04300001-2",   # Cerro Olivares, 3.566 m
+                    "04300004-7",   # Glaciar Tapado en Los Corrales, 4.065 m
+                    "04520006-K",   # Quebrada Larga, 3.550 m
+                    "04700002-5")   # El Soldado, 3.293 m
 NIEVE_NUEVA_CM = 5.0
 DIAS_LINEA_NIEVE = 30
 
@@ -133,13 +145,18 @@ def nieve_regional(cache: Path, refrescar: bool, inicio: str, fin: str):
         tabla[cod] = s.reindex(dias)
     tabla = pd.DataFrame(tabla)
     cobertura = tabla.notna().mean()
-    fijas = cobertura[cobertura >= COBERTURA_NIEVE_MIN].index
-    print(f"\nEstaciones de nieve en Coquimbo: {len(catalogo)}; con dato en el "
-          f"{COBERTURA_NIEVE_MIN:.0%} de los dias o mas: {len(fijas)}")
+    fijas = [c for c in ESTACIONES_NIEVE if c in tabla.columns]
+    print(f"\nEstaciones de nieve en Coquimbo: {len(catalogo)}; las de referencia "
+          f"(ESTACIONES_NIEVE): {len(fijas)} de {len(ESTACIONES_NIEVE)}")
     for _, e in catalogo.iterrows():
-        marca = "  usada" if e["codigo"] in fijas else ""
+        marca = "  referencia" if e["codigo"] in fijas else ""
         print(f"  {e['nombre'][:32]:<32} {e['altitud_m']:>5.0f} m  "
               f"cobertura {cobertura[e['codigo']]:>4.0%}{marca}")
+    bajas = [c for c in fijas if cobertura[c] < COBERTURA_NIEVE_MIN]
+    if bajas or len(fijas) < len(ESTACIONES_NIEVE):
+        print(f"  AVISO: estaciones de referencia sin dato o bajo el "
+              f"{COBERTURA_NIEVE_MIN:.0%}: la mediana mezcla menos estaciones que las "
+              "que fijaron el corte de 50 cm.")
     return tabla[fijas].median(axis=1), tabla[fijas].notna().sum(axis=1)
 
 

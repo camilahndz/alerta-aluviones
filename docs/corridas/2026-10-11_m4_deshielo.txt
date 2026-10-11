@@ -18,16 +18,16 @@ temporal. Por eso la isoterma de aca se extrapola desde las estaciones altas.
 M4 - Indicador experimental de deshielo, 2024-06-01 a 2026-08-23
 ==========================================================================
 
-Estaciones de nieve en Coquimbo: 10; con dato en el 80% de los dias o mas: 4
-  CERRO OLIVARES                    3566 m  cobertura  96%  usada
-  GLACIAR TAPADO EN LOS CORRALES    4065 m  cobertura  96%  usada
+Estaciones de nieve en Coquimbo: 10; las de referencia (ESTACIONES_NIEVE): 4 de 4
+  CERRO OLIVARES                    3566 m  cobertura  96%  referencia
+  GLACIAR TAPADO EN LOS CORRALES    4065 m  cobertura  96%  referencia
   LA LAGUNA EMBALSE                 3160 m  cobertura   6%
   EL INDIO                          3800 m  cobertura   7%
   CUESTA BLANCA                     3284 m  cobertura  33%
   CERRO VEGA NEGRA                  3529 m  cobertura  64%
   LOS AZULES                        3408 m  cobertura  48%
-  QUEBRADA LARGA                    3550 m  cobertura  96%  usada
-  EL SOLDADO                        3293 m  cobertura  96%  usada
+  QUEBRADA LARGA                    3550 m  cobertura  96%  referencia
+  EL SOLDADO                        3293 m  cobertura  96%  referencia
   EL ENCANTO                        3540 m  cobertura  20%
 
 Estaciones de temperatura sobre 3000 m: 10
