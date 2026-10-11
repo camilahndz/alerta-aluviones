@@ -1,0 +1,448 @@
+M1 a M5 - Unidades troncales (quebradas de mas de 50 km2)
+10 de octubre de 2026, local, .venv con Python 3.12
+
+Comandos, en este orden:
+  python src/m1_troncos.py
+  python src/m2_susceptibilidad.py
+  python src/m3_exposicion.py
+  python src/m4_lluvia.py
+  python src/m5_troncos.py
+  python src/m5_validacion.py --sin-troncos
+  python src/m5_validacion.py
+  python src/m5_calibracion.py
+
+Por que existen los troncos: ver 2026-10-10_m5_satelite.txt. 15 de las 23
+quebradas reportadas con cauce en OSM drenan mas de 50 km2, el tope de las
+unidades de m1_subcuencas.py, y el satelite ve su cambio en el tronco.
+
+########################################################################
+# 1. python src/m1_troncos.py
+########################################################################
+======================================================================
+M1 (segunda extension) - Troncos de las quebradas grandes
+======================================================================
+Cobertura del DEM sobre la region: 100.0%
+
+Buscando bocas de afluente de mas de 50 km2...
+  318 bocas
+  117 con la boca dentro de la region
+
+Etiquetando por duplicacion de punteros...
+  convergio en 15 pasadas
+  vectorizando 318 subcuencas...
+
+Leyendo el nombre de cada tronco en OpenStreetMap...
+  117 troncos en la region; con nombre en OSM: 101
+  descartados por llamarse Rio: 24
+    Río Carrizal
+    Río Carén
+    Río Chalinga
+    Río Cochiguaz
+    Río Colorado
+    Río Cuncumén
+    Río Hurtado
+    Río Illapel
+    Río Incaguaz
+    Río Limarí
+    Río Manque
+    Río Ponio
+    Río Seco
+    Río Tascadero
+    Río Tomes
+    Río Torca
+    Río Tulahuencito
+    Río Turbio (Elqui)
+    Río de González
+    Río del Valle
+  descartados por tocar el borde del raster: 0
+
+Troncos que entran: 93
+  area: mediana 92 km2, p90 278, maximo 1371
+  con nombre: 77; los mayores:
+    200001     1371 km2  Estero Canela
+    200002     1322 km2  Estero Punitaqui
+    200003     1078 km2  (sin nombre)
+    200004      935 km2  Quebrada del Calvario
+    200005      736 km2  Quebrada Marquesa
+    200006      562 km2  Quebrada El Arrayán
+    200007      475 km2  Estero Camisas
+    200008      306 km2  Quebrada Cachacos
+    200009      296 km2  Quebrada El Ingenio
+    200010      279 km2  (sin nombre)
+    200011      272 km2  Estero de Guanta
+    200012      261 km2  Quebrada San Carlos
+    200013      254 km2  Quebrada Choros Altos
+    200014      253 km2  Quebrada Grande de Los Ahogados
+    200015      253 km2  Quebrada del Gigante
+
+Unidades de analisis: 3,850 3,313 confluencia + 444 costera + 93 tronco (se reemplazaron 93 troncos de una corrida anterior)
+
+  troncos  -> troncos_coquimbo.gpkg
+  unidades -> unidades_coquimbo.gpkg
+
+Tomo 80 s
+
+########################################################################
+# 2. python src/m2_susceptibilidad.py (resumen)
+########################################################################
+Unidades de analisis: unidades_coquimbo.gpkg
+Cobertura del DEM sobre la region: 100.0%
+Cuencas de entrada: 3850
+Leyendo el DEM y midiendo cada cuenca...
+  calculando pendientes...
+  midiendo 93 troncos, cada uno en su ventana...
+
+Clasificacion, por los dos criterios:
+                        Wilford   solo Melton
+  tronco                     93             0
+  flujo_detritos            959          1414
+  crecida_detritos         1630          1186
+  inundacion               1168          1250
+
+  548 cuencas cambian de clase segun el criterio de largo.
+  Son las mas energeticas de la region, descartadas solo por ser largas:
+ id_cuenca  area_km2  largo_km  melton
+    107557      0.46      2.86    2.44
+    106694      0.56      3.02    2.40
+    106765      0.55      2.70    2.27
+    106752      0.55      2.87    2.19
+    106069      0.67      2.72    2.18
+
+  El umbral de 2.7 km viene de un estudio en la Columbia
+  Britanica. M5 va a decir si sirve para Coquimbo o hay que recalibrarlo.
+
+  3334 de 3850 cuencas estan dentro del rango de calibracion del indice (<= 10 km2)
+
+########################################################################
+# 3. python src/m3_exposicion.py (resumen)
+########################################################################
+Cuencas susceptibles: 2682 de 3850
+  crecida_detritos: 1630 · flujo_detritos: 959 · tronco: 93
+
+Trazando cauces principales...
+  el cauce se corta bajo 0.15 km2 drenados (166 celdas)
+  2682 trayectorias trazadas de 2682 cuencas
+  largo del cauce: mediana 1.77 km, maximo 89.27 km
+Leyendo OSM del extracto local: chile.gpkg
+  vias: 54,542 en el recuadro -> 48,100 de los tipos que interesan
+  zonas urbanas: 1,240 de uso de suelo + 0 de localidad = 1,240 poligonos
+  red vial: 48,100 tramos | zonas urbanas: 1,240 poligonos
+
+Verificando que las capas se solapen...
+  trayectorias: X    239590-411970    Y   6435555-6783825  
+  red vial    : X    240596-421702    Y   6426190-6795641  
+  ok, ambas en EPSG:32719
+
+Bajando limites comunales...
+
+Cruzando trayectorias con la red vial...
+  5001 pares via-trayectoria se tocan
+  4846 puntos de corte tras fusionar duplicados
+
+Revisando entrada a zonas urbanas...
+  144 trayectorias entran en zona urbana
+  32 localidades con nombre alcanzadas
+
+==================================================================
+Puntos de corte: 4846
+
+Por jerarquia de via:
+  unclassified      1151   (peso 0.30)
+  track             1112   (peso 0.10)
+  tertiary           784   (peso 0.45)
+  residential        722   (peso 0.30)
+  service            312   (peso 0.15)
+  secondary          297   (peso 0.60)
+  primary            198   (peso 0.85)
+  motorway           175   (peso 1.00)
+  living_street       70   (peso 0.20)
+  motorway_link       10   (peso 0.15)
+  primary_link         7   (peso 0.15)
+  tertiary_link        6   (peso 0.15)
+  trunk                1   (peso 1.00)
+  secondary_link       1   (peso 0.15)
+
+Las 12 vias mas afectadas:
+                                                 cortes  prioridad_max
+via_nombre                            via_tipo                        
+Ruta 5 Norte                          motorway      146          1.000
+Camino Internacional Gabriela Mistral primary        63          0.925
+Ruta D-55                             primary        38          0.925
+Ruta D-377-E                          primary         9          0.925
+Camino Internacional Gabriela Mistral secondary     125          0.800
+Ruta D-835                            secondary      33          0.800
+Ruta D-597                            secondary      25          0.800
+Ruta D-865                            secondary      21          0.800
+Ruta D-485                            secondary      18          0.800
+Ruta D-875                            secondary      13          0.800
+Ruta D-951                            secondary       9          0.800
+Eduardo Abott                         secondary       2          0.800
+
+Los 12 cortes de mayor prioridad:
+
+########################################################################
+# 4. python src/m4_lluvia.py (desde el cruce con las cuencas)
+########################################################################
+Cuencas de M2: 3850; susceptibles (flujo_detritos + crecida_detritos + tronco): 2682
+  invierno 2024: mediana de distancia cuenca-estacion 6.9 km; 170 cuencas sobre el criterio de 30 km, marcadas en la capa
+  invierno 2025: mediana de distancia cuenca-estacion 6.9 km; 158 cuencas sobre el criterio de 30 km, marcadas en la capa
+  invierno 2026: mediana de distancia cuenca-estacion 6.7 km; 158 cuencas sobre el criterio de 30 km, marcadas en la capa
+
+--------------------------------------------------------------------------
+Interpolacion de la lluvia por evento (dejando una estacion fuera)
+--------------------------------------------------------------------------
+  eventos regionales: 98; con media >= 5 mm y >= 20 estaciones completas: 5
+  pares estacion-evento para entrenar: 449 (24 fuera por estar sobre la isoterma 0)
+
+  metodo                 MAE mm  RMSE mm      R2  R2 evento
+  media regional           39.5     65.5   0.620     -0.023
+  estacion cercana         36.8     76.9   0.476     -0.411
+  random forest            29.9     59.1   0.691      0.167
+  gradient boosting        30.7     58.1   0.701      0.194
+
+  Total del invierno 2026 (1-jun a 23-ago), 72 estaciones con >= 95% de dato, 4 variables fijas:
+  media regional          125.8    165.7  -0.028
+  estacion cercana        158.2    230.3  -0.986
+  random forest           107.7    157.6   0.070
+
+  SE ADOPTA random forest: MAE 29.9 contra 36.8 mm de la estacion cercana.
+  lluvia areal: 2360 puntos para 93 troncos
+  pares interpolados: 22639 de 30499 (el resto cae en eventos chicos y queda con factor 1)
+  factor: mediana 1.00, p10 0.71, p90 1.79; 1202 recortados a [0.25, 4.0]
+
+Pares cuenca-episodio: 30499
+  cuencas que superan, por invierno (de 2682):
+                                       2024   2025   2026
+  Caine (1980)                           11    163    628
+  Ben David-Novak et al. (2004)           0      0     20
+  Caine sobre la ventana critica        321    338   1039
+
+  De que se sostiene cada positivo (cuencas, por invierno):
+                                           2024   2025   2026
+  estacion marcada como ambigua               0      0     58
+  episodio de un solo paso de 30 min          0     97      1
+  estacion a mas de 30 km                     0      0      0
+  sin objeciones                             11     66    570
+
+  Estaciones que sostienen los positivos (cuencas, todos los inviernos):
+    RIO CHOAPA EN CUNCUMEN                          70
+    LAMBERT                                         48
+    SALALA                                          47
+    LA CANELA                                       44
+    RIO COGOTI EN FRAGUITA                          40
+    RIO CHOAPA EN SALAMANCA                         39
+    CAIMANES                                        38
+    COIRON                                          35
+    EL TOME                                         29
+    HUINTIL                                         29
+
+  capa    -> gatillo.gpkg
+  figura  -> m4_umbral_id.png
+  tabla   -> m4_episodios.csv
+
+########################################################################
+# 5. python src/m5_troncos.py
+########################################################################
+==========================================================================
+M5 - Evaluacion de las unidades troncales
+==========================================================================
+
+Troncos: 93; con cauce principal trazado por M3: 93
+  largo del cauce troncal: mediana 21.0 km, total 2533 km
+
+Midiendo el cambio satelital de los cauces troncales...
+  clase satelital de los troncos, por temporada:
+temporada  2025  2026
+clase_sat            
+activo        1    45
+dudoso        2    18
+inactivo     86    21
+sin_dato      1     2
+
+--------------------------------------------------------------------------
+1. La lluvia contra la actividad satelital (sin prensa)
+--------------------------------------------------------------------------
+
+  temporada 2025, troncos activos contra inactivos: 1 contra 86
+    lectura                   AUC  marca Caine (recall)  marca, negativos
+    Caine publicado         0.988                  1.00              0.07
+    Caine critica           0.965                  1.00              0.17
+    lluvia maxima           0.209
+
+  temporada 2026, troncos activos contra inactivos: 45 contra 21
+    lectura                   AUC  marca Caine (recall)  marca, negativos
+    Caine publicado         0.492                  0.22              0.29
+    Caine critica           0.540                  0.44              0.48
+    lluvia maxima           0.393
+
+  Referencia, unidades chicas (clases de m5_satelite_cauces.py):
+
+  temporada 2025, unidades chicas con cambio contra sin cambio: 174 contra 1435
+    lectura                   AUC  marca Caine (recall)  marca, negativos
+    Caine publicado         0.566                  0.07              0.04
+    Caine critica           0.560                  0.14              0.11
+    lluvia maxima           0.551
+
+  temporada 2026, unidades chicas con cambio contra sin cambio: 274 contra 1192
+    lectura                   AUC  marca Caine (recall)  marca, negativos
+    Caine publicado         0.586                  0.34              0.27
+    Caine critica           0.577                  0.47              0.41
+    lluvia maxima           0.563
+
+--------------------------------------------------------------------------
+2. La prensa de 2025 (no motivo los troncos)
+--------------------------------------------------------------------------
+
+  temporada 2025, troncos reportados contra no reportados (negativos presuntos): 3 contra 87
+    lectura                   AUC  marca Caine (recall)  marca, negativos
+    Caine publicado         0.789                  0.33              0.07
+    Caine critica           0.793                  0.67              0.16
+    lluvia maxima           0.529
+
+    tronco    area   quebrada(s) reportada(s)       Caine  critica  satelite
+    200003   1078   San Antonio                    1.36     1.36  inactivo (3%)
+    200054     81   La Laja                        0.82     1.01  inactivo (0%)
+    200009    296   El Ingenio                     0.59     0.68  inactivo (6%)
+
+--------------------------------------------------------------------------
+3. La prensa de 2026 -- MOTIVO EL CAMBIO, no es validacion
+--------------------------------------------------------------------------
+
+  temporada 2026, troncos reportados contra no reportados (negativos presuntos): 8 contra 77
+    lectura                   AUC  marca Caine (recall)  marca, negativos
+    Caine publicado         0.377                  0.00              0.29
+    Caine critica           0.399                  0.38              0.45
+    lluvia maxima           0.424
+
+    tronco    area   quebrada(s) reportada(s)       Caine  critica  satelite
+    200006    562   El Arrayan                     0.90     1.21  activo (83%)
+    200005    736   Marquesa                       0.79     1.13  activo (71%)
+    200084     52   Quebrada de Martinez           0.82     1.11  activo (67%)
+    200003   1078   Santa Gracia                   0.54     0.68  activo (50%)
+    200067     65   Santa Gracia                   0.51     0.65  dudoso (38%)
+    200012    261   San Carlos                     0.21     0.51  dudoso (48%)
+    200035    129   El Tambo                       0.20     0.47  activo (57%)
+    200043     98   Uchumi                         0.34     0.41  dudoso (22%)
+
+  tablas -> m5_troncos.csv, m5_troncos_reportados.csv
+
+########################################################################
+# 6. python src/m5_validacion.py --sin-troncos (recall)
+########################################################################
+Recall segun como se lea Caine:
+  lectura                     todas   evidencia fuerte          julio         agosto
+  episodio               6/25 (24%)         2/15 (13%)     4/14 (29%)     2/11 (18%)
+  ventana critica       18/25 (72%)        10/15 (67%)    11/14 (79%)     7/11 (64%)
+  episodio, estacion     6/25 (24%)         3/15 (20%)     4/14 (29%)     2/11 (18%)
+  critica, estacion     10/25 (40%)         5/15 (33%)     8/14 (57%)     2/11 (18%)
+
+--------------------------------------------------------------------------
+
+########################################################################
+# 7. python src/m5_validacion.py (recall, con troncos)
+########################################################################
+Con 93 unidades troncales: el recall de 2026 con troncos NO es validacion, los motivo este inventario
+ id quebrada                 evidencia          susc  pos  veredicto
+  1 El Rincon                activacion           13   11  predicho
+  2 Marquesa                 activacion           61    0  no_predicho
+  3 Batuco                   escurrimiento        18    9  predicho
+  4 Estero de Punitaqui      escurrimiento        30   19  predicho
+  5 Las Canas                escurrimiento        33    0  no_predicho
+  6 Carcamo                  escurrimiento        12   12  predicho
+  7 Cruz de Cana             activacion            0    0  sin_cobertura
+  8 Quebrada de Martinez     activacion            6    0  no_predicho
+  9 Santa Gracia             aluvion              37    0  no_predicho
+ 10 Tres Cruces              activacion           24    0  no_predicho
+ 11 Tambillos                activacion            0    0  sin_cobertura
+ 12 Las Barrancas            activacion            0    0  sin_cobertura
+ 13 Cutum                    activacion_menor     11    0  no_predicho
+ 14 Cajon del Romero         activacion            3    0  no_predicho
+ 15 Santa Gracia             activacion_menor     37    0  no_predicho
+ 16 Arrayan Costero          alerta_preventiva    12    0  no_predicho
+ 17 Los Loros                activacion_menor     18    0  no_predicho
+ 18 San Carlos               activacion_menor     27    0  no_predicho
+ 19 El Porotal               activacion           15    0  no_predicho
+ 20 Leiva                    activacion           14    0  no_predicho
+ 21 Marquesa                 activacion           61    0  no_predicho
+ 22 El Lucho                 activacion            0    0  sin_ubicar
+ 23 Llimpo                   activacion           12   10  predicho
+ 24 (sin nombre)             activacion            0    0  sin_ubicar
+ 25 Cutun                    activacion           11    0  no_predicho
+ 26 El Maite                 activacion            0    0  sin_ubicar
+ 27 Pichasca                 activacion_menor     16    3  predicho
+ 28 Uchumi                   activacion           27    0  no_predicho
+ 29 Los Loros                activacion           18    0  no_predicho
+ 30 El Tambo                 activacion           15    0  no_predicho
+ 31 San Carlos               activacion           27    0  no_predicho
+ 32 El Arrayan               activacion           35    0  no_predicho
+ 33 Los Mates                activacion            0    0  sin_ubicar
+
+Recall segun como se lea Caine:
+  lectura                     todas   evidencia fuerte          julio         agosto
+  episodio               6/26 (23%)         2/16 (12%)     4/15 (27%)     2/11 (18%)
+  ventana critica       20/26 (77%)        11/16 (69%)    12/15 (80%)     8/11 (73%)
+  episodio, estacion    11/26 (42%)         6/16 (38%)     7/15 (47%)     4/11 (36%)
+  critica, estacion     15/26 (58%)         8/16 (50%)    11/15 (73%)     4/11 (36%)
+
+--------------------------------------------------------------------------
+
+########################################################################
+# 8. python src/m5_calibracion.py
+########################################################################
+Salida identica, linea por linea, a la de 2026-10-10_m5_tres_inviernos.txt
+(comprobado con diff): calibra sobre las unidades chicas, y estas no cambiaron.
+
+========================================================================
+VERIFICACIONES DERIVADAS
+========================================================================
+
+AGREGAR LOS TRONCOS NO MOVIO NADA DE LO QUE YA EXISTIA
+
+  - M2 sin los troncos reproduce exacto la clasificacion del README: Wilford
+    959 / 1.630 / 1.168; costeras 21 / 146 / 277; confluencias 938 / 1.484 /
+    891.
+  - M5 --sin-troncos reproduce exacto el recall de 2026-10-10_m5_tres_inviernos.
+  - m5_calibracion.py reproduce su salida completa.
+
+  Para lograrlo hubo que arreglar un error previo de M2: pintaba todas las
+  cuencas en una sola capa de etiquetas, y donde dos se superponian ganaba la
+  ultima. La primera corrida con troncos cambio la clase de cientos de
+  unidades chicas sin que nada fallara (flujo de detritos 959 -> 848). Ahora
+  mide por capas sin superposicion. El error ya existia con las subcuencas
+  dentro de las cuencas costeras de rio, y no movia ninguna clase.
+
+  Y otro de M3: una clase sin peso de prioridad recibia cero en silencio. Los
+  1.177 cortes de los troncos quedaban con la mitad de la prioridad. Ahora
+  una clase sin peso detiene el script, y el tronco pesa como una crecida de
+  detritos.
+
+EL TRONCO ES EL OBJETO CORRECTO
+
+  De los 8 troncos que la prensa reporto en 2026, el satelite ve 5 activos, 3
+  dudosos y ninguno inactivo. La unidad coincide con el fenomeno.
+
+  Exposicion: 93 troncos agregan 1.177 cortes de ruta, 145 de ellos en la Ruta
+  5, la Ruta 43 o rutas primarias. Es lo directamente util para gestion: donde
+  vigilar cuando el temporal llega.
+
+PERO LA LLUVIA NO DISTINGUE ENTRE TRONCOS
+
+  Contra el satelite, en 2026, los 45 troncos activos y los 21 inactivos
+  reciben la misma lluvia segun el modelo: AUC 0,49 (Caine) y 0,54 (ventana
+  critica). Contra la prensa de 2026, 0,38. La lluvia maxima de un episodio
+  da 0,39. En las unidades chicas, la misma prueba da 0,56 a 0,59.
+
+  2025 no sirve para separar: el satelite ve 1 tronco activo de 89, y la
+  prensa reporta 3 troncos (AUC 0,79 sobre 3 casos, que no sostiene nada).
+
+  La lectura: el cuello de botella dejo de ser la unidad y el umbral, y es la
+  lluvia de entrada. Con pluviometros -incluso interpolados, con R2 dentro del
+  evento de 0,17- el modelo no resuelve cuanto llovio en una cuenca contra la
+  vecina dentro de un mismo temporal. Para eso hace falta precipitacion con
+  resolucion espacial: radar, o satelite corregido contra estaciones.
+
+EL RECALL DE 2026 CON TRONCOS NO ES VALIDACION
+
+  Sube de 79% a 80% en julio (ventana critica) y de 57% a 73% leyendo la
+  lluvia de la estacion. Ese inventario motivo los troncos, asi que esas
+  cifras se reportan y no se usan como evidencia.

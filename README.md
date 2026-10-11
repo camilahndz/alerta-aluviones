@@ -67,7 +67,12 @@ python src/m1_preparar_dem.py                                   # baja el DEM, l
 python src/m1_terreno.py --umbral-km2 0.15 --area-min-km2 0.4   # rellena, calcula flujo, delinea cuencas
 python src/m1_recortar_region.py                                # deja solo las que descargan en Coquimbo
 python src/m1_subcuencas.py                                     # agrega las subcuencas de confluencia
+python src/m1_troncos.py                                        # agrega los troncos de mas de 50 km2
 ```
+
+El quinto, `m1_troncos.py`, se agregó en octubre de 2026 y está explicado en M5,
+[Unidades troncales](#unidades-troncales-el-objeto-correcto-y-lo-que-eso-dejó-a-la-vista).
+Las cifras de M1 a M3 de esta sección son de antes de los troncos.
 
 El tercero baja el límite regional de geoBoundaries por su cuenta la primera vez
 y lo deja en `data/raw/limite_coquimbo.gpkg`, así que ese archivo no hay que
@@ -1017,6 +1022,68 @@ Dos resultados más, que acotan lo que el satélite puede dar:
   reverdecimiento del lecho frente a las laderas pesa más de lo que el método
   descuenta. Estos datos no separan una cosa de la otra.
 
+### Unidades troncales: el objeto correcto, y lo que eso dejó a la vista
+
+```bash
+python src/m1_troncos.py        # después de m1_subcuencas.py; ~3 GB de RAM por un par de minutos
+python src/m2_susceptibilidad.py
+python src/m3_exposicion.py
+python src/m4_lluvia.py
+python src/m5_troncos.py        # la evaluación; lee imágenes de AWS, ~15 min
+```
+
+Corrida: [`2026-10-10_troncos.txt`](docs/corridas/2026-10-10_troncos.txt).
+
+**Qué es un tronco.** Un afluente que entra a un valle con las mismas reglas de
+`m1_subcuencas.py`, pero de más de 50 km², que es donde terminaban las unidades.
+Se excluyen los que OpenStreetMap llama "Río": un río tiene caudal permanente y
+su peligro es el desborde, otro fenómeno. La regla se tomó de afuera a propósito.
+Elegir un tope de tamaño mirando el área de las quebradas reportadas habría sido
+ajustar contra la validación. Salen **93 troncos**, de 51 a 1.371 km² (mediana
+92), con su área completa aguas arriba. Melton no está calibrado a esa escala,
+así que no se filtran: M2 los marca como `tronco` y se evalúan todos.
+
+Para la lluvia, M4 usa el promedio del random forest sobre una grilla de ~25
+puntos por tronco (lluvia areal), no el valor de un punto.
+
+**Agregarlos no movió nada de lo existente**, y está comprobado. M2 sin troncos
+reproduce la clasificación de siempre, M5 `--sin-troncos` reproduce el recall
+anterior y la calibración reproduce su salida línea por línea. Para lograrlo
+hubo que corregir dos errores previos que no daban error. M2 medía todas las
+cuencas en una sola capa de etiquetas, y donde se superponían ganaba la última:
+la primera corrida con troncos le cambió la clase a cientos de unidades chicas.
+Y M3 le ponía peso cero a una clase sin peso de prioridad.
+
+**El tronco es el objeto correcto.** De los 8 troncos que la prensa reportó en
+2026, el satélite ve 5 activos, 3 dudosos y ninguno inactivo. Y en exposición
+agregan 1.177 cortes de ruta, 145 en la Ruta 5, la Ruta 43 o rutas primarias:
+es donde bajó el agua en 2026.
+
+**Pero la lluvia no distingue entre troncos:**
+
+| Prueba (2026) | AUC Caine | AUC ventana crítica |
+|---|---|---|
+| Troncos activos (45) contra inactivos (21), según el satélite | 0,49 | 0,54 |
+| Unidades chicas con cambio contra sin cambio, según el satélite | 0,59 | 0,58 |
+| Troncos reportados por la prensa (motivó el cambio, no valida) | 0,38 | 0,40 |
+
+Dentro de un mismo temporal, la lluvia que el modelo le asigna a cada tronco no
+separa los que bajaron de los que no. 2025 no sirve para separar: el satélite ve
+un tronco activo de 89, y la prensa reporta tres.
+
+**El cuello de botella se movió.** Ya no son la unidad ni el umbral: es la
+lluvia de entrada. Con pluviómetros, incluso interpolados (R² dentro del evento
+de 0,17), el modelo no resuelve cuánto llovió en una cuenca frente a la vecina.
+
+Para gestión, eso se traduce en dos usos distintos:
+
+* **Sirve** para decir *cuándo* un temporal es peligroso a escala regional, y
+  para decir *dónde* están los cortes de ruta que conviene vigilar cuando llega,
+  ahora incluidos los troncos.
+* **No sirve**, con la red de pluviómetros actual, para priorizar entre
+  quebradas *dentro* de un mismo temporal. Para eso hace falta precipitación con
+  resolución espacial: radar, o satélite corregido contra estaciones.
+
 ---
 
 ## Hoja de ruta
@@ -1027,7 +1094,8 @@ Dos resultados más, que acotan lo que el satélite puede dar:
 - [x] **M3 — Exposición**: cruce con red vial y zonas urbanas → 3.669 puntos de corte en 14 comunas.
 - [x] **M4 — Gatillo de lluvia**: tres inviernos, 1.188 episodios de 30 min; lluvia de cada cuenca interpolada con random forest.
 - [x] **M5 — Validación y calibración**: 33 activaciones de 2026 y 44 de 2024-2025. Con negativos, Caine publicado tiene precisión de 4,5% (cota inferior) y calibrar baja el umbral sin mejorar el AUC.
-- [ ] **M1 — Unidades troncales**: 15 de 23 quebradas reportadas drenan más de 50 km², el tope de las unidades. Ver M5, negativos desde satélite.
+- [x] **M1 — Unidades troncales**: 93 quebradas de más de 50 km² como segunda clase de unidad. El satélite confirma que son el objeto que se activa; la lluvia de pluviómetros no las distingue entre sí.
+- [ ] **Lluvia con resolución espacial**: radar o satélite corregido contra estaciones. Es hoy el límite del modelo.
 - [ ] **M6 — Entrega**: mapa o visor final y documentación.
 
 M0 a M3 forman la versión mínima mostrable (v0). M4 y M5 son calibración y

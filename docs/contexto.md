@@ -58,7 +58,7 @@ observados.
 | Hito | Contenido | Estado |
 |---|---|---|
 | **M0** | Andamiaje: repo, estructura, README, .gitignore, primer commit | Cerrado |
-| **M1** | Terreno: DEM, flujo, cuencas costeras y subcuencas de confluencia | Cerrado y reproducible en local — 3.757 unidades (corrida 2026-10-10) |
+| **M1** | Terreno: DEM, flujo, cuencas costeras, subcuencas de confluencia y troncos | Cerrado y reproducible en local — 3.757 unidades más 93 troncos de más de 50 km² (corrida 2026-10-10) |
 | **M2** | Susceptibilidad: variables de terreno + quebradas rankeadas (razón de Melton) | Cerrado y reproducible en local — 2.589 susceptibles (corrida 2026-10-10) |
 | **M3** | Exposición: cruce de trayectorias con red vial (OSM) y zonas urbanas | Cerrado y reproducible en local — 3.669 puntos de corte en 14 comunas (corrida 2026-10-10, extracto OSM del 08-10) |
 | **M4** | Gatillo: lluvia sub-diaria de VIPNET + umbrales publicados aplicados | Cerrado y reproducible en local. Desde el 10-10 cubre tres inviernos (2024-2026), 1.188 episodios, con la lluvia de cada cuenca interpolada por random forest (MAE 29,9 mm contra 36,8 de la estación cercana) |
@@ -211,3 +211,11 @@ Hidrología: pysheds o richdem (o GRASS GIS si se requiere `r.watershed` /
   Melton ya no está calibrado —Wilford trabajó entre 0,1 y 10 km²—, así que la
   solución no es subir el tope sino agregar una segunda clase de unidad, el
   tronco, con su propio criterio.
+
+  Se hizo (`src/m1_troncos.py`, 93 troncos) y el satélite lo confirma: de los 8
+  troncos reportados en 2026, ninguno se ve inactivo. Pero arreglar el objeto
+  dejó a la vista el límite siguiente. La lluvia que el modelo le asigna a cada
+  tronco no separa los que bajaron de los que no (AUC 0,49 contra el satélite).
+  Con pluviómetros no se resuelve cuánto llovió en una cuenca contra la vecina.
+  **El límite del modelo hoy es la lluvia de entrada, no la unidad ni el
+  umbral.**
