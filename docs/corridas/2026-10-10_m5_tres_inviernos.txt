@@ -1,0 +1,365 @@
+M5 - Validacion y calibracion sobre tres inviernos
+10 de octubre de 2026, local, .venv con Python 3.12
+Entrada: data/processed/gatillo.gpkg de 2026-10-10_m4_tres_inviernos.txt
+Inventarios: docs/inventario_activaciones_2024-2025.csv (44 entradas)
+             docs/inventario_activaciones_2026-07.csv (33 entradas: 18 de julio
+             y 15 del bloque del 14 al 17 de agosto, agregadas en octubre)
+
+Comandos, en este orden:
+  python src/m5_validacion.py
+  python src/m5_calibracion.py
+  python src/m5_calibracion.py --positivos fuerte
+  python src/m5_satelite_piloto.py
+
+########################################################################
+# 1. python src/m5_validacion.py
+########################################################################
+==========================================================================
+M5 - Validacion contra el invierno de 2026 (julio y agosto)
+==========================================================================
+
+Entradas del inventario: 33
+Pares cuenca-episodio en gatillo.gpkg: 29,556; en la ventana 2026-06-01 a 2026-08-24: 11,639
+Unidades susceptibles: 2,589
+Unidades que superan Caine (episodio): 606
+Unidades que superan Caine (ventana critica): 1,000
+Unidades que superan Caine (episodio, estacion): 668
+Unidades que superan Caine (critica, estacion): 856
+
+Ubicando cada entrada en OpenStreetMap...
+
+ id quebrada                 evidencia          susc  pos  veredicto
+  1 El Rincon                activacion           10   10  predicho
+  2 Marquesa                 activacion           57    0  no_predicho
+  3 Batuco                   escurrimiento        18    9  predicho
+  4 Estero de Punitaqui      escurrimiento        24   15  predicho
+  5 Las Canas                escurrimiento        26    0  no_predicho
+  6 Carcamo                  escurrimiento        11   11  predicho
+  7 Cruz de Cana             activacion            0    0  sin_cobertura
+  8 Quebrada de Martinez     activacion            4    0  no_predicho
+  9 Santa Gracia             aluvion              30    0  no_predicho
+ 10 Tres Cruces              activacion           24    0  no_predicho
+ 11 Tambillos                activacion            0    0  sin_cobertura
+ 12 Las Barrancas            activacion            0    0  sin_cobertura
+ 13 Cutum                    activacion_menor      9    0  no_predicho
+ 14 Cajon del Romero         activacion            0    0  sin_cobertura
+ 15 Santa Gracia             activacion_menor     30    0  no_predicho
+ 16 Arrayan Costero          alerta_preventiva    12    0  no_predicho
+ 17 Los Loros                activacion_menor     16    0  no_predicho
+ 18 San Carlos               activacion_menor     24    0  no_predicho
+ 19 El Porotal               activacion           15    0  no_predicho
+ 20 Leiva                    activacion           14    0  no_predicho
+ 21 Marquesa                 activacion           57    0  no_predicho
+ 22 El Lucho                 activacion            0    0  sin_ubicar
+ 23 Llimpo                   activacion           11    9  predicho
+ 24 (sin nombre)             activacion            0    0  sin_ubicar
+ 25 Cutun                    activacion            9    0  no_predicho
+ 26 El Maite                 activacion            0    0  sin_ubicar
+ 27 Pichasca                 activacion_menor     15    2  predicho
+ 28 Uchumi                   activacion           24    0  no_predicho
+ 29 Los Loros                activacion           16    0  no_predicho
+ 30 El Tambo                 activacion           12    0  no_predicho
+ 31 San Carlos               activacion           24    0  no_predicho
+ 32 El Arrayan               activacion           32    0  no_predicho
+ 33 Los Mates                activacion            0    0  sin_ubicar
+
+todas las entradas: 33
+  sin ubicar en OSM          4
+  sin cobertura del modelo   4
+  evaluadas y no predichas  19
+  predichas                  6
+  RECALL sobre las evaluadas: 6/25 = 24%
+
+solo evidencia fuerte: 23
+  sin ubicar en OSM          4
+  sin cobertura del modelo   4
+  evaluadas y no predichas  13
+  predichas                  2
+  RECALL sobre las evaluadas: 2/15 = 13%
+
+  La precision NO se reporta y no es un olvido: el inventario no tiene
+  negativos observados. Ver la cabecera de este archivo.
+
+--------------------------------------------------------------------------
+Recall segun como se lea Caine:
+  lectura                     todas   evidencia fuerte          julio         agosto
+  episodio               6/25 (24%)         2/15 (13%)     4/14 (29%)     2/11 (18%)
+  ventana critica       18/25 (72%)        10/15 (67%)    11/14 (79%)     7/11 (64%)
+  episodio, estacion     6/25 (24%)         3/15 (20%)     4/14 (29%)     2/11 (18%)
+  critica, estacion     10/25 (40%)         5/15 (33%)     8/14 (57%)     2/11 (18%)
+
+--------------------------------------------------------------------------
+Que tan lejos estuvo el umbral en las que fallo:
+  minimo 0.21 | mediana 0.85 | maximo 0.94
+  5 de 19 caen entre 0,55 y 0,80 de lo que Caine pide
+
+Recall que daria un umbral escalado (Caine multiplicado por k):
+      k         recall
+    1.0       6/25 ( 24%)   <- Caine sin tocar
+    0.9      12/25 ( 48%)
+    0.8      17/25 ( 68%)
+    0.7      19/25 ( 76%)
+    0.6      22/25 ( 88%)
+    0.5      22/25 ( 88%)
+
+  ESTE ESCALAMIENTO NO SE ADOPTA, Y LA RAZON IMPORTA.
+  Elegir el k que maximiza el recall sobre este mismo inventario es
+  ajustar el modelo contra su propia validacion: el numero que saldria
+  despues no mediria nada. Ademas las entradas no son independientes
+  -varias comparten la estacion mas cercana, y por eso repiten razon-
+  asi que los 25 casos valen bastante menos de 25 observaciones.
+  Para calibrar en serio hacen falta episodios sin activacion
+  documentada. Eso lo hace m5_calibracion.py, con 2024-2025.
+
+  tabla -> m5_validacion.csv
+
+########################################################################
+# 2. python src/m5_calibracion.py
+########################################################################
+==========================================================================
+M5 - Calibracion de Caine: entrena en 2024-2025, prueba en 2026
+==========================================================================
+Positivos: aluvion, activacion, activacion_menor
+
+Cargando OSM y comunas...
+
+Inventario: 77 entradas
+tipo
+sin_cobertura     7
+sin_nombre       12
+sin_ubicar       13
+ubicada          45
+
+Observaciones estacion-episodio: 1092
+etiqueta  excluido  negativo  positivo
+conjunto                              
+entreno        209       439        12
+fuera            2         9         0
+prueba          45       343        33
+
+  positivos de entreno por evento regional:
+    evento   51 (2025-06-16): 6
+    evento   61 (2025-07-31): 6
+
+  positivos de prueba por evento regional:
+    evento   91 (2026-07-16): 13
+    evento   92 (2026-08-13): 20
+
+--------------------------------------------------------------------------
+Caine publicado, ahora con negativos (precision = cota inferior)
+--------------------------------------------------------------------------
+  conjunto   lectura            VP    FP   FN    VN  recall  precision    FPR    AUC
+  entreno    episodio            0     3   12   436    0.00      0.000  0.007  0.899
+  entreno    ventana critica     1     7   11   432    0.08      0.125  0.016  0.886
+  prueba     episodio            1    21   32   322    0.03      0.045  0.061  0.469
+  prueba     ventana critica     5    33   28   310    0.15      0.132  0.096  0.486
+
+--------------------------------------------------------------------------
+Ajuste por maxima verosimilitud sobre 2024-2025
+--------------------------------------------------------------------------
+  451 observaciones, 12 positivas
+  b0 =  -7.838 (ee 1.450)
+  bD =   3.193 (ee 1.027)   coeficiente de log10 D
+  bI =   5.365 (ee 1.336)   coeficiente de log10 I
+
+  curva                                  alfa             IC 95%   beta           IC 95%
+  Caine (1980) publicado                14.82                      0.39
+  ajustada, p = 0,50                    28.90      [9.74, 48.18]   0.60     [0.23, 0.83]
+  ajustada, p = 0.028 (Youden 0.70)      6.35      [2.54, 12.36]   0.60
+  remuestreo por eventos: 873 de 1000 validos (127 sin positivos o sin convergencia)
+
+  Prueba sobre 2026 con la curva ya fija (p de Youden del entrenamiento):
+  curva                        VP    FP   FN    VN  recall  precision    FPR    AUC
+  Caine publicado               1    21   32   322    0.03      0.045  0.061  0.469
+  Caine ventana critica         5    33   28   310    0.15      0.132  0.096  0.486
+  ajustada (Youden)            16   155   17   188    0.48      0.094  0.452  0.488
+
+  Prueba por evento regional con positivos (AUC contra todos los
+  negativos de la prueba; recall = positivos del evento que marca cada curva):
+  evento                  pos  lluvia med  AUC Caine  critica  ajustada  recall C  critica  ajust.
+  91 (2026-07-16)          13     59.2 mm      0.774    0.795     0.776      0.08     0.38    0.92
+  92 (2026-08-13)          20      4.6 mm      0.271    0.285     0.301      0.00     0.00    0.20
+
+  ATENCION: los positivos de entrenamiento salen de 2 evento(s). Los intervalos
+  del remuestreo no miden incertidumbre real con tan pocos eventos.
+
+--------------------------------------------------------------------------
+Regresion con log10_D, log10_I, melton, antecedente_72h_mm, altitud_m
+  hacen falta 50 positivos de entrenamiento (10 por variable); hay 12.
+  NO SE AJUSTA. Con menos positivos que eso los coeficientes
+  describen el ruido de esta muestra, no el fenomeno.
+
+  observaciones -> m5_calibracion_observaciones.csv
+  inventario    -> m5_calibracion_inventario.csv
+  figura        -> m5_calibracion.png
+
+########################################################################
+# 3. python src/m5_calibracion.py --positivos fuerte
+########################################################################
+==========================================================================
+M5 - Calibracion de Caine: entrena en 2024-2025, prueba en 2026
+==========================================================================
+Positivos: aluvion, activacion
+
+Cargando OSM y comunas...
+
+Inventario: 77 entradas
+tipo
+sin_cobertura     7
+sin_nombre       12
+sin_ubicar       13
+ubicada          45
+
+Observaciones estacion-episodio: 1092
+etiqueta  excluido  negativo  positivo
+conjunto                              
+entreno        215       439         6
+fuera            2         9         0
+prueba          52       343        26
+
+  positivos de entreno por evento regional:
+    evento   61 (2025-07-31): 6
+
+  positivos de prueba por evento regional:
+    evento   91 (2026-07-16): 8
+    evento   92 (2026-08-13): 18
+
+--------------------------------------------------------------------------
+Caine publicado, ahora con negativos (precision = cota inferior)
+--------------------------------------------------------------------------
+  conjunto   lectura            VP    FP   FN    VN  recall  precision    FPR    AUC
+  entreno    episodio            0     3    6   436    0.00      0.000  0.007  0.927
+  entreno    ventana critica     1     7    5   432    0.17      0.125  0.016  0.937
+  prueba     episodio            1    21   25   322    0.04      0.045  0.061  0.436
+  prueba     ventana critica     4    33   22   310    0.15      0.108  0.096  0.453
+
+--------------------------------------------------------------------------
+Ajuste por maxima verosimilitud sobre 2024-2025
+--------------------------------------------------------------------------
+  445 observaciones, 6 positivas
+  b0 =  -9.890 (ee 2.430)
+  bD =   4.080 (ee 1.607)   coeficiente de log10 D
+  bI =   6.384 (ee 2.064)   coeficiente de log10 I
+
+  curva                                  alfa             IC 95%   beta           IC 95%
+  Caine (1980) publicado                14.82                      0.39
+  ajustada, p = 0,50                    35.40     [28.31, 48.98]   0.64     [0.52, 0.84]
+  ajustada, p = 0.022 (Youden 0.84)      9.00      [8.03, 11.20]   0.64
+  remuestreo por eventos: 625 de 1000 validos (375 sin positivos o sin convergencia)
+
+  Prueba sobre 2026 con la curva ya fija (p de Youden del entrenamiento):
+  curva                        VP    FP   FN    VN  recall  precision    FPR    AUC
+  Caine publicado               1    21   25   322    0.04      0.045  0.061  0.436
+  Caine ventana critica         4    33   22   310    0.15      0.108  0.096  0.453
+  ajustada (Youden)             8   118   18   225    0.31      0.063  0.344  0.467
+
+  Prueba por evento regional con positivos (AUC contra todos los
+  negativos de la prueba; recall = positivos del evento que marca cada curva):
+  evento                  pos  lluvia med  AUC Caine  critica  ajustada  recall C  critica  ajust.
+  91 (2026-07-16)           8    154.7 mm      0.832    0.841     0.848      0.12     0.50    0.75
+  92 (2026-08-13)          18      4.6 mm      0.261    0.280     0.298      0.00     0.00    0.11
+
+  ATENCION: los positivos de entrenamiento salen de 1 evento(s). Los intervalos
+  del remuestreo no miden incertidumbre real con tan pocos eventos.
+
+--------------------------------------------------------------------------
+Regresion con log10_D, log10_I, melton, antecedente_72h_mm, altitud_m
+  hacen falta 50 positivos de entrenamiento (10 por variable); hay 6.
+  NO SE AJUSTA. Con menos positivos que eso los coeficientes
+  describen el ruido de esta muestra, no el fenomeno.
+
+  observaciones -> m5_calibracion_observaciones.csv
+  inventario    -> m5_calibracion_inventario.csv
+  figura        -> m5_calibracion.png
+
+########################################################################
+# 4. python src/m5_satelite_piloto.py
+########################################################################
+==========================================================================
+M5 - Piloto satelital sobre quebradas con activacion documentada
+==========================================================================
+
+sitio                comparacion            antes     despues  dNDVI p50  dBSI p95
+islon_santa_gracia   antes_despues     2026-07-11  2026-08-30      0.377    -0.136
+marquesa             antes_despues     2026-07-11  2026-09-01      0.187    -0.070
+tres_cruces          antes_despues     2026-07-11  2026-08-30      0.059     0.011
+el_rincon_caimanes   antes_despues     2026-07-11  2026-08-30      0.166    -0.048
+islon_santa_gracia   misma_estacion    2025-09-14  2026-08-30      0.140    -0.015
+marquesa             misma_estacion    2025-08-25  2026-09-01      0.141    -0.041
+tres_cruces          misma_estacion    2025-08-25  2026-08-30      0.047     0.019
+el_rincon_caimanes   misma_estacion    2025-08-25  2026-08-30     -0.003     0.105
+
+  paneles -> outputs/m5_satelite/
+
+========================================================================
+VERIFICACIONES DERIVADAS
+========================================================================
+
+LA PRECISION AHORA SE PUEDE CALCULAR, Y ES UNA COTA INFERIOR
+
+  Con negativos de 2024-2025 y de 2026 -episodios donde llovio y la prensa
+  no reporto nada- la precision de Caine publicado sobre el invierno de 2026
+  es 1 de 22: 4,5%. Su recall sobre las mismas observaciones es 3%. El umbral
+  publicado esta tan alto que casi no marca nada, y lo poco que marca no
+  coincide con lo que se reporto.
+
+  "Cota inferior" no es una muletilla. Un negativo de este conjunto es un
+  episodio sin activacion REPORTADA. Si una quebrada bajo sin que nadie la
+  viera, el modelo que la marco cuenta como falso positivo cuando acerto.
+
+CALIBRAR BAJA EL UMBRAL PERO NO LO HACE DISCRIMINAR MEJOR
+
+  La curva ajustada sobre 2024-2025 es mas empinada que Caine (beta 0,60
+  contra 0,39) y, en el punto de operacion elegido en el entrenamiento,
+  bastante mas baja. Sobre 2026, sin haber visto 2026:
+
+    curva               recall  precision  FPR    AUC
+    Caine publicado      0,03     0,045    0,06   0,47
+    Caine critica        0,15     0,132    0,10   0,49
+    ajustada (Youden)    0,48     0,094    0,45   0,49
+
+  El AUC no cambia. La curva ajustada cambia falsos negativos por falsos
+  positivos a lo largo de la misma ordenacion; no ordena mejor. Es la
+  confirmacion, ahora con negativos observados, del diagnostico previo:
+  mover el umbral no arregla que el modelo ponga lo que no se activo por
+  encima de lo que si.
+
+EL BLOQUE DE AGOSTO DE 2026 NO LO GATILLO LA LLUVIA
+
+  El AUC global de 0,47 mezcla dos temporales muy distintos:
+
+    evento            positivos  lluvia mediana   AUC Caine  recall ajustada
+    16 de julio           13         59,2 mm        0,77         0,92
+    13 de agosto          20          4,6 mm        0,27         0,20
+
+  Dentro del temporal de julio el I-D si ordena (0,77; 0,83 con evidencia
+  fuerte). En agosto las zonas activadas recibieron una mediana de 4,6 mm
+  por episodio, y el AUC bajo 0,5 dice que se activaron donde MENOS llovio.
+  La prensa lo atribuyo al derretimiento acelerado de la nieve sobre suelos
+  saturados despues de julio (Diario El Dia, 16-08-2026). Es un mecanismo que
+  un umbral de lluvia no puede ver, y la variable que lo describiria -la
+  lluvia antecedente de semanas, o la nieve acumulada- no esta en el modelo.
+
+LO QUE NO SE PUEDE CONCLUIR
+
+  - 12 positivos de entrenamiento en DOS eventos (16-06-2025 y 01-08-2025).
+    El intervalo de beta, [0,23; 0,82], es ancho y aun asi optimista: el
+    remuestreo por eventos casi no tiene eventos que remuestrear.
+  - Con --positivos fuerte quedan 6 positivos de UN evento. Sus intervalos
+    angostos son un artefacto: el script lo avisa. Esa variante no se usa.
+  - La regresion con Melton, antecedente 72 h y altitud pide 50 positivos de
+    entrenamiento y hay 12. No se ajusto.
+  - El 1 de agosto de 2025, el evento mas intenso de los dos inviernos de
+    entrenamiento (130 mm en Pichidangui en menos de un dia), no aporta
+    negativos: la Red Geocientifica reporto "bastantes quebradas activadas"
+    sin nombrarlas, y eso excluye la region entera esa fecha.
+
+EL PILOTO SATELITAL
+
+  Sentinel-2 L2A de AWS (sin cuenta), ventanas de 5 x 5 km sobre cuatro
+  quebradas con activacion documentada. Julio contra septiembre de 2026 lo
+  domina el reverdecimiento despues de la lluvia (NDVI +0,38 de mediana en El
+  Islon) y el cambio de sombras por la altura del sol. Septiembre de 2025
+  contra septiembre de 2026 limpia las sombras y deja una senal con forma -mas
+  suelo desnudo a lo largo de los cauces- pero en TODA la red de drenaje, no
+  solo en la quebrada reportada. Ver la cabecera de src/m5_satelite_piloto.py.

@@ -1,0 +1,206 @@
+M4 - Tres inviernos (2024, 2025, 2026) con interpolacion de la lluvia
+10 de octubre de 2026, local, .venv con Python 3.12
+Cache de VIPNET: data/raw/lluvia/2024-06-01_2026-08-23/ (220 series, 89 MB en gzip)
+
+Comando: python src/m4_lluvia.py
+
+Que cambio respecto de 2026-10-10_m4_reconstruido.txt:
+  - ventana del 2024-06-01 al 2026-08-23 (antes 2026-06-01 a 2026-08-23)
+  - hora local con zoneinfo America/Santiago (antes desfase fijo de 4 h)
+  - cache en una subcarpeta por ventana, en gzip
+  - saltos aislados del contador de mas de 100 mm anulados (regla nueva)
+  - R2, R4 y estaciones ambiguas por estacion e invierno (antes por estacion)
+  - lluvia de cada cuenca escalada por un random forest validado dejando
+    estaciones fuera (antes, la de la estacion mas cercana tal cual)
+
+========================================================================
+==========================================================================
+M4 - ventana 2024-06-01 a 2026-08-23, paso 30 min
+     corte seco 12 h, usando cache
+==========================================================================
+
+R1  estaciones de precipitacion en Coquimbo: 107
+
+Bajando series de precipitacion...
+  20/107
+  40/107
+  60/107
+  80/107
+  100/107
+  107/107
+
+Ajustando la isoterma 0 observada, dia a dia...
+  106 de 814 dias con isoterma ajustada
+  mediana de julio: 2643 m
+
+Saltos del contador anulados (aislados, > 100 mm en 30 min): 19 pasos en 10 estaciones
+    GLACIAR TAPADO EN LOS CORRALES     2026-07-17 09:30    233.8 mm
+    RIVADAVIA                          2024-10-23 12:00    241.9 mm
+    RIVADAVIA                          2026-08-01 00:00    162.9 mm
+    RIO CLARO EN RIVADAVIA             2025-08-16 16:30    225.9 mm
+    RIO CLARO EN RIVADAVIA             2025-08-21 09:00    225.9 mm
+    RIO ELQUI EN ALMENDRAL             2026-04-10 01:00    350.3 mm
+    COGOTI 18                          2026-04-09 17:00    589.2 mm
+    COGOTI EMBALSE                     2026-04-09 17:00    660.2 mm
+    CUNCUMEN                           2026-04-09 14:00    598.2 mm
+    RIO CUNCUMEN ANTES JUNTA CHOAPA (C 2025-07-15 09:30    391.2 mm
+    RIO CUNCUMEN ANTES JUNTA CHOAPA (C 2025-07-18 07:30    391.2 mm
+    HUINTIL                            2026-04-09 18:30    739.1 mm
+    ESTERO PUPIO EN EL ROMERO          2025-07-09 10:30    737.7 mm
+    ESTERO PUPIO EN EL ROMERO          2025-07-09 11:30    737.2 mm
+    ESTERO PUPIO EN EL ROMERO          2025-07-09 12:30    736.9 mm
+    ESTERO PUPIO EN EL ROMERO          2025-07-09 13:30    736.5 mm
+    ESTERO PUPIO EN EL ROMERO          2025-07-09 14:30    736.5 mm
+    ESTERO PUPIO EN EL ROMERO          2025-07-09 15:30    737.3 mm
+    ESTERO PUPIO EN EL ROMERO          2025-07-09 16:30    737.3 mm
+
+R2 y R4 por estacion e invierno:
+                                 2024   2025   2026
+  R2  descartadas                   8      5      3
+  R4  descartadas                   1      1      3
+      validas                      98    101    101
+      ambiguas (no se descartan)      6     14     18
+  Con la version anterior (por estacion sobre toda la ventana y sin anular saltos):
+    R2 6, R4 13, quedan 88 de 107 estaciones
+    104 de 107 estaciones validas en al menos un invierno
+
+Detectando episodios con corte seco de 12 h...
+R3  episodios descartados por hueco de transmision: 139
+R5  episodios descartados por estar sobre la isoterma 0: 16
+    quedan 1188 episodios en 104 estaciones
+    98 eventos regionales
+
+Episodios que superan cada umbral, por invierno:
+                                     2024   2025   2026  total
+  episodios                           223    503    462   1188
+  Caine (1980)                          3      7     26     36
+  Ben David-Novak et al. (2004)         0      0      0      0
+  Caine sobre la ventana critica       10     17     41     68
+
+Sensibilidad al corte seco (cuantas horas separan dos episodios):
+   corte (h)   episodios   D mediana   superan Caine
+           6        1407         6.5              43
+          12        1204         8.0              36  <- el usado
+          24        1065         9.0              28
+
+Sensibilidad al umbral de paso seco (que cuenta como no llover):
+   seco < mm   episodios   D mediana   superan Caine
+         0.0        1253        11.5              28
+         0.1        1257        10.0              31
+         0.2        1204         8.0              36  <- el usado
+         0.5        1104         6.0              41
+
+Cuencas de M2: 3757; susceptibles (flujo_detritos + crecida_detritos): 2589
+  invierno 2024: mediana de distancia cuenca-estacion 6.6 km; 162 cuencas sobre el criterio de 30 km, marcadas en la capa
+  invierno 2025: mediana de distancia cuenca-estacion 6.6 km; 150 cuencas sobre el criterio de 30 km, marcadas en la capa
+  invierno 2026: mediana de distancia cuenca-estacion 6.5 km; 150 cuencas sobre el criterio de 30 km, marcadas en la capa
+
+--------------------------------------------------------------------------
+Interpolacion de la lluvia por evento (dejando una estacion fuera)
+--------------------------------------------------------------------------
+  eventos regionales: 98; con media >= 5 mm y >= 20 estaciones completas: 5
+  pares estacion-evento para entrenar: 449 (24 fuera por estar sobre la isoterma 0)
+
+  metodo                 MAE mm  RMSE mm      R2  R2 evento
+  media regional           39.5     65.5   0.620     -0.023
+  estacion cercana         36.8     76.9   0.476     -0.411
+  random forest            29.9     59.1   0.691      0.167
+  gradient boosting        30.7     58.1   0.701      0.194
+
+  Total del invierno 2026 (1-jun a 23-ago), 72 estaciones con >= 95% de dato, 4 variables fijas:
+  media regional          125.8    165.7  -0.028
+  estacion cercana        158.2    230.3  -0.986
+  random forest           107.7    157.6   0.070
+
+  SE ADOPTA random forest: MAE 29.9 contra 36.8 mm de la estacion cercana.
+  pares interpolados: 21880 de 29556 (el resto cae en eventos chicos y queda con factor 1)
+  factor: mediana 1.00, p10 0.71, p90 1.77; 1172 recortados a [0.25, 4.0]
+
+Pares cuenca-episodio: 29556
+  cuencas que superan, por invierno (de 2589):
+                                       2024   2025   2026
+  Caine (1980)                           10    154    606
+  Ben David-Novak et al. (2004)           0      0     20
+  Caine sobre la ventana critica        304    320   1000
+
+  De que se sostiene cada positivo (cuencas, por invierno):
+                                           2024   2025   2026
+  estacion marcada como ambigua               0      0     56
+  episodio de un solo paso de 30 min          0     92      1
+  estacion a mas de 30 km                     0      0      0
+  sin objeciones                             10     62    550
+
+  Estaciones que sostienen los positivos (cuencas, todos los inviernos):
+    RIO CHOAPA EN CUNCUMEN                          70
+    SALALA                                          44
+    LA CANELA                                       43
+    LAMBERT                                         43
+    CAIMANES                                        38
+    RIO CHOAPA EN SALAMANCA                         38
+    RIO COGOTI EN FRAGUITA                          38
+    COIRON                                          34
+    HUINTIL                                         29
+    EL TOME                                         28
+
+  capa    -> gatillo.gpkg
+  figura  -> m4_umbral_id.png
+  tabla   -> m4_episodios.csv
+
+========================================================================
+VERIFICACIONES DERIVADAS
+========================================================================
+
+EL CAMBIO DE HORA NO MOVIO NADA DEL INVIERNO 2026
+
+  Dos pruebas de regresion sobre la ventana vieja (2026-06-01 a 2026-08-23),
+  con el cache viejo copiado y comprimido:
+
+  1. Con zoneinfo y antes de las reglas nuevas: reproduce exacto la corrida
+     del 10-10. R2 1, R4 4, R3 58, R5 7, 448 episodios en 94 estaciones,
+     22 de 84 dias con isoterma, julio en 2.643 m, y las dos tablas de
+     sensibilidad identicas (455 episodios a 12 h, 26 sobre Caine).
+  2. Con las reglas nuevas: la linea "version anterior" que imprime el script
+     da R2 1, R4 4, quedan 102 de 107, igual que el 10-10. En 2026 solo cambia
+     RIVADAVIA: su salto aislado de 162,9 mm del 1 de agosto se anula y la
+     estacion se recupera (453 episodios en vez de 448; los 26 sobre Caine no
+     se mueven).
+
+  Cifras de control sobre la ventana larga:
+    LA SERENA (ESCUELA AGRICOLA), julio de 2026       150,9 mm  (igual que antes)
+    LA SERENA, junio a agosto de 2025                 122,2 mm
+    LA SERENA, junio a agosto de 2026                 175,8 mm
+    CUNCUMEN 04703003-K, 1-jun a 23-ago de 2026       409,5 mm  (igual que antes)
+  Leyendo la lluvia de la estacion sin interpolar, M5 cuenta 668 cuencas
+  sobre Caine en 2026: el mismo numero de la corrida del 10-10.
+
+R4 POR ESTACION BOTABA ESTACIONES POR FALLAS DEL EQUIPO, NO POR NIEVE
+
+  La primera corrida de esta ventana, con R2 y R4 por estacion, botaba 6 y 13
+  (quedaban 88 de 107). De las 13 de R4, solo Glaciar Tapado era nieve. El
+  resto eran saltos del contador: el 9 y 10 de abril de 2026 cinco estaciones
+  registran a la vez cientos de mm en un paso entre ceros, y Pupio oscila
+  entre 0 y 737 mm. Con la regla por estacion, la falla de abril botaba a
+  Cuncumen y Huintil tambien para el temporal de julio.
+
+  En tres inviernos el mayor paso de 30 min no aislado de la red es de
+  16,0 mm (Punitaqui), mas uno de 33 mm en Angostura de Pabellon. Los aislados
+  se separan en dos familias: 22 a 81 mm y 163 a 739 mm. El corte de 100 mm
+  queda en el hueco; cualquier valor entre 81 y 163 da lo mismo.
+
+LA INTERPOLACION SE ADOPTA, PERO REPARTE POCO
+
+  Le gana a la estacion cercana en los dos sentidos que pide la regla (MAE
+  29,9 contra 36,8 mm; RMSE 59,1 contra 76,9). Pero el R2 dentro del evento,
+  que mide si reparte bien la lluvia en el espacio, es 0,17: gana sobre todo
+  porque la estacion cercana es PEOR que la media regional (-0,41). Sobre el
+  total del invierno 2026, que es como se hizo el diagnostico, el orden es el
+  mismo que alla: media 125,8, cercana 158,2, bosque 107,7 mm de MAE.
+
+  Solo 5 de 98 eventos regionales tienen media de 5 mm o mas con 20
+  estaciones o mas de total exacto: el bosque se entrena con 449 pares de
+  cinco temporales. Los otros 93 eventos quedan con factor 1.
+
+  Ben David-Novak pasa de 0 a 20 cuencas en 2026 por el factor, que escala
+  tambien la intensidad maxima de 60 min. Es una consecuencia del supuesto
+  "la tormenta de la cuenca es la de su estacion, multiplicada": no es
+  intensidad medida.
