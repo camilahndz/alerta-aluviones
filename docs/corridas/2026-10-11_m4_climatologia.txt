@@ -1,0 +1,40 @@
+M4 - Precipitacion media anual de CR2MET, normal 1991-2020
+11 de octubre de 2026, local, .venv con Python 3.12
+
+Comando:
+  python src/m4_climatologia.py
+
+Fuente: CR2MET v2.5, Boisier et al., Zenodo 10.5281/zenodo.7529682, archivo
+CR2MET_pr_v2.5.zip (2.542,7 MB). No se bajo entero: se leyo el indice del zip
+por rangos HTTP y se pidieron solo los 360 meses de 1991 a 2020, cada uno
+verificado contra su CRC. Zenodo entrego unos 0,4 MB/s por conexion; con seis
+conexiones fueron 18 minutos. Los totales mensuales recortados quedan en
+data/raw/cr2met/ (360 archivos .npy y transform.txt).
+
+Verificacion de escala: la normal en La Serena da 91 mm, Vicuna 123, Ovalle
+149, Illapel 211 y Copiapo 19.
+
+========================================================================
+==========================================================================
+M4 - Precipitacion media anual, CR2MET v2.5, normal 1991-2020
+==========================================================================
+
+Meses de la normal: 360; en cache: 0
+Leyendo el indice del zip de Zenodo...
+Bajando 360 meses (1228 MB comprimidos) con 6 conexiones...
+  30/360  (187 s)
+  60/360  (278 s)
+  90/360  (388 s)
+  120/360  (466 s)
+  150/360  (531 s)
+  180/360  (615 s)
+  210/360  (684 s)
+  240/360  (777 s)
+  270/360  (859 s)
+  300/360  (923 s)
+  330/360  (993 s)
+  360/360  (1060 s)
+
+Precipitacion media anual 1991-2020: 60 x 150 celdas de 0,05 grados
+  minimo 11 mm, mediana 139 mm, maximo 1413 mm
+  raster -> data\processed\precipitacion_media_anual.tif
