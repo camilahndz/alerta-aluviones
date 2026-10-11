@@ -150,6 +150,16 @@ PCT_SIN_CAMBIO = 75
 PCT_CAMBIO = 95
 
 HILOS = 8
+REINTENTOS = 8           # con esperas de 10, 20, 40 y luego 60 s: aguanta ~5 min sin red
+
+# Configuracion de GDAL para leer de AWS. Va al importar el modulo y no en main,
+# porque m5_satelite_troncos.py y m5_troncos.py usan estas funciones sin pasar
+# por main: la primera version la ponia en main, y un corte de red de un segundo
+# tumbo una corrida de 15 minutos de m5_troncos.py.
+os.environ.setdefault("GDAL_DISABLE_READDIR_ON_OPEN", "EMPTY_DIR")
+os.environ.setdefault("GDAL_CACHEMAX", "512")
+os.environ.setdefault("GDAL_HTTP_MAX_RETRY", "5")
+os.environ.setdefault("GDAL_HTTP_RETRY_DELAY", "2")
 BLOQUE_CAUCES = 100         # cauces por tanda, para acotar la memoria
 
 
@@ -252,14 +262,35 @@ def leer_banda(href, ventanas_utm, crs_tesela):
     from rasterio.enums import Resampling
     from rasterio.windows import from_bounds
 
+    from rasterio.errors import RasterioIOError
+
+    # Un error de red reabre el archivo y sigue desde el cauce donde quedo. Los
+    # ya leidos no se repiten. Si el mismo cauce falla REINTENTOS veces, el
+    # error sube: no se inventa un arreglo vacio, que se leeria como "sin dato".
+    #
+    # Cada reintento pide la URL con un parametro distinto. GDAL guarda en
+    # memoria lo que bajo de cada URL, y un bloque que llego cortado se
+    # releeria cortado desde ahi: el primer reintento fallaba igual que el
+    # intento original. S3 ignora el parametro; GDAL lo trata como otro archivo.
     salida = {}
-    with rasterio.open(href) as src:
-        for cid, (x0, y0, x1, y1) in ventanas_utm.items():
-            ancho = int(round((x1 - x0) / 10))
-            alto = int(round((y1 - y0) / 10))
-            w = from_bounds(x0, y0, x1, y1, src.transform)
-            salida[cid] = src.read(1, window=w, out_shape=(alto, ancho), boundless=True,
-                                   fill_value=0, resampling=Resampling.nearest)
+    pendientes = list(ventanas_utm.items())
+    for intento in range(REINTENTOS):
+        url = href if intento == 0 else f"{href}?reintento={intento}"
+        try:
+            with rasterio.open(url) as src:
+                while pendientes:
+                    cid, (x0, y0, x1, y1) = pendientes[0]
+                    ancho = int(round((x1 - x0) / 10))
+                    alto = int(round((y1 - y0) / 10))
+                    w = from_bounds(x0, y0, x1, y1, src.transform)
+                    salida[cid] = src.read(1, window=w, out_shape=(alto, ancho), boundless=True,
+                                           fill_value=0, resampling=Resampling.nearest)
+                    pendientes.pop(0)
+            return salida
+        except RasterioIOError:
+            if intento == REINTENTOS - 1:
+                raise
+            time.sleep(min(60, 10 * 2 ** intento))
     return salida
 
 
@@ -419,10 +450,6 @@ def main():
     ap.add_argument("--procesados", type=Path, default=RAIZ / "data" / "processed")
     args = ap.parse_args()
 
-    os.environ.setdefault("GDAL_DISABLE_READDIR_ON_OPEN", "EMPTY_DIR")
-    os.environ.setdefault("GDAL_CACHEMAX", "512")
-    os.environ.setdefault("GDAL_HTTP_MAX_RETRY", "5")
-    os.environ.setdefault("GDAL_HTTP_RETRY_DELAY", "2")
 
     import geopandas as gpd
 

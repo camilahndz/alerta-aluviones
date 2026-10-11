@@ -75,6 +75,7 @@ Uso:
     python src/m5_validacion.py
     python src/m5_validacion.py --radio-km 5     # mas generoso al emparejar
     python src/m5_validacion.py --solo-fuertes   # solo aluvion y activacion
+    python src/m5_validacion.py --sin-troncos    # sin las unidades de m1_troncos.py
 
 Escribe outputs/m5_validacion.csv con una fila por entrada del inventario.
 """
@@ -268,6 +269,9 @@ def main():
     ap.add_argument("--solo-fuertes", action="store_true",
                     help="Usa solo las entradas con evidencia de aluvion o "
                          "activacion, sin escurrimientos ni alertas.")
+    ap.add_argument("--sin-troncos", action="store_true",
+                    help="Deja fuera las unidades troncales de m1_troncos.py, "
+                         "para comparar con el modelo anterior a ellas.")
     args = ap.parse_args()
 
     ruta_susc = args.procesados / "susceptibilidad.gpkg"
@@ -288,6 +292,16 @@ def main():
     unidades = gpd.read_file(ruta_susc).to_crs(CRS_METRICO)
     susceptibles = unidades[unidades["clase"].isin(CLASES_SUSCEPTIBLES)]
     gatillo = gpd.read_file(ruta_gat)
+    # Los troncos se motivaron con este mismo inventario (ver m1_troncos.py), asi
+    # que su efecto sobre el recall de 2026 no es una validacion: se reporta para
+    # ver cuanto cambia, y la corrida guarda las dos versiones.
+    if args.sin_troncos:
+        susceptibles = susceptibles[susceptibles["clase"] != "tronco"]
+        gatillo = gatillo[gatillo["clase"] != "tronco"]
+        print("Sin unidades troncales (--sin-troncos)")
+    else:
+        print(f"Con {int((susceptibles['clase'] == 'tronco').sum())} unidades troncales: "
+              "el recall de 2026 con troncos NO es validacion, los motivo este inventario")
     # Solo los episodios de la ventana que se valida: ver VALIDACION_DESDE.
     inicio = pd.to_datetime(gatillo["inicio"], utc=True).dt.tz_convert("America/Santiago")
     en_ventana = ((inicio >= pd.Timestamp(VALIDACION_DESDE, tz="America/Santiago"))

@@ -442,6 +442,11 @@ def main():
     print(f"Positivos: {', '.join(positivos)}")
 
     gatillo = gpd.read_file(args.procesados / "gatillo.gpkg")
+    # Se calibra sobre las unidades chicas, como en la corrida del 10-10. Los
+    # troncos de m1_troncos.py tienen lluvia areal y otra escala, y meterlos en
+    # la mediana de cada zona mezclaria dos objetos en una observacion; se
+    # evaluan aparte en m5_troncos.py.
+    gatillo = gatillo[gatillo["clase"] != "tronco"]
     for col in ("inicio", "fin"):
         gatillo[col] = pd.to_datetime(gatillo[col], utc=True)
     unidades = gpd.read_file(args.procesados / "susceptibilidad.gpkg").to_crs(m5.CRS_METRICO)
