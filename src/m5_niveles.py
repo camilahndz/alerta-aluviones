@@ -13,11 +13,21 @@ LA PREGUNTA
 LA VARIABLE
 
     Una sola: la fraccion de la lluvia normal de un anio que cae en el
-    temporal, en la estacion mas mojada de la provincia. La lluvia del
+    temporal, en la SEGUNDA estacion mas mojada de la provincia. La lluvia del
     temporal sale de los episodios de M4; la normal, de CR2MET 1991-2020
     (m4_climatologia.py). Es la lluvia relativa al clima del lugar, que es la
     correccion que la literatura propone para un gradiente como el de
     Coquimbo (Guzzetti et al., 2008).
+
+    POR QUE LA SEGUNDA Y NO LA MAS MOJADA. La primera version usaba la mas
+    mojada, y la auditoria del 11-10-2026 encontro lo que eso cuesta: el
+    boletin en vivo de ese dia ponia a Choapa en naranja por una sola
+    estacion, Rio Cuncumen antes junta Choapa, con 94,5 mm, cuando sus dos
+    vecinas a 1-2 km median 36,6 y 41,8. M4 ya la tenia marcada como ambigua
+    por ese mismo patron. Con la mas mojada, un pluviometro malo decide el
+    nivel de una provincia entera. Con la segunda, hacen falta dos que lo
+    digan. En los tres inviernos el orden casi no cambia (AUC 0,98 con las
+    dos lecturas): lo que se gana es que un solo sensor no alcanza.
 
     Una y no mas porque no hay con que: 12 provincias-temporal positivas en
     tres inviernos, y la regla de m5_calibracion es diez positivos por
@@ -39,8 +49,8 @@ EL MODELO Y LOS NIVELES
         roja       P >= 0,75   tres de cada cuatro
 
     Se traducen a fraccion de la normal, que es lo que se le puede decir a
-    alguien: "roja si en alguna estacion de la provincia cae mas del X% de lo
-    que llueve en un anio".
+    alguien: "roja si en al menos dos estaciones de la provincia cae mas del
+    X% de lo que llueve en un anio".
 
 COMO SE PRUEBA
 
@@ -53,46 +63,51 @@ COMO SE PRUEBA
     Los niveles que quedan para operar se ajustan con los tres inviernos; la
     prueba 2 es la estimacion de como se van a comportar.
 
+    Ademas se guardan tres modelos que dejan fuera un invierno cada uno. Son
+    los que usa el visor para repasar un temporal: el repaso de julio de 2026
+    tiene que mostrar lo que habria dicho un modelo que no conocia 2026, no
+    uno ajustado con ese mismo temporal.
+
     El deshielo (m4_deshielo.py) no entra al modelo: es experimental y tiene
     un caso. Se reporta al lado, como aviso aparte.
 
 LO QUE SALIO
 
-    Corrida 2026-10-11_m5_niveles.txt.
+    Corrida 2026-10-11_m5_niveles.txt, con la segunda estacion.
 
-    * Entrenado con 2024-2025 y probado en 2026, ordena las 17
-      provincias-temporal de 2026 sin un error (AUC 1,00; con mm absolutos,
-      0,95). Las 9 que quedaron sin nivel no tuvieron activaciones; las 4 en
-      naranja o roja, todas.
+    * Entrenado con 2024-2025 y probado en 2026: AUC 0,97. Las 9
+      provincias-temporal que quedaron sin nivel no tuvieron activaciones; las
+      5 en naranja o roja, todas; de las 3 en amarilla, una. Con la estacion
+      mas mojada daba 1,00: la segunda estacion pierde un caso en la prueba y
+      gana que un sensor solo no decida.
 
-    * Dejando fuera un temporal a la vez: AUC 0,95 (0,87 en los regionales),
-      contra 0,88 (0,78) de la razon contra Caine sobre las mismas filas. En
-      Elqui, donde Caine publicado no se activaba nunca, 0,94: el problema de
-      Caine ahi era el corte, no el orden.
+    * Dejando fuera un temporal a la vez: AUC 0,96 (0,89 en los regionales) y
+      Brier 0,059, contra 0,95 y 0,063 con la estacion mas mojada y 0,88 de la
+      razon contra Caine sobre las mismas filas. En Elqui, 0,95.
 
-    * Normalizar por la normal aporta poco dentro de Coquimbo: con mm
-      absolutos la validacion cruzada da 0,94 y un Brier algo mejor (0,056
-      contra 0,063). Lo que mejora la alerta es contar la lluvia del temporal
-      entero por provincia y poner el corte a esa escala. Se usa la fraccion
-      igual, por el argumento fisico y porque es la unica forma de llevar los
-      niveles a un clima mas seco o mas humedo; Atacama es la prueba.
+    * Los niveles para operar: amarilla desde el 16% de la normal anual en al
+      menos dos estaciones de la provincia, naranja desde el 23%, roja desde el
+      32%.
 
-    * Los niveles para operar: amarilla desde el 21% de la normal anual en
-      alguna estacion de la provincia, naranja desde el 27%, roja desde el
-      35%. Estan cerca uno de otro porque la probabilidad sube rapido: entre
-      un quinto y un tercio de un anio de lluvia en un temporal se pasa de
-      "probable" a "casi seguro".
+    * LO QUE ESAS CIFRAS NO DICEN. Las 12 provincias-temporal positivas salen
+      de solo 5 temporales, y las provincias de un mismo temporal no son
+      independientes. Remuestreando temporales enteros (auditoria del
+      11-10-2026, con la estacion mas mojada), el corte de roja tiene un
+      intervalo del 90% que va de 23 a 49%. Y el modelo que deja fuera 2025
+      sale casi en escalon (19, 20,5 y 22%): con tan pocos positivos, sacar un
+      invierno cambia la forma de la curva. Son cortes para operar con cuidado
+      y revisar con mas datos, no cortes estimados con precision.
 
-    * El bloque de deshielo de agosto de 2026 queda en naranja o roja en las
-      tres provincias sin el indicador de deshielo: medido como temporal
-      entero, llovio entre el 30 y el 42% de la normal. El 4,6 mm de mediana
-      que lo hacia parecer seco era por cuenca y episodio.
+    * El bloque de deshielo de agosto de 2026 queda en alerta en las tres
+      provincias sin el indicador de deshielo: medido como temporal entero,
+      la lluvia fue mucho mas que la que hacia parecer seco el analisis por
+      cuenca y episodio.
 
-    * Lo que falla es un par: el 11 de junio de 2025 llovio entre el 26 y el
-      33% y no hubo reportes (falsa alarma), y el 16 de junio llovio entre el
-      21 y el 23% y si hubo activaciones (falla). Es la firma de la lluvia
-      antecedente: el segundo cayo sobre el suelo que mojo el primero. Con 12
-      positivos no se puede agregar una segunda variable sin sobreajustar.
+    * Lo que falla es un par: el 11 de junio de 2025 llovio sobre el corte y
+      no hubo reportes (falsa alarma), y el 16 de junio llovio menos y si hubo
+      activaciones (falla). Es la firma de la lluvia antecedente: el segundo
+      cayo sobre el suelo que mojo el primero. Con 12 positivos de 5
+      temporales no se puede agregar una segunda variable sin sobreajustar.
 
 Uso:
 
@@ -154,9 +169,17 @@ def lluvia_por_temporal(episodios: pd.DataFrame, tor: pd.DataFrame) -> pd.DataFr
     return pd.concat(filas, ignore_index=True)
 
 
+def segunda(valores: pd.Series) -> float:
+    """El segundo valor mas alto; 0 si en la provincia llovio en una sola estacion."""
+    v = valores.sort_values(ascending=False).to_numpy()
+    return float(v[1]) if len(v) > 1 else 0.0
+
+
 def variables(tabla: pd.DataFrame) -> dict:
-    return {"fraccion de la normal": np.log10(tabla["fraccion_max"].clip(lower=PISO_FRACCION)),
-            "lluvia absoluta (mm)": np.log10(tabla["lluvia_max_mm"].clip(lower=PISO_MM))}
+    return {"fraccion de la normal": np.log10(tabla["fraccion_2"].clip(lower=PISO_FRACCION)),
+            "lluvia absoluta (mm)": np.log10(tabla["lluvia_2_mm"].clip(lower=PISO_MM)),
+            "fraccion, estacion mas mojada (version anterior)":
+                np.log10(tabla["fraccion_max"].clip(lower=PISO_FRACCION))}
 
 
 def ajustar(x, y):
@@ -245,14 +268,17 @@ def main():
     lluvia["fraccion"] = lluvia["lluvia_mm"] / lluvia["normal_mm"]
     puntaje = lluvia.groupby(["temporal", "provincia"]).agg(
         lluvia_max_mm=("lluvia_mm", "max"), fraccion_max=("fraccion", "max"),
+        lluvia_2_mm=("lluvia_mm", segunda), fraccion_2=("fraccion", segunda),
         estaciones=("estacion_codigo", "nunique")).reset_index()
 
     inv = cal.cargar_inventario()
     etq, _, _ = alerta.etiquetar(tor, inv)
     t = etq.merge(puntaje, on=["temporal", "provincia"], how="left").fillna(
-        {"lluvia_max_mm": 0.0, "fraccion_max": 0.0, "estaciones": 0})
+        {"lluvia_max_mm": 0.0, "fraccion_max": 0.0, "lluvia_2_mm": 0.0, "fraccion_2": 0.0,
+         "estaciones": 0})
     t = t.merge(tor[["temporal", "inicio", "regional"]], on="temporal")
     t["prueba"] = t["inicio"] >= pd.Timestamp(INICIO_PRUEBA, tz=ZONA)
+    t["invierno"] = m4.invierno(t["inicio"].dt.tz_convert(ZONA)).to_numpy()
 
     ruta_deshielo = RAIZ / "outputs" / "m4_deshielo.csv"
     if ruta_deshielo.exists():
@@ -327,15 +353,25 @@ def main():
     print("-" * 74)
     x = variables(d)["fraccion de la normal"]
     b = ajustar(x, d["y"].to_numpy())
-    print("  en alguna estacion de la provincia, la lluvia del temporal llega a:")
+    print("  en al menos dos estaciones de la provincia, la lluvia del temporal llega a:")
     for nombre, umbral in NIVELES:
         print(f"    {nombre:<9} {corte(b, umbral):>6.1%} de la normal anual   (P >= {umbral:.2f})")
     # Los coeficientes con todos sus decimales: m6_alerta_en_vivo.py los copia
     # como constantes congeladas, y este JSON es contra lo que se verifica.
     print(f"  coeficientes: P = 1 / (1 + exp(-({b[0]:.6f} + {b[1]:.6f} * log10(fraccion))))")
+    # Un modelo por invierno dejado fuera, para que los repasos del visor no
+    # muestren un temporal con un modelo que ya lo conocia.
+    sin_invierno = {}
+    for invierno in sorted(d["invierno"].unique()):
+        fuera = (d["invierno"] == invierno).to_numpy()
+        bi = ajustar(x[~fuera], d.loc[~fuera, "y"].to_numpy())
+        sin_invierno[str(int(invierno))] = [float(bi[0]), float(bi[1])]
+        print(f"  sin el invierno {invierno}: " + ", ".join(
+            f"{n} {corte(bi, u):.1%}" for n, u in NIVELES))
     (RAIZ / "outputs" / "m5_niveles_modelo.json").write_text(json.dumps({
         "b0": float(b[0]), "b1": float(b[1]), "piso_fraccion": PISO_FRACCION,
         "niveles": dict(NIVELES), "positivos": int(d["y"].sum()), "casos": int(len(d)),
+        "sin_invierno": sin_invierno,
     }, indent=2))
     d["p_final"] = probabilidad(b, x)
     d["nivel"] = nivel(d["p_final"])
@@ -354,7 +390,7 @@ def main():
                 continue
             f = f.iloc[0]
             celdas.append(f"{'+' if f['y'] else '-'} {nivel([f['p_cruzada']])[0]:<8} "
-                          f"{f['fraccion_max']:>5.0%}".ljust(26))
+                          f"{f['fraccion_2']:>5.0%}".ljust(26))
         print(f"    {fecha:<12} " + "".join(celdas) + desh)
 
     d.drop(columns=["inicio"]).to_csv(RAIZ / "outputs" / "m5_niveles.csv", index=False,

@@ -13,6 +13,12 @@ se fijaron antes de correr. Una corrida de prueba del codigo, con una normal
 falsa constante de 100 mm, se hizo en una carpeta temporal para encontrar
 errores; sus cifras equivalen a las de "lluvia absoluta" de abajo.
 
+Despues de la auditoria del mismo 11-10, la variable paso de la estacion mas
+mojada a la SEGUNDA estacion mas mojada de cada provincia (ver la cabecera de
+m5_niveles.py), y la corrida guarda tambien los modelos que dejan fuera cada
+invierno. Esta es la corrida con ese cambio; la version anterior daba cortes de
+21, 27 y 35% con la estacion mas mojada.
+
 ========================================================================
 ==========================================================================
 M5 - Niveles de alerta por provincia: la lluvia del temporal contra el clima
@@ -30,29 +36,34 @@ Provincias-temporal: 98 (12 positivas), 4 excluidas
 1. Entrenar con 2024-2025, probar en 2026
 --------------------------------------------------------------------------
 
-  fraccion de la normal: AUC en 2026 1.00 (regionales 1.00), Brier 0.062
+  fraccion de la normal: AUC en 2026 0.97 (regionales 0.93), Brier 0.066
     nivel       casos  con activaciones   tasa
     ninguna         9                 0   0.00
-    amarilla        4                 2   0.50
+    amarilla        3                 1   0.33
     naranja         2                 2   1.00
-    roja            2                 2   1.00
+    roja            3                 3   1.00
 
-  lluvia absoluta (mm): AUC en 2026 0.95 (regionales 0.90), Brier 0.080
+  lluvia absoluta (mm): AUC en 2026 0.95 (regionales 0.90), Brier 0.084
+
+  fraccion, estacion mas mojada (version anterior): AUC en 2026 1.00 (regionales 1.00), Brier 0.062
 
 --------------------------------------------------------------------------
 2. Dejando fuera un temporal a la vez, tres inviernos
 --------------------------------------------------------------------------
 
-  fraccion de la normal: AUC 0.95 (regionales 0.87), Brier 0.063
-    por provincia (AUC):  Choapa 0.96   Elqui 0.94   Limari 0.93
+  fraccion de la normal: AUC 0.96 (regionales 0.89), Brier 0.059
+    por provincia (AUC):  Choapa 0.95   Elqui 0.95   Limari 0.98
     nivel       casos  con activaciones   tasa
-    ninguna        83                 3   0.04
-    amarilla        2                 0   0.00
-    naranja         5                 3   0.60
+    ninguna        82                 3   0.04
+    amarilla        4                 1   0.25
+    naranja         4                 2   0.50
     roja            8                 6   0.75
 
-  lluvia absoluta (mm): AUC 0.94 (regionales 0.87), Brier 0.056
-    por provincia (AUC):  Choapa 0.96   Elqui 0.92   Limari 0.97
+  lluvia absoluta (mm): AUC 0.95 (regionales 0.86), Brier 0.060
+    por provincia (AUC):  Choapa 0.94   Elqui 0.96   Limari 0.95
+
+  fraccion, estacion mas mojada (version anterior): AUC 0.95 (regionales 0.87), Brier 0.063
+    por provincia (AUC):  Choapa 0.96   Elqui 0.94   Limari 0.93
 
   referencia, Caine sin ajustar (m5_alerta_sector): AUC 0.88 (regionales 0.78); solo 2026, 0.68
     por provincia (AUC):  Choapa 0.91   Elqui 0.91   Limari 0.84
@@ -60,28 +71,31 @@ Provincias-temporal: 98 (12 positivas), 4 excluidas
 --------------------------------------------------------------------------
 Los niveles para operar, ajustados con los tres inviernos
 --------------------------------------------------------------------------
-  en alguna estacion de la provincia, la lluvia del temporal llega a:
-    amarilla   20.8% de la normal anual   (P >= 0.25)
-    naranja    26.9% de la normal anual   (P >= 0.50)
-    roja       34.9% de la normal anual   (P >= 0.75)
-  coeficientes: P = 1 / (1 + exp(-(5.568862 + 9.776656 * log10(fraccion))))
+  en al menos dos estaciones de la provincia, la lluvia del temporal llega a:
+    amarilla   16.2% de la normal anual   (P >= 0.25)
+    naranja    22.6% de la normal anual   (P >= 0.50)
+    roja       31.6% de la normal anual   (P >= 0.75)
+  coeficientes: P = 1 / (1 + exp(-(4.860371 + 7.526972 * log10(fraccion))))
+  sin el invierno 2024: amarilla 16.0%, naranja 22.6%, roja 31.8%
+  sin el invierno 2025: amarilla 19.3%, naranja 20.5%, roja 21.9%
+  sin el invierno 2026: amarilla 16.9%, naranja 25.2%, roja 37.7%
 
   Los temporales regionales con el nivel que habria tenido cada provincia
   (validacion cruzada; + activaciones, - nada, D deshielo):
     temporal     Elqui                     Limari                    Choapa                    
-    06-10-2024   - ninguna     7%          - ninguna     4%          - ninguna     3%          
-    11-06-2025   - roja       28%          - roja       33%          - naranja    26%          
-    16-06-2025   + ninguna    23%          + ninguna    21%          + ninguna    22%          
+    06-10-2024   - ninguna     6%          - ninguna     2%          - ninguna     3%          
+    11-06-2025   - naranja    22%          - roja       26%          - roja       25%          
+    16-06-2025   + ninguna    15%          + ninguna    20%          + ninguna    22%          
     22-06-2025   - ninguna     0%          - ninguna     2%          - ninguna     2%          
-    31-07-2025   + roja      151%          + roja       70%          + roja       66%          
-    18-08-2025   - naranja    28%          - ninguna     6%          - ninguna     0%          
-    21-08-2025   - ninguna    14%          - ninguna    10%          - ninguna    19%          
-    26-09-2025   - ninguna     0%          - ninguna     9%          - ninguna    10%          
-    06-11-2025   - ninguna     0%          - ninguna     2%          - ninguna     4%          
-    05-12-2025   - ninguna     3%          - ninguna     0%          - ninguna     7%          
-    10-06-2026   - ninguna     0%          - ninguna     1%          - ninguna    13%          
-    15-07-2026   + roja      237%          x (excluida)              + roja      156%           D
-    30-07-2026   + naranja    29%          - amarilla   23%          - amarilla   25%           D
-    11-08-2026   + naranja    32%          + roja       42%          + naranja    30%           D
+    31-07-2025   + roja       55%          + roja       51%          + roja       44%          
+    18-08-2025   - naranja    26%          - ninguna     3%          - ninguna     0%          
+    21-08-2025   - ninguna     9%          - ninguna     9%          - amarilla   17%          
+    26-09-2025   - ninguna     0%          - ninguna     6%          - ninguna     7%          
+    06-11-2025   - ninguna     0%          - ninguna     2%          - ninguna     2%          
+    05-12-2025   - ninguna     2%          - ninguna     0%          - ninguna     3%          
+    10-06-2026   - ninguna     0%          - ninguna     1%          - ninguna     4%          
+    15-07-2026   + roja      207%          x (excluida)              + roja      146%           D
+    30-07-2026   + naranja    26%          - amarilla   20%          - amarilla   20%           D
+    11-08-2026   + naranja    28%          + roja       41%          + amarilla   20%           D
 
   tabla -> m5_niveles.csv
