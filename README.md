@@ -342,6 +342,12 @@ El segundo cruza el cauce principal de cada cuenca susceptible con la red vial y
 las zonas urbanas, y devuelve los puntos donde una ruta cruza el fondo de una
 quebrada capaz de generar flujo.
 
+Desde octubre de 2026 también cruza las cuencas de clase inundación, menos los
+ríos, y ordena los puntos sumando el área drenada en el cruce. Las cifras de esta
+sección son de antes de ese cambio. El cambio y la prueba que lo motivó están en
+M5, [La prueba que haría una
+autoridad](#la-prueba-que-haría-una-autoridad-cortes-reales-y-alerta-por-provincia).
+
 El primero baja el extracto de Chile de
 [Geofabrik](https://download.geofabrik.de/south-america/chile.html) y lo deja en
 `data/raw/osm/chile.gpkg`. **No baja `chile-latest-free.gpkg.zip`**, que es lo
@@ -1084,6 +1090,190 @@ Para gestión, eso se traduce en dos usos distintos:
   quebradas *dentro* de un mismo temporal. Para eso hace falta precipitación con
   resolución espacial: radar, o satélite corregido contra estaciones.
 
+### La prueba que haría una autoridad: cortes reales y alerta por provincia
+
+```bash
+python src/m3_exposicion.py       # con la clase inundacion y el area en el orden
+python src/m5_cortes.py           # los cortes de ruta reales contra la lista de M3
+python src/m5_alerta_sector.py    # la alerta por provincia y por temporal
+```
+
+Corridas: [`2026-10-11_m3_exposicion.txt`](docs/corridas/2026-10-11_m3_exposicion.txt),
+[`2026-10-11_m5_cortes.txt`](docs/corridas/2026-10-11_m5_cortes.txt) y
+[`2026-10-11_m5_alerta_sector.txt`](docs/corridas/2026-10-11_m5_alerta_sector.txt).
+
+Todo lo anterior de M5 evalúa quebrada por quebrada. Una autoridad no decide así:
+vigila tramos de ruta y declara alertas por provincia y por temporal. Estas dos
+pruebas miden el modelo en esos términos.
+
+#### Los cortes de ruta reales contra el mapa de exposición
+
+Los inventarios traen 11 cortes o daños de ruta con la vía nombrada. Cada uno se
+ubica con el cauce o el caserío de OSM que lleva su nombre. Hay acierto si M3
+tiene un candidato sobre esa ruta a menos de 1 km del punto (1,5 km si se ubicó
+por caserío). La línea base pone la misma ventana en 2.000 puntos al azar de la
+misma ruta. Sin ella el acierto no dice nada: hay rutas con un candidato por
+kilómetro.
+
+| Lista de M3 | Cortes con candidato | Al azar | 3% de arriba de la lista | Al azar |
+|---|---|---|---|---|
+| Hasta octubre (clases susceptibles, orden por clase y vía) | 7 de 11 | 5,3 | 2 | 2,5 |
+| Más la clase inundación | 9 de 11 | 6,6 | 2 | 2,5 |
+| Más el área drenada en el orden (la actual) | 9 de 11 | 6,6 | **4** | **1,0** |
+
+**La lista de antes sabía qué rutas cruzan quebradas, no en qué punto**
+(P = 0,14 contra el azar), y su orden no ayudaba. Los cuatro cortes sin candidato
+caían en cuencas de clase inundación, que M3 no miraba. La prensa ahí describe
+agua, no barro: "aumento de caudal" en la D-427, una crecida que "sobrepasó la
+calzada" en la misma ruta un año antes, un socavón en la D-697. M2 acertaba el
+proceso; M3 se equivocaba de pregunta. Para una vía no importa si la corta un
+flujo de detritos o una crecida de agua.
+
+De ahí los dos cambios. Las cuencas de inundación entran con peso 0,30, sin los
+ríos (Elqui, Limarí, Choapa y otros doce, con la regla de los troncos). La
+prioridad pasa a tener tres tercios: clase, vía y área drenada en el cruce, en
+logaritmo entre 0,15 y 1.000 km². El área se agregó porque con dos términos los
+candidatos de una misma ruta empataban. **El 3% de arriba de la lista pasa a
+cubrir 4 cortes contra 1,0 al azar (P = 0,006).** La lista crece de 4.846 a 9.424
+puntos y los 4.846 de antes no cambian.
+
+La fórmula se fijó antes de evaluarla, pero los once cortes son los mismos que
+mostraron el problema. **Esto no es validación independiente**: la
+independiente es el invierno de 2027, contra la lista congelada de esta corrida.
+
+#### La alerta por provincia y por temporal
+
+Los temporales se arman con los episodios de M4 de 5 mm o más que quedan a menos
+de 24 h. Salen 34 en tres inviernos, 15 de ellos regionales (5 estaciones o más
+sobre 5 mm). Una provincia es positiva en un temporal si alguna fuente reporta
+una activación en una de sus comunas. A esa escala el negativo pesa bastante más
+que por quebrada: es difícil que una provincia entera tenga activaciones y nadie
+lo reporte.
+
+Caine publicado, sin ajustar nada, en los temporales regionales:
+
+| Nivel | Recall | Precisión | Falsas alarmas | AUC Caine | AUC lluvia máxima |
+|---|---|---|---|---|---|
+| Región, por temporal (*cuándo*) | 0,67 | 0,80 | 1 de 9 | 0,91 | 0,94 |
+| Provincia, por temporal (*dónde*) | 0,25 | 0,43 | 4 de 29 | 0,78 | 0,86 |
+
+**El *cuándo* funciona.** De los 6 temporales con activaciones, Caine avisa en 4.
+No ve el del 16-06-2025 (activaciones menores en Canela con 51 mm) ni el bloque de
+deshielo de agosto de 2026.
+
+**El *dónde* por provincia no, y el patrón es uno solo.** En Elqui, Caine no se
+activa en ningún temporal, ni siquiera en el de julio de 2026, con el aluvión de
+Santa Gracia. Un umbral global, puesto sobre un gradiente que va del desierto al
+semiárido, queda alto justo en la provincia más seca. Y la lluvia máxima del
+temporal, sin umbral, ordena las provincias mejor que la razón contra Caine.
+
+De ahí salen los dos pasos siguientes:
+
+* un indicador de deshielo, para el bloque de agosto que ningún umbral de lluvia
+  ve;
+* niveles de alerta por provincia que miren la lluvia relativa al clima de cada
+  zona, calibrados con 2024-2025 y probados en 2026 con esta misma tabla.
+
+#### El deshielo: el bloque que ningún umbral de lluvia ve
+
+```bash
+python src/m4_deshielo.py         # antes de m5_alerta_sector.py
+```
+
+Corrida: [`2026-10-11_m4_deshielo.txt`](docs/corridas/2026-10-11_m4_deshielo.txt).
+
+Del 11 al 18 de agosto de 2026 se activaron veinte zonas con una lluvia mediana
+de 4,6 mm. La prensa lo atribuyó al "derretimiento acelerado de la nieve
+acumulada", con lluvia en altura. M4 no tenía ninguna variable que viera eso. El
+indicador nuevo usa dos redes de VIPNET que no se usaban para esto:
+
+* **La nieve.** La mediana de la altura de nieve en las cuatro estaciones con
+  registro completo (Cerro Olivares, Glaciar Tapado, Quebrada Larga y El Soldado,
+  de 3.293 a 4.065 m). Su máximo fue de 40 cm en 2024, 23 cm en 2025 y
+  **157 cm en 2026**, después del temporal de julio.
+* **La isoterma 0**, extrapolada desde las estaciones sobre 3.000 m. La de M4
+  ajusta una recta sobre toda la red y fuera de los días de temporal la rompe la
+  inversión térmica de la costa: no tiene ningún día entre el 4 y el 22 de agosto
+  de 2026. Las estaciones altas quedan sobre la inversión.
+
+**La condición de deshielo** se cumple cuando hay 50 cm de nieve o más y la
+isoterma está sobre la línea de nieve, que es la isoterma más baja de los días
+en que nevó durante el último mes. En la práctica es nieve acumulada recibiendo
+lluvia o derritiéndose. En 2024 y 2025 no aparece nunca. En 2026 queda activa del
+22 de julio al 23 de agosto, y la tienen los temporales del 30 de julio, del 4 de
+agosto y del 11 al 18.
+
+Sumada a la alerta ("Caine o deshielo"), en los temporales regionales:
+
+| Nivel | Caine | Caine o deshielo |
+|---|---|---|
+| Por temporal (región) | recall 0,67, precisión 0,80 | recall 0,83, precisión 0,83 |
+| Por provincia | recall 0,25, precisión 0,43 | recall 0,67, precisión 0,67 |
+
+La tasa de falsas alarmas no cambia. **Es experimental, y se dice por qué.** Hay
+un solo evento de deshielo documentado. Los 50 cm describen que 2026 fue
+distinto, no son un umbral calibrado: cualquier corte entre 41 y 110 cm da lo
+mismo en estos tres inviernos. De los cinco aciertos que se agregan por
+provincia, tres son el bloque de agosto que motivó el indicador. El siguiente
+invierno con mucha nieve dirá si sirve.
+
+#### Niveles de alerta por provincia
+
+```bash
+python src/m4_climatologia.py     # una vez: la normal 1991-2020 de CR2MET, ~20 min
+python src/m5_niveles.py          # después de m5_alerta_sector.py
+```
+
+Corridas: [`2026-10-11_m4_climatologia.txt`](docs/corridas/2026-10-11_m4_climatologia.txt)
+y [`2026-10-11_m5_niveles.txt`](docs/corridas/2026-10-11_m5_niveles.txt).
+
+Una autoridad no emite "supera Caine": emite amarilla, naranja o roja por
+provincia. El modelo nuevo usa una sola variable: **la lluvia del temporal en la
+estación más mojada de la provincia, como fracción de lo que llueve ahí en un año
+normal.** La normal es la de CR2MET 1991-2020: 91 mm en La Serena, 211 en
+Illapel. No se bajan los 2,5 GB del producto, solo los 360 meses de la normal,
+leídos por rangos dentro del zip. La probabilidad sale de una logística sobre esa
+variable. Los niveles se fijaron antes de ajustar: 0,25, 0,50 y 0,75 de
+probabilidad.
+
+| Prueba | Lluvia / normal | Lluvia en mm | Caine publicado |
+|---|---|---|---|
+| Entrenado en 2024-2025, probado en 2026 (AUC) | **1,00** | 0,95 | 0,68 |
+| Un temporal fuera a la vez, tres inviernos (AUC) | **0,95** | 0,94 | 0,88 |
+| Ídem, solo temporales regionales | 0,87 | 0,87 | 0,78 |
+| Ídem, solo Elqui | 0,94 | 0,92 | 0,91 |
+
+En 2026, sin haberlo visto, las 9 provincias-temporal que quedaron sin nivel no
+tuvieron activaciones, y las 4 en naranja o roja tuvieron todas.
+
+**Los niveles para operar**, ajustados con los tres inviernos, se leen así: en
+alguna estación de la provincia, el temporal deja
+
+| Nivel | Lluvia del temporal | Probabilidad de activaciones en la provincia |
+|---|---|---|
+| Amarilla | 21% de la normal anual | 1 de cada 4 |
+| Naranja | 27% | 1 de cada 2 |
+| Roja | 35% | 3 de cada 4 |
+
+Tres cosas que conviene decir con la misma claridad que las cifras:
+
+* **Normalizar por el clima aporta poco dentro de Coquimbo.** Con milímetros
+  absolutos, la validación cruzada da casi lo mismo. La mejora viene de contar la
+  lluvia del temporal entero por provincia y poner el corte a esa escala: en
+  Elqui, Caine ordenaba bien (AUC 0,91), pero su corte global nunca se alcanzaba.
+  Se usa la fracción igual por el argumento físico, y porque es la única forma
+  de llevar los niveles a un clima más seco. **Atacama es la prueba**, con normales
+  de 19 mm en Copiapó.
+* **El bloque de deshielo de agosto de 2026 queda en naranja o roja sin el
+  indicador de deshielo.** Medido como temporal entero, llovió entre el 30 y el
+  42% de la normal. Los 4,6 mm de mediana que lo hacían parecer seco eran por
+  cuenca y por episodio.
+* **Lo que falla es un par de temporales.** El 11 de junio de 2025 llovió entre
+  el 26 y el 33% de la normal y no hubo reportes (falsa alarma). El 16 de junio
+  llovió entre el 21 y el 23% y sí hubo activaciones (falla). Es la firma de la
+  lluvia antecedente: el segundo cayó sobre el suelo que mojó el primero. Con 12
+  positivos no se puede agregar una segunda variable sin sobreajustar.
+
 ---
 
 ## Hoja de ruta
@@ -1095,6 +1285,11 @@ Para gestión, eso se traduce en dos usos distintos:
 - [x] **M4 — Gatillo de lluvia**: tres inviernos, 1.188 episodios de 30 min; lluvia de cada cuenca interpolada con random forest.
 - [x] **M5 — Validación y calibración**: 33 activaciones de 2026 y 44 de 2024-2025. Con negativos, Caine publicado tiene precisión de 4,5% (cota inferior) y calibrar baja el umbral sin mejorar el AUC.
 - [x] **M1 — Unidades troncales**: 93 quebradas de más de 50 km² como segunda clase de unidad. El satélite confirma que son el objeto que se activa; la lluvia de pluviómetros no las distingue entre sí.
+- [x] **M3/M5 — La prueba de una autoridad**: 11 cortes de ruta reales contra la lista de exposición, y la alerta por provincia y temporal. Con la clase inundación y el área drenada, el 3% de arriba de la lista cubre 4 cortes contra 1,0 al azar. Caine dice bien *cuándo* (precisión 0,80 por temporal) y mal *dónde* (en Elqui no se activa nunca).
+- [x] **Indicador de deshielo (experimental)**: nieve de VIPNET e isoterma 0 desde las estaciones altas. Ve el bloque de agosto de 2026 y no se activa nunca en 2024 ni 2025; con un solo evento, no está validado.
+- [x] **Niveles de alerta por provincia**: lluvia del temporal como fracción de la normal de CR2MET; amarilla 21%, naranja 27%, roja 35%. Probados en 2026 sin un error de orden; en validación cruzada, AUC 0,95 contra 0,88 de Caine.
+- [ ] **Atacama como prueba independiente**: los niveles de Coquimbo aplicados a otra región, con su propio inventario de prensa. VIPNET tiene 68 estaciones allí y el temporal de julio de 2026 activó quebradas en Huasco y Copiapó.
+- [ ] **Lluvia antecedente**: la segunda variable de los niveles, cuando haya positivos para ajustarla.
 - [ ] **Lluvia con resolución espacial**: radar o satélite corregido contra estaciones. Es hoy el límite del modelo.
 - [ ] **M6 — Entrega**: mapa o visor final y documentación.
 
@@ -1108,7 +1303,8 @@ validación (v1).
 | Dato | Fuente | Acceso |
 |---|---|---|
 | Modelo de elevación (DEM) | Copernicus GLO-30 (TanDEM-X, 30 m) | Libre, sin registro |
-| Precipitación climatológica | CR2MET (CR2) | Libre |
+| Precipitación climatológica | CR2MET v2.5 (CR2), normal 1991-2020, en uso desde octubre de 2026 | Libre, sin registro (Zenodo) |
+| Lluvia, temperatura y nieve sub-diarias | VIPNET (MOP), API REST | Libre, sin registro |
 | Precipitación evento jul-2026 | Estaciones DGA/DMC + GPM IMERG | Libre |
 | Geología / peligro | SERNAGEOMIN | Libre |
 | Red vial y urbana | OpenStreetMap, extracto de Chile de Geofabrik | Libre, sin registro |

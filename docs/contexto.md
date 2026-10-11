@@ -60,9 +60,9 @@ observados.
 | **M0** | Andamiaje: repo, estructura, README, .gitignore, primer commit | Cerrado |
 | **M1** | Terreno: DEM, flujo, cuencas costeras, subcuencas de confluencia y troncos | Cerrado y reproducible en local — 3.757 unidades más 93 troncos de más de 50 km² (corrida 2026-10-10) |
 | **M2** | Susceptibilidad: variables de terreno + quebradas rankeadas (razón de Melton) | Cerrado y reproducible en local — 2.589 susceptibles (corrida 2026-10-10) |
-| **M3** | Exposición: cruce de trayectorias con red vial (OSM) y zonas urbanas | Cerrado y reproducible en local — 3.669 puntos de corte en 14 comunas (corrida 2026-10-10, extracto OSM del 08-10) |
-| **M4** | Gatillo: lluvia sub-diaria de VIPNET + umbrales publicados aplicados | Cerrado y reproducible en local. Desde el 10-10 cubre tres inviernos (2024-2026), 1.188 episodios, con la lluvia de cada cuenca interpolada por random forest (MAE 29,9 mm contra 36,8 de la estación cercana) |
-| **M5** | Validación contra las activaciones documentadas de 2026 y calibración con 2024-2025 | Cerrado (corrida 2026-10-10, tres inviernos). Con negativos presuntos, Caine publicado tiene precisión de 4,5% (cota inferior) y AUC 0,47 en 2026; la curva ajustada baja el umbral sin mejorar el AUC. En el temporal de julio el I-D ordena (AUC 0,77); el bloque de agosto, de deshielo, no lo ve ningún umbral de lluvia |
+| **M3** | Exposición: cruce de trayectorias con red vial (OSM) y zonas urbanas | Cerrado y reproducible en local — desde el 11-10 suma la clase inundación (sin ríos) y ordena por clase, vía y área drenada en el cruce: 9.424 puntos de corte (extracto OSM del 08-10) |
+| **M4** | Gatillo: lluvia sub-diaria de VIPNET + umbrales publicados aplicados | Cerrado y reproducible en local. Desde el 10-10 cubre tres inviernos (2024-2026), 1.188 episodios, con la lluvia de cada cuenca interpolada por random forest (MAE 29,9 mm contra 36,8 de la estación cercana). Desde el 11-10 suma la normal 1991-2020 de CR2MET y un indicador experimental de deshielo con la nieve de VIPNET |
+| **M5** | Validación contra las activaciones documentadas de 2026 y calibración con 2024-2025 | Cerrado (corrida 2026-10-10, tres inviernos). Con negativos presuntos, Caine publicado tiene precisión de 4,5% (cota inferior) y AUC 0,47 en 2026; la curva ajustada baja el umbral sin mejorar el AUC. En el temporal de julio el I-D ordena (AUC 0,77); el bloque de agosto, de deshielo, no lo ve ningún umbral de lluvia. Desde el 11-10, también en los términos de una autoridad: por temporal Caine acierta (precisión 0,80), por provincia no (en Elqui no se activa nunca); y la lista de M3 cubre 4 de 11 cortes reales en su 3% de arriba, contra 1,0 al azar. Niveles de alerta por provincia con la lluvia del temporal como fracción de la normal de CR2MET: probados en 2026 sin un error de orden (AUC 1,00) y con AUC 0,95 en validación cruzada, contra 0,88 de Caine |
 | **M6** | Entrega: visor y documentación | No iniciado |
 
 M4 cambió de contenido respecto de lo que este documento proyectaba. Decía
@@ -91,7 +91,9 @@ sino de datos.
   30 m, es resolución falsa. Plan B para hidrología: FABDEM (GLO-30 corregido,
   quita edificios y vegetación; licencia solo no comercial / investigación).
 - **Precipitación climatológica:** CR2MET v2.5 (0,05°, diario, 1960–2021,
-  NetCDF, Zenodo DOI 10.5281/zenodo.7529682).
+  NetCDF, Zenodo DOI 10.5281/zenodo.7529682). En uso desde octubre de 2026 para la
+  normal 1991-2020 (`src/m4_climatologia.py`), leída por rangos dentro del zip
+  sin bajar los 2,5 GB.
 - **Precipitación evento jul-2026:** estaciones DGA/DMC (Explorador Climático
   CR2, DataClima) + GPM IMERG (0,1°, 30 min). **IMERG subestima la lluvia
   orográfica en los Andes:** hay que corregir sesgo contra estaciones antes de
@@ -170,12 +172,35 @@ Hidrología: pysheds o richdem (o GRASS GIS si se requiere `r.watershed` /
   tiene que aplicarse con la misma granularidad que el daño que vigila**: R3
   pasó de la estación al episodio por eso, y R2 y R4 pasaron al invierno.
 
+- **Contar aciertos sin línea base.** En octubre de 2026 la lista de cortes de
+  M3 tenía candidato en 7 de 11 cortes de ruta reales, y parecía un buen
+  resultado. Pero poniendo la misma ventana en puntos al azar de las mismas
+  rutas se esperaban 5,3: en un valle con una quebrada por kilómetro,
+  cualquier lista larga "acierta". Un acierto solo dice algo comparado con lo
+  que daría el azar en el mismo lugar (`src/m5_cortes.py`). Con esa prueba se
+  vio lo que faltaba: la clase de cuenca que M3 descartaba y un orden dentro de
+  cada ruta.
+
+- **Un umbral global sobre un gradiente climático.** Caine se ajustó con
+  eventos de todo el mundo, y en Coquimbo la lluvia anual crece varias veces
+  de norte a sur y de la costa a la cordillera. Por provincia y temporal
+  (`src/m5_alerta_sector.py`), Caine no se activa en Elqui en ningún temporal
+  de tres inviernos, incluido el del aluvión de Santa Gracia. Un umbral único
+  queda alto justo donde llueve menos, que es donde cabe esperar que las
+  quebradas respondan con menos lluvia. La literatura lo resuelve normalizando
+  la lluvia por la precipitación media anual de cada lugar.
+
 - **Suponer que todo lo que se activa lo gatilla la lluvia.** El bloque del 13
   al 17 de agosto de 2026 activó 20 zonas con una lluvia mediana de 4,6 mm, y
   el AUC de Caine sobre ese evento es 0,27: se activaron donde menos llovió. La
   prensa lo atribuyó al deshielo sobre suelos saturados. Un umbral I-D no tiene
   ninguna variable que vea eso, y evaluarlo contra esas activaciones mezcla dos
   mecanismos en una sola cifra.
+
+  Desde octubre de 2026 hay un indicador experimental (`src/m4_deshielo.py`):
+  nieve de las estaciones de VIPNET sobre 3.000 m e isoterma 0 extrapolada desde
+  ellas. Ve el bloque de agosto y no se activa en 2024 ni en 2025, pero con un
+  solo evento es una hipótesis con un caso a favor, no un resultado.
 
 - **Que la unidad de análisis no coincida con el fenómeno.** Es el error más caro
   que tuvo este proyecto y conviene dejarlo escrito completo. M1 cortaba cuencas
