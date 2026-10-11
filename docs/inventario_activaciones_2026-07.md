@@ -139,14 +139,44 @@ como falsos negativos sería medir algo que el modelo no intentó.
 
 ---
 
-## Pendiente antes de usarlo
+## Lo que se corrigió en octubre de 2026
 
-El inventario tiene nombres, no coordenadas. Para la matriz de confusión hay que
-amarrar cada fila a un `id_cuenca` de `cuencas_coquimbo.gpkg`, y eso requiere
-geolocalizar cada quebrada. Dos sin resolver:
+**La entrada 9 ya tiene quebrada: Santa Gracia.** SENAPRED pidió el 18 y 19 de
+julio evitar Lambert e Islón "debido a la crecida de la quebrada Santa Gracia"
+([Mi Radio, 19-07-2026](https://www.miradiols.cl/2026/07/19/senapred-alerta-por-crecida-de-la-quebrada-santa-gracia-y-pide-evacuar-sectores-de-la-serena/)).
+M5 la ubicaba por el pueblo de Islón con un alias; ahora la ubica por el cauce,
+como a todas las demás.
 
-* La entrada 9, el aluvión de El Islón del 20 de julio, es el único evento que
-  una fuente llama aluvión y no tiene quebrada identificada. Vale la pena
-  averiguar cuál lo generó: es el caso más claro de todo el inventario.
-* Varias quebradas comparten nombre con otras del país. "Los Loros" aparece dos
-  veces en el mismo reporte de Carabineros, bajo dos comunas distintas.
+**El inventario pasó de 18 a 33 entradas: entró el bloque del 14 al 17 de
+agosto.** El pedido era agregar la quebrada El Porotal, km 41 de la Ruta CH-41,
+Vicuña, "julio de 2026". **No es de julio.** La única fuente que la nombra es el
+balance de SENAPRED del 15 de agosto
+([Serena y Coquimbo](https://serenaycoquimbo.cl/region-coquimbo-senapred-actualiza-alerta-amarilla-hubo-activacion-de-6-quebradas-por-lluvias-en-4-comunas/),
+repetido por Madero el 16), y entra con esa fecha.
+
+Ese mismo balance nombra cinco quebradas más, y dos notas del mismo fin de
+semana nombran otras (la 33, Los Mates, sale de la nota de El Día que atribuye el bloque al deshielo). Agregar El Porotal y dejar fuera las que salen en la misma
+lista sería elegir qué entra, así que entraron todas: filas 19 a 33. Las 18
+originales no se tocaron, salvo la 9.
+
+El nombre del archivo sigue diciendo `2026-07` para no romper los enlaces, aunque
+ahora cubre julio y agosto. `m5_validacion.py` reporta los dos bloques por
+separado, para que el número de julio siga siendo comparable con la corrida
+anterior.
+
+**Hay más activaciones de julio que no están.** Al buscar El Porotal aparecieron
+notas de julio que nombran quebradas fuera de las 18 originales: la evacuación
+por la Quebrada San Carlos del 18 de julio, Maitencillo cortando la D-51 en
+Andacollo, Las Lisitas en Guanaqueros, y un balance municipal de
+"20 quebradas activadas" en Vicuña. **No se agregaron.** El bloque de julio es
+el conjunto contra el que se cerró M5, y completarlo es una decisión que
+corresponde tomar a propósito y no de pasada.
+
+## Pendiente
+
+* Varias quebradas comparten nombre con otras del país. Desde octubre,
+  `m5_validacion.ubicar` busca primero dentro de la comuna de la entrada y
+  marca FUERA DE COMUNA lo que no encuentra ahí. Con eso cambió la ubicación de
+  Las Barrancas (12), que se ubicaba en sus homónimas de otras comunas, y de
+  Cárcamo (6), que se ubicaba en una Quebrada Cárcamo fuera de Illapel.
+* El Lucho (22), El Maite (26) y Los Mates (33) no están en OpenStreetMap con ese nombre.
