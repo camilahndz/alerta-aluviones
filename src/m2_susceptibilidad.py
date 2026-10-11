@@ -61,6 +61,7 @@ from pathlib import Path
 import geopandas as gpd
 import matplotlib
 import numpy as np
+import pandas as pd
 import rasterio
 from rasterio import features
 from scipy import ndimage
@@ -102,24 +103,10 @@ def estadisticas_por_cuenca(cuencas: gpd.GeoDataFrame, ruta_dem: Path):
         afin = src.transform
         sin_dato = src.nodata if src.nodata is not None else -9999.0
         resolucion = abs(afin.a)
-
-        etiquetas = features.rasterize(
-            ((geom, int(i)) for geom, i in zip(cuencas.geometry, cuencas["id_cuenca"])),
-            out_shape=(src.height, src.width),
-            transform=afin,
-            fill=0,
-            dtype="int32",
-        )
+        forma = (src.height, src.width)
 
     valido = elevacion != sin_dato
-    etiquetas[~valido] = 0
     elevacion[~valido] = np.nan
-
-    ids = cuencas["id_cuenca"].astype(int).tolist()
-
-    h_min = np.array(ndimage.minimum(elevacion, etiquetas, ids), dtype="float64")
-    h_max = np.array(ndimage.maximum(elevacion, etiquetas, ids), dtype="float64")
-    h_media = np.array(ndimage.mean(elevacion, etiquetas, ids), dtype="float64")
 
     # Pendiente: cuanto sube o baja el terreno por cada metro que uno avanza.
     # np.gradient da la variacion en cada eje; el arcotangente de su magnitud
@@ -127,32 +114,72 @@ def estadisticas_por_cuenca(cuencas: gpd.GeoDataFrame, ruta_dem: Path):
     print("  calculando pendientes...")
     dz_dy, dz_dx = np.gradient(elevacion, resolucion, resolucion)
     pendiente = np.degrees(np.arctan(np.hypot(dz_dx, dz_dy)))
+    del dz_dy, dz_dx
 
-    # En el borde del terreno el gradiente toca celdas sin dato y sale NaN.
-    # Esas celdas se sacan del promedio en vez de contaminarlo.
-    etiquetas_pend = np.where(np.isfinite(pendiente), etiquetas, 0)
-    pend_media = np.array(ndimage.mean(pendiente, etiquetas_pend, ids), dtype="float64")
+    # POR CAPAS QUE NO SE SUPERPONEN
+    #
+    # La primera version pintaba todas las cuencas en una sola capa de
+    # etiquetas, y donde dos se superponen gana la ultima que se pinta. Con las
+    # subcuencas de confluencia eso ya pasaba sin que se notara: quedan dentro
+    # de las cuencas costeras de rio, y estas se median sin los pixeles de sus
+    # subcuencas. No movia ninguna clase porque esas cuencas de rio salen
+    # inundacion igual. Con los troncos, que se pintaban al final, el efecto se
+    # invirtio y les quito pixeles a tres mil unidades chicas: la clasificacion
+    # de las 3.757 de siempre cambio sin que nada fallara.
+    #
+    # Ahora cada capa sin superposicion -costeras, confluencias- se pinta por
+    # separado, y cada tronco aparte en su propia ventana, porque los troncos
+    # se anidan entre ellos.
+    n = len(cuencas)
+    salida = {k: np.full(n, np.nan) for k in
+              ("h_min_m", "h_max_m", "h_media_m", "pend_media_g", "pend_p90_g")}
+    origen = (cuencas["origen"].fillna("costera").to_numpy()
+              if "origen" in cuencas.columns else np.full(n, "costera", dtype=object))
 
-    # El percentil 90 de la pendiente: que tan empinado es el sector mas
-    # inclinado de la cuenca, ignorando el 10% mas extremo para no quedarse con
-    # un pixel raro. Va por labeled_comprehension y no por un ciclo, porque un
-    # ciclo tendria que recorrer el raster completo una vez por cuenca: con 434
-    # cuencas sobre 160 millones de pixeles eso son horas de calculo.
-    pend_p90 = np.array(
-        ndimage.labeled_comprehension(
-            pendiente, etiquetas_pend, ids,
-            lambda valores: np.percentile(valores, 90), "float64", np.nan,
-        ),
-        dtype="float64",
-    )
+    def medir(elev, pend, etq, ids):
+        etq_p = np.where(np.isfinite(pend), etq, 0)
+        return {
+            "h_min_m": ndimage.minimum(elev, etq, ids),
+            "h_max_m": ndimage.maximum(elev, etq, ids),
+            "h_media_m": ndimage.mean(elev, etq, ids),
+            "pend_media_g": ndimage.mean(pend, etq_p, ids),
+            # El percentil 90 de la pendiente: que tan empinado es el sector mas
+            # inclinado de la cuenca, ignorando el 10% mas extremo. Va por
+            # labeled_comprehension y no por un ciclo, que recorreria el raster
+            # completo una vez por cuenca.
+            "pend_p90_g": ndimage.labeled_comprehension(
+                pend, etq_p, ids, lambda v: np.percentile(v, 90), "float64", np.nan),
+        }
 
-    return {
-        "h_min_m": h_min,
-        "h_max_m": h_max,
-        "h_media_m": h_media,
-        "pend_media_g": pend_media,
-        "pend_p90_g": pend_p90,
-    }
+    for capa in [o for o in pd.unique(origen) if o != "tronco"]:
+        pos = np.flatnonzero(origen == capa)
+        sub = cuencas.iloc[pos]
+        ids = sub["id_cuenca"].astype(int).tolist()
+        etq = features.rasterize(((g, int(i)) for g, i in zip(sub.geometry, ids)),
+                                 out_shape=forma, transform=afin, fill=0, dtype="int32")
+        etq[~valido] = 0
+        for k, v in medir(elevacion, pendiente, etq, ids).items():
+            salida[k][pos] = np.asarray(v, dtype="float64")
+        del etq
+
+    pos_troncos = np.flatnonzero(origen == "tronco")
+    if len(pos_troncos):
+        from rasterio.windows import from_bounds
+        print(f"  midiendo {len(pos_troncos)} troncos, cada uno en su ventana...")
+        for p in pos_troncos:
+            g = cuencas.geometry.iloc[p]
+            w = from_bounds(*g.bounds, transform=afin).round_offsets().round_lengths()
+            f0, c0 = max(int(w.row_off), 0), max(int(w.col_off), 0)
+            f1 = min(int(w.row_off + w.height) + 1, forma[0])
+            c1 = min(int(w.col_off + w.width) + 1, forma[1])
+            af = afin * afin.translation(c0, f0)
+            etq = features.rasterize([(g, 1)], out_shape=(f1 - f0, c1 - c0),
+                                     transform=af, fill=0, dtype="int32")
+            etq[~valido[f0:f1, c0:c1]] = 0
+            for k, v in medir(elevacion[f0:f1, c0:c1], pendiente[f0:f1, c0:c1], etq, [1]).items():
+                salida[k][p] = float(np.asarray(v).ravel()[0])
+
+    return salida
 
 
 def largo_cuenca_km(cuencas: gpd.GeoDataFrame) -> np.ndarray:
@@ -260,6 +287,13 @@ def calcular(cuencas: gpd.GeoDataFrame, red: gpd.GeoDataFrame, ruta_dem: Path):
         cuencas.loc[borde, "clase"] = "borde_truncado"
         cuencas.loc[borde, "clase_melton"] = "borde_truncado"
 
+    # Los troncos de m1_troncos.py no se clasifican con Melton: miden de 50 a
+    # cientos de km2, y el indice esta calibrado hasta 10. Se marcan aparte y
+    # se evaluan todos. `clase_melton` queda calculada solo como referencia.
+    if "origen" in cuencas.columns:
+        tronco = (cuencas["origen"] == "tronco") & (cuencas["clase"] != "borde_truncado")
+        cuencas.loc[tronco, "clase"] = "tronco"
+
     # Ranking por Melton descendente: las mas energeticas primero.
     cuencas = cuencas.sort_values("melton", ascending=False).reset_index(drop=True)
     cuencas.insert(0, "ranking", cuencas.index + 1)
@@ -273,6 +307,10 @@ def figura(cuencas: gpd.GeoDataFrame, ruta_png: Path):
         "crecida_detritos": "#ef8a62",
         "inundacion": "#c9d6e5",
     }
+    # Los troncos van solo con contorno: estan anidados sobre las unidades
+    # chicas y, rellenos, las taparian.
+    troncos = cuencas[cuencas["clase"] == "tronco"]
+    cuencas = cuencas[cuencas["clase"] != "tronco"]
 
     fig = plt.figure(figsize=(15, 12))
     ax1 = fig.add_subplot(1, 2, 1)
@@ -308,6 +346,11 @@ def figura(cuencas: gpd.GeoDataFrame, ruta_png: Path):
                        label=f"salida de cuenca critica ({len(criticas)})")
         )
 
+    if not troncos.empty:
+        troncos.boundary.plot(ax=ax1, color="#6a3d9a", linewidth=0.8)
+        marcas.append(plt.Line2D([], [], color="#6a3d9a", linewidth=1.2,
+                                 label=f"tronco, sin clasificar ({len(troncos)})"))
+
     ax1.set_title("Susceptibilidad a flujos de detritos\n(clasificacion de Wilford)",
                   fontsize=12)
     ax1.legend(handles=marcas, loc="upper right", fontsize=9)
@@ -330,7 +373,7 @@ def figura(cuencas: gpd.GeoDataFrame, ruta_png: Path):
              "limite de validez\ndel indice", fontsize=7, color="gray")
 
     ax3.scatter(cuencas["pend_media_g"], cuencas["melton"],
-                c=[colores[c] for c in cuencas["clase"]], s=18,
+                c=[colores.get(c, "#888888") for c in cuencas["clase"]], s=18,
                 edgecolor="black", linewidth=0.3)
     ax3.axhline(MELTON_FLUJO, color="#b2182b", ls="--", lw=1)
     ax3.set_xlabel("pendiente media (grados)")

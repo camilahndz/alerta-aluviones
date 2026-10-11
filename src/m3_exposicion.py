@@ -141,9 +141,15 @@ PESO_VIA_DEFECTO = 0.15
 # grava y agua turbia. El corte que produce el primero es mas severo y mas
 # dificil de despejar. La razon 1,0 / 0,55 dice "el flujo pesa casi el doble",
 # y es un juicio, no una medicion.
+#
+# El tronco (m1_troncos.py) pesa como una crecida de detritos. A cientos de km2
+# lo esperable es eso, una crecida cargada de sedimento -el aluvion del Islon
+# bajo por un tronco de 1.073 km2-, y no hay indice calibrado a esa escala que
+# permita afirmar mas. Es el mismo juicio, aplicado a la clase nueva.
 PESO_CLASE = {
     "flujo_detritos": 1.00,
     "crecida_detritos": 0.55,
+    "tronco": 0.55,
 }
 
 # Cuanto pesa cada mitad en la prioridad final. 50/50 porque no hay evidencia
@@ -757,7 +763,13 @@ def priorizar(puntos: gpd.GeoDataFrame):
     para poder discutirlos y moverlos.
     """
     puntos = puntos.copy()
-    puntos["peso_clase"] = puntos["clase"].map(PESO_CLASE).fillna(0.0)
+    # Una clase sin peso detiene el script. La version anterior le ponia cero
+    # en silencio, y cuando M2 agrego los troncos sus 1.177 cortes quedaron con
+    # la mitad de la prioridad que les tocaba sin que nada fallara.
+    sin_peso = set(puntos["clase"]) - set(PESO_CLASE)
+    if sin_peso:
+        sys.exit(f"Clases sin peso en PESO_CLASE: {sin_peso}. Agregalas antes de priorizar.")
+    puntos["peso_clase"] = puntos["clase"].map(PESO_CLASE)
     puntos["peso_via"] = puntos["via_tipo"].map(PESO_VIA).fillna(PESO_VIA_DEFECTO)
     puntos["prioridad"] = (
         PONDERADOR_CLASE * puntos["peso_clase"]
