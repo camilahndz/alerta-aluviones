@@ -1,0 +1,45 @@
+M4 - Indicador experimental de deshielo
+11 de octubre de 2026, local, .venv con Python 3.12
+
+Comando:
+  python src/m4_deshielo.py
+
+Baja de VIPNET las diez series de nieve (tipoEstacion 3) de Coquimbo, que
+quedan en el cache de M4 (data/raw/lluvia/2024-06-01_2026-08-23/3_*.json.gz),
+y lee del mismo cache la temperatura de las estaciones sobre 3.000 m.
+
+Antes de escribir el script se miro la isoterma de m4_lluvia.py para el bloque
+de agosto: no hay ningun dia con isoterma entre el 4 y el 22 de agosto de
+2026, porque el ajuste lineal no pasa el R2 de 0,70 fuera de los dias de
+temporal. Por eso la isoterma de aca se extrapola desde las estaciones altas.
+
+========================================================================
+==========================================================================
+M4 - Indicador experimental de deshielo, 2024-06-01 a 2026-08-23
+==========================================================================
+
+Estaciones de nieve en Coquimbo: 10; con dato en el 80% de los dias o mas: 4
+  CERRO OLIVARES                    3566 m  cobertura  96%  usada
+  GLACIAR TAPADO EN LOS CORRALES    4065 m  cobertura  96%  usada
+  LA LAGUNA EMBALSE                 3160 m  cobertura   6%
+  EL INDIO                          3800 m  cobertura   7%
+  CUESTA BLANCA                     3284 m  cobertura  33%
+  CERRO VEGA NEGRA                  3529 m  cobertura  64%
+  LOS AZULES                        3408 m  cobertura  48%
+  QUEBRADA LARGA                    3550 m  cobertura  96%  usada
+  EL SOLDADO                        3293 m  cobertura  96%  usada
+  EL ENCANTO                        3540 m  cobertura  20%
+
+Estaciones de temperatura sobre 3000 m: 10
+
+Nieve maxima por invierno (mediana de las estaciones usadas):
+  2024:    40 cm, el 03-08
+  2025:    23 cm, el 01-08
+  2026:   157 cm, el 24-07
+
+Dias con condicion de deshielo: 35
+  19-07-2026 al 20-07-2026
+  22-07-2026 al 23-08-2026
+
+  tabla  -> m4_deshielo.csv
+  figura -> m4_deshielo.png
