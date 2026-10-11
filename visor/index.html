@@ -1,0 +1,391 @@
+<title>Vigía de quebradas</title>
+<meta name="description" content="Mapa en relieve de la Región de Coquimbo: el nivel de alerta por quebradas de cada provincia, hora a hora, y los tramos de ruta a vigilar.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Overpass:wght@400;600;800&family=Overpass+Mono:wght@400;600&display=swap">
+<style>
+/* Sala de monitoreo nocturna: el relieve ocupa todo, los paneles flotan
+   sobre él como instrumentos; el color fuerte se reserva para las alertas. */
+:root {
+  color-scheme: dark;
+  --fondo: #0d1215;
+  --panel: rgba(16, 22, 26, 0.92);
+  --panel-solido: #121a1e;
+  --linea: #263239;
+  --texto: #ebe6dc;
+  --texto-2: #a3aaa8;
+  --texto-3: #6f7a7b;
+  --agua: #62c6e6;
+  --amarilla: #f2c94c;
+  --naranja: #f08a3c;
+  --roja: #e5484d;
+  --ninguna: #3b4a50;
+  --elqui: #9cc3e6;
+  --limari: #d3a6e0;
+  --choapa: #a7d9ae;
+  --display: "Overpass", "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
+  --cuerpo: "Atkinson Hyperlegible", "Segoe UI", Roboto, Arial, sans-serif;
+  --datos: "Overpass Mono", "Cascadia Mono", Consolas, monospace;
+  --radio: 10px;
+}
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body {
+  background: var(--fondo);
+  color: var(--texto);
+  font-family: var(--cuerpo);
+  font-size: 15px;
+  line-height: 1.45;
+  overflow: hidden;
+}
+button, input { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--agua); outline-offset: 2px; }
+a { color: var(--agua); }
+
+/* --- Estructura --- */
+#app { position: relative; height: 100%; }
+#mapa { position: absolute; inset: 0; }
+#mapa canvas { outline: none; }
+
+.flotante {
+  position: absolute;
+  background: var(--panel);
+  border: 1px solid var(--linea);
+  border-radius: var(--radio);
+  backdrop-filter: blur(6px);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
+}
+
+#cabecera {
+  top: 16px; left: 16px;
+  width: min(420px, calc(100% - 32px));
+  padding: 14px 16px 12px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.marca { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.marca h1 {
+  margin: 0;
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 1.55rem;
+  letter-spacing: 0.01em;
+  line-height: 1;
+}
+.marca span {
+  font-family: var(--display);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--texto-2);
+}
+.bajada { margin: 0; color: var(--texto-2); font-size: 0.92rem; text-wrap: pretty; }
+
+#escenarios { display: flex; flex-wrap: wrap; gap: 6px; }
+#escenarios button {
+  border: 1px solid var(--linea);
+  background: transparent;
+  border-radius: 999px;
+  padding: 4px 11px;
+  font-family: var(--display);
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--texto-2);
+}
+#escenarios button[aria-pressed="true"] { background: var(--texto); color: var(--fondo); border-color: var(--texto); }
+#escenarios button .vivo {
+  display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+  background: var(--roja); margin-right: 6px; vertical-align: 1px;
+}
+.acciones { display: flex; gap: 8px; flex-wrap: wrap; }
+.boton-texto {
+  background: none; border: none; padding: 0;
+  color: var(--agua); font-family: var(--display); font-weight: 600; font-size: 0.85rem;
+}
+
+/* --- Panel de la derecha --- */
+#panel {
+  top: 16px; right: 16px; bottom: 16px;
+  width: 372px;
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+#panel .desplazable { overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 16px; min-height: 0; }
+.etiqueta {
+  font-family: var(--display);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--texto-3);
+  margin: 0 0 6px;
+}
+#hora {
+  font-family: var(--datos);
+  font-size: 1.6rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+  margin: 0;
+}
+#relato { margin: 6px 0 0; font-size: 0.98rem; text-wrap: pretty; }
+
+.provincias { display: flex; flex-direction: column; gap: 8px; }
+.prov {
+  display: grid;
+  grid-template-columns: 6px 1fr auto;
+  gap: 0 12px;
+  padding: 10px 12px 10px 0;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--linea);
+}
+.prov .franja { grid-row: 1 / span 3; border-radius: 0 4px 4px 0; background: var(--ninguna); }
+.prov .nombre { font-family: var(--display); font-weight: 800; font-size: 1.05rem; }
+.prov .chip {
+  justify-self: end; align-self: start;
+  font-family: var(--display); font-weight: 800; font-size: 0.74rem;
+  letter-spacing: 0.1em; text-transform: uppercase;
+  padding: 2px 8px; border-radius: 4px;
+  background: var(--ninguna); color: var(--texto);
+}
+.prov .detalle { grid-column: 2 / span 2; color: var(--texto-2); font-size: 0.86rem; min-width: 0; }
+.prov .barra { grid-column: 2 / span 2; margin-top: 6px; position: relative; height: 8px; border-radius: 4px; background: rgba(255,255,255,0.07); }
+.prov .barra .relleno { position: absolute; inset: 0 auto 0 0; border-radius: 4px; background: var(--texto-2); }
+.prov .barra .corte { position: absolute; top: -3px; bottom: -3px; width: 2px; border-radius: 1px; }
+.nivel-1 .franja, .nivel-1 .chip { background: var(--amarilla); color: #1d1a10; }
+.nivel-2 .franja, .nivel-2 .chip { background: var(--naranja); color: #20130a; }
+.nivel-3 .franja, .nivel-3 .chip { background: var(--roja); color: #fff; }
+.nivel-1 .barra .relleno { background: var(--amarilla); }
+.nivel-2 .barra .relleno { background: var(--naranja); }
+.nivel-3 .barra .relleno { background: var(--roja); }
+.leyenda-barra { font-size: 0.78rem; color: var(--texto-3); margin: 2px 0 0; }
+
+.aviso {
+  border-left: 3px solid var(--agua);
+  padding: 8px 12px;
+  background: rgba(98, 198, 230, 0.07);
+  border-radius: 0 8px 8px 0;
+  font-size: 0.88rem;
+}
+.aviso strong { font-family: var(--display); }
+
+.lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.lista li { font-size: 0.88rem; }
+.lista button {
+  width: 100%; text-align: left;
+  background: rgba(255,255,255,0.03); border: 1px solid var(--linea);
+  border-radius: 8px; padding: 7px 10px;
+  display: grid; grid-template-columns: 1fr auto; gap: 2px 8px;
+}
+.lista button:hover { border-color: var(--texto-3); }
+.lista .principal { font-weight: 700; min-width: 0; }
+.lista .secundario { color: var(--texto-2); font-size: 0.8rem; grid-column: 1 / span 2; }
+.lista .fecha { font-family: var(--datos); font-size: 0.78rem; color: var(--texto-2); }
+.vacio { color: var(--texto-3); font-size: 0.86rem; margin: 0; }
+
+/* --- Ficha de lo que se toca en el mapa: primera sección del panel --- */
+#ficha {
+  position: relative;
+  padding: 12px 14px;
+  border: 1px solid var(--texto-3);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  font-size: 0.9rem;
+}
+#ficha h3 { margin: 0 24px 4px 0; font-family: var(--display); font-size: 1rem; }
+#ficha p { margin: 4px 0 0; color: var(--texto-2); }
+#ficha .cerrar { position: absolute; top: 6px; right: 8px; background: none; border: none; color: var(--texto-3); font-size: 1.2rem; line-height: 1; }
+
+/* --- Línea de tiempo --- */
+#tiempo {
+  left: 16px; right: 404px; bottom: 16px;
+  padding: 10px 14px 8px;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 12px;
+  align-items: center;
+}
+#reproducir {
+  width: 42px; height: 42px; border-radius: 50%;
+  border: none; background: var(--texto); color: var(--fondo);
+  display: grid; place-items: center;
+}
+#reproducir svg { width: 16px; height: 16px; }
+#grafico { width: 100%; height: 70px; display: block; }
+#deslizador { grid-column: 2; width: 100%; accent-color: var(--texto); margin: 0; }
+.ejes { grid-column: 2; display: flex; justify-content: space-between; font-family: var(--datos); font-size: 0.72rem; color: var(--texto-3); }
+.claves { grid-column: 1 / span 2; display: flex; gap: 14px; flex-wrap: wrap; font-size: 0.76rem; color: var(--texto-2); }
+.claves i { display: inline-block; width: 14px; height: 3px; border-radius: 2px; vertical-align: 3px; margin-right: 5px; }
+
+/* --- Brújula --- */
+#brujula {
+  top: 16px; right: 404px;
+  width: 46px; height: 46px; border-radius: 50%;
+  display: grid; place-items: center; padding: 0;
+}
+#brujula svg { width: 30px; height: 30px; transition: transform 0.2s; }
+#brujula:hover { border-color: var(--texto-3); }
+
+/* --- Capas --- */
+#capas {
+  left: 16px; top: auto; bottom: 150px;
+  padding: 10px 12px;
+  font-size: 0.85rem;
+}
+#capas summary { cursor: pointer; font-family: var(--display); font-weight: 600; list-style: none; }
+#capas summary::-webkit-details-marker { display: none; }
+#capas label { display: flex; gap: 8px; align-items: center; margin-top: 6px; }
+#capas .muestra { width: 12px; height: 12px; border-radius: 3px; flex: none; }
+
+/* --- Cómo funciona --- */
+#explicacion {
+  position: absolute; inset: 0;
+  background: rgba(6, 9, 11, 0.72);
+  display: grid; place-items: center;
+  padding: 16px;
+  z-index: 5;
+}
+#explicacion .caja {
+  background: var(--panel-solido);
+  border: 1px solid var(--linea);
+  border-radius: 14px;
+  max-width: 760px; width: 100%;
+  max-height: calc(100% - 32px);
+  overflow-y: auto;
+  padding: 24px 26px;
+  display: flex; flex-direction: column; gap: 18px;
+}
+#explicacion h2 { margin: 0; font-family: var(--display); font-weight: 800; font-size: 1.5rem; text-wrap: balance; }
+#explicacion h3 { margin: 0 0 4px; font-family: var(--display); font-size: 1.02rem; }
+#explicacion p { margin: 0; max-width: 65ch; color: var(--texto-2); }
+.pasos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 22px; counter-reset: paso; }
+.pasos > div { min-width: 0; }
+.pasos h3::before {
+  counter-increment: paso; content: counter(paso);
+  display: inline-grid; place-items: center;
+  width: 22px; height: 22px; margin-right: 8px; border-radius: 50%;
+  background: var(--texto); color: var(--fondo); font-size: 0.8rem;
+}
+.niveles-tabla { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.niveles-tabla div { border-radius: 8px; padding: 10px; color: #1b1712; }
+.niveles-tabla b { display: block; font-family: var(--display); font-size: 0.8rem; letter-spacing: 0.1em; text-transform: uppercase; }
+.niveles-tabla span { font-family: var(--datos); font-size: 1.3rem; font-weight: 600; }
+.niveles-tabla small { display: block; font-size: 0.8rem; }
+.fuentes { font-size: 0.8rem; color: var(--texto-3); }
+#cerrar-explicacion { align-self: flex-start; border: none; border-radius: 8px; padding: 8px 16px; background: var(--texto); color: var(--fondo); font-family: var(--display); font-weight: 800; }
+
+#cargando {
+  position: absolute; inset: 0; display: grid; place-items: center;
+  font-family: var(--display); color: var(--texto-2); letter-spacing: 0.08em;
+}
+
+/* --- Teléfono: el mapa arriba, todo lo demás abajo, en una columna --- */
+@media (max-width: 900px) {
+  body { overflow: auto; }
+  #app { height: auto; display: flex; flex-direction: column; padding-inline: 12px; padding-block: 12px; gap: 12px; }
+  #mapa { position: relative; height: 50vh; min-height: 300px; border-radius: var(--radio); overflow: hidden; order: 2; }
+  .flotante { position: relative; inset: auto; width: auto; backdrop-filter: none; }
+  /* los paneles traen posiciones de escritorio con id: se anulan con la misma fuerza */
+  #cabecera, #tiempo, #panel, #capas { inset: auto; }
+  #cabecera { order: 1; width: auto; }
+  #tiempo { order: 3; left: auto; right: auto; bottom: auto; }
+  #panel { order: 4; width: auto; top: auto; right: auto; bottom: auto; }
+  #panel .desplazable { overflow: visible; }
+  #capas { order: 5; bottom: auto; }
+  #brujula { display: none; }
+  .pasos { grid-template-columns: minmax(0, 1fr); }
+}
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+
+<div id="app">
+  <div id="mapa" aria-label="Mapa en relieve de la Región de Coquimbo"><div id="cargando">Cargando el relieve…</div></div>
+
+  <header id="cabecera" class="flotante">
+    <div class="marca"><h1>Vigía de quebradas</h1><span>Región de Coquimbo</span></div>
+    <p class="bajada">Qué tan probable es que se activen quebradas en cada provincia durante un temporal, y qué rutas vigilar. Elige un temporal y presiona reproducir.</p>
+    <div id="escenarios" role="group" aria-label="Temporales"></div>
+    <div class="acciones"><button class="boton-texto" id="abrir-explicacion" type="button">¿Cómo funciona y qué tan confiable es?</button></div>
+  </header>
+
+  <aside id="panel" class="flotante" aria-live="polite">
+    <div class="desplazable">
+      <section id="ficha" hidden></section>
+      <section>
+        <p class="etiqueta" id="etiqueta-hora">Momento</p>
+        <p id="hora">—</p>
+        <p id="relato"></p>
+      </section>
+      <section>
+        <p class="etiqueta">Nivel de alerta por provincia</p>
+        <div class="provincias" id="provincias"></div>
+        <p class="leyenda-barra">La barra es la lluvia del temporal en la estación más mojada, como parte de lo que llueve en un año normal. Las marcas son los cortes de amarilla, naranja y roja.</p>
+      </section>
+      <div class="aviso" id="deshielo" hidden></div>
+      <section>
+        <p class="etiqueta">Tramos de ruta a vigilar</p>
+        <ul class="lista" id="tramos"></ul>
+      </section>
+      <section>
+        <p class="etiqueta">Quebradas activadas, según prensa y SENAPRED</p>
+        <ul class="lista" id="reportes"></ul>
+      </section>
+    </div>
+  </aside>
+
+  <section id="tiempo" class="flotante" aria-label="Línea de tiempo">
+    <button id="reproducir" type="button" aria-label="Reproducir"></button>
+    <svg id="grafico" role="img" aria-label="Lluvia del temporal por provincia, como parte de un año normal"></svg>
+    <span></span>
+    <input id="deslizador" type="range" min="0" max="0" value="0" aria-label="Momento del temporal">
+    <span></span>
+    <div class="ejes" id="ejes"></div>
+    <div class="claves">
+      <span><i style="background: var(--elqui)"></i>Elqui</span>
+      <span><i style="background: var(--limari)"></i>Limarí</span>
+      <span><i style="background: var(--choapa)"></i>Choapa</span>
+      <span><i style="background: var(--texto-3)"></i>cortes 21 %, 27 % y 35 %</span>
+    </div>
+  </section>
+
+  <button id="brujula" class="flotante" type="button" aria-label="Volver a la vista inicial" title="El norte. Toca para volver a la vista inicial.">
+    <svg viewBox="0 0 30 30" aria-hidden="true"><path d="M15 3 L20 16 L15 13.5 L10 16 Z" fill="#e5484d"/><path d="M15 27 L20 14 L15 16.5 L10 14 Z" fill="#6f7a7b"/></svg>
+  </button>
+
+  <details id="capas" class="flotante">
+    <summary>Capas del mapa</summary>
+    <label><input type="checkbox" id="capa-quebradas" checked><span class="muestra" style="background: var(--agua)"></span>Quebradas grandes</label>
+    <label><input type="checkbox" id="capa-chicas" checked><span class="muestra" style="background: rgba(98,198,230,.45)"></span>Quebradas chicas</label>
+    <label><input type="checkbox" id="capa-rutas" checked><span class="muestra" style="background: #cfc6b8"></span>Rutas principales</label>
+    <label><input type="checkbox" id="capa-cruces"><span class="muestra" style="background: #fff"></span>Todos los cruces ruta-quebrada</label>
+    <label><input type="checkbox" id="capa-estaciones" checked><span class="muestra" style="background: var(--texto-2); border-radius: 50%"></span>Pluviómetros</label>
+    <label><input type="checkbox" id="capa-reportes" checked><span class="muestra" style="border: 2px solid #fff; background: var(--roja); border-radius: 50%"></span>Quebradas activadas</label>
+  </details>
+
+
+  <div id="explicacion" hidden>
+    <div class="caja" role="dialog" aria-modal="true" aria-labelledby="titulo-explicacion">
+      <h2 id="titulo-explicacion">Cómo funciona</h2>
+      <div class="pasos">
+        <div><h3>Dónde pueden bajar</h3><p>Con el relieve satelital de 30 metros se dibujaron <b id="n-cuencas">3.850</b> quebradas, y se clasificó cuáles pueden traer barro y bloques, cuáles sedimento y cuáles solo agua.</p></div>
+        <div><h3>Dónde cortan rutas</h3><p>Sus cauces se cruzaron con la red vial: <b id="n-cruces">9.424</b> cruces, ordenados por la importancia de la ruta, el tipo de quebrada y cuánta agua llega a cada cruce.</p></div>
+        <div><h3>Cuánto llueve</h3><p>Cada 30 minutos, <b id="n-estaciones">107</b> pluviómetros de la red VIPNET del Ministerio de Obras Públicas. Lo que importa es cuánto es esa lluvia para ese lugar: 40 mm en La Serena son casi medio año de lluvia, y en Illapel, una quinta parte.</p></div>
+        <div><h3>El nivel de alerta</h3><p>Cada provincia toma el nivel de su estación más mojada, según qué parte de un año normal de lluvia ya cayó en el temporal.</p></div>
+      </div>
+      <div class="niveles-tabla" id="tabla-niveles"></div>
+      <div>
+        <h3>Qué tan confiable es</h3>
+        <p id="confianza">Los cortes salen de tres inviernos de activaciones reales (2024-2026). En 2026, que el modelo no conocía al ajustarse, de las provincias que puso en naranja o roja todas tuvieron quebradas activadas, y de las que dejó sin alerta, ninguna.</p>
+      </div>
+      <div>
+        <h3>Lo que no hace</h3>
+        <p>No dice qué quebrada exacta va a bajar: con pluviómetros no se puede saber cuánto llovió en una quebrada y no en la vecina. No pronostica: avisa con la lluvia que ya cayó. Y no reemplaza las alertas de SENAPRED ni de la Dirección Meteorológica de Chile.</p>
+      </div>
+      <p class="fuentes">Relieve: Copernicus DEM GLO-30 (ESA), exagerado 3 veces en altura. Lluvia, temperatura y nieve: VIPNET, Ministerio de Obras Públicas. Lluvia normal: CR2MET v2.5, Centro de Ciencia del Clima y la Resiliencia (1991-2020). Rutas y localidades: © colaboradores de OpenStreetMap. Activaciones: prensa, SENAPRED y municipios, cada una con su fuente. Proyecto personal alerta-aluviones; no es un sistema oficial.</p>
+      <button id="cerrar-explicacion" type="button">Volver al mapa</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/deck.gl@8.9.35/dist.min.js"></script>
+<script src="app.js"></script>

@@ -104,3 +104,8 @@ $RECYCLE.BIN/
 *.key
 credentials.json
 service_account.json
+
+# --- Visor ---
+# Los datos se generan con src/m6_visor.py; _local.html es solo para verlo en local.
+visor/datos/
+visor/_local.html
