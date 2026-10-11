@@ -1,0 +1,127 @@
+M5 - Cortes de ruta reales contra el mapa de exposicion (M3)
+11 de octubre de 2026, local, .venv con Python 3.12
+
+Comandos, en este orden:
+  python src/m5_cortes.py       # 1. sobre la salida de M3 del 10-10, antes de tocar M3
+  python src/m3_exposicion.py   # 2. con la clase inundacion y el area en el orden
+  python src/m5_cortes.py       # 3. las tres variantes, sobre la salida nueva
+
+La corrida 1 evaluo solo la lista de antes y dio:
+  aciertos 7 de 11; esperable al azar en las mismas rutas 5.3; P(azar >= 7) = 0.140
+y la misma tabla por K que la primera variante de abajo. El unico numero que
+cambia es el rango de Cajon del Romero, 3395 antes y 3389 ahora, por el orden
+entre puntos empatados. Esa corrida es la que motivo los dos cambios de M3; la
+formula del area se escribio antes de la corrida 3 y no se movio despues.
+
+Abajo, la corrida 3.
+
+========================================================================
+==========================================================================
+M5 - Cortes de ruta reales contra el mapa de exposicion (M3)
+==========================================================================
+
+Entradas con via afectada: 16; se evaluan 11, quedan fuera 5:
+    21  la D-215 corre 42 km por dentro de la quebrada Marquesa: no hay un punto que ubicar
+   103  la fuente dice que no hubo cortes en la D-595
+   106  'caminos rurales' sin nombre
+   108  'caminos danados' sin nombre
+   109  'sin acceso terrestre' sin via nombrada
+
+Ubicacion de cada corte:
+    11 Tambillos            43     lugar 'tambillos' a  2100 m de la ruta; unidad: inundacion (costera, 538 km2)
+         la prensa dice D-43; en OSM la Ruta 43 lleva ref '43'. OSM no tiene la quebrada y se ubica por el caserio. Cortada el 19-07 y el 31-07
+    12 Las Barrancas        D-427  lugar 'las barrancas' a     8 m de la ruta; unidad: inundacion (costera, 538 km2)
+         OSM no tiene la quebrada; el caserio esta sobre la ruta
+    14 Cajon del Romero     D-205  cauce 'quebrada del romero' a     0 m de la ruta; unidad: tronco (tronco, 1078 km2)
+         la prensa dice Cajon del Romero; el cauce de ese nombre en La Serena es Quebrada del Romero, y cruza la D-205
+    17 Los Loros            41     cauce 'quebrada los loros' a   359 m de la ruta; unidad: inundacion (confluencia, 2 km2)
+         la 'ruta Vicuna-Peralillo' es la Ruta 41 al oriente de Vicuna
+    19 El Porotal           41     lugar 'el porotal' a   241 m de la ruta; unidad: inundacion (confluencia, 18 km2)
+         km 41 de la Ruta 41; OSM no tiene el cauce
+    20 Leiva                41     cauce 'quebrada de leiva' a     0 m de la ruta; unidad: crecida_detritos (confluencia, 47 km2)
+         km 62 de la Ruta 41, a la entrada de Vicuna
+    23 Llimpo               D-835  lugar 'llimpo' a    23 m de la ruta; unidad: flujo_detritos (confluencia, 1 km2)
+         km 14 de la D-835; OSM no tiene el cauce
+    24 (sin nombre)         D-697  lugar 'la isla' a    19 m de la ruta; unidad: inundacion (confluencia, 19 km2)
+         sin nombre de quebrada: 'km 4, sector La Isla - Cogoti'
+    25 Cutun                41     lugar 'cutun alto' a  1931 m de la ruta; unidad: inundacion (confluencia, 2 km2)
+         como el alias de m5_validacion: OSM tiene el caserio Cutun Alto
+    26 El Maite             D-577  lugar 'el maiten' a    49 m de la ruta; unidad: inundacion (costera, 11675 km2)
+         la prensa escribe El Maite; el caserio El Maiten de Monte Patria esta sobre la D-577
+   137 Los Rincones         D-427  cauce 'quebrada los rincones' a     0 m de la ruta; unidad: inundacion (costera, 538 km2)
+         la prensa dice Ruta 427
+
+--------------------------------------------------------------------------
+Cobertura, linea base y prioridad
+--------------------------------------------------------------------------
+
+  M3 hasta octubre de 2026: clases susceptibles, orden por clase y via: 4846 candidatos
+      id quebrada             via              loc cand.  azar  acierto  rango
+      11 Tambillos            Ruta D-43      lugar    29  0.25       no      -
+      12 Las Barrancas        Ruta D-427     lugar     0  0.00       no      -
+      14 Cajon del Romero     Ruta D-205     cauce    21  0.31       si   3389
+      17 Los Loros            ruta Vicuna-Pe cauce   202  0.69       si    475
+      19 El Porotal           Ruta CH-41 km  lugar   202  0.73       si     19
+      20 Leiva                Ruta CH-41 km  cauce   202  0.69       si    475
+      23 Llimpo               Ruta 835 km 14 lugar    52  0.93       si     96
+      24 (sin nombre)         Ruta D-697 km  lugar     0  0.00       no      -
+      25 Cutun                Ruta 41        lugar   202  0.73       si    601
+      26 El Maite             Ruta D-577     lugar    23  0.96       si   1442
+     137 Los Rincones         Ruta 427       cauce     0  0.00       no      -
+    aciertos 7 de 11; esperable al azar en las mismas rutas 5.3; P(azar >= 7) = 0.140
+    vigilando solo los primeros K puntos de la lista:
+           K  % lista  cortes cubiertos  al azar  P(azar >=)
+         100       2%                 2      1.9       0.619
+         250       5%                 2      2.5       0.808
+         500      10%                 4      3.7       0.553
+        1000      21%                 5      4.0       0.367
+        2000      41%                 6      5.2       0.418
+        4846     100%                 7      5.3       0.140
+
+  Con la clase inundacion, mismo orden -- MOTIVO EL CAMBIO: 9424 candidatos
+      id quebrada             via              loc cand.  azar  acierto  rango
+      11 Tambillos            Ruta D-43      lugar    71  0.47       no      -
+      12 Las Barrancas        Ruta D-427     lugar     4  0.17       si   2629
+      14 Cajon del Romero     Ruta D-205     cauce    35  0.35       si   4055
+      17 Los Loros            ruta Vicuna-Pe cauce   225  0.75       si    475
+      19 El Porotal           Ruta CH-41 km  lugar   225  0.80       si     19
+      20 Leiva                Ruta CH-41 km  cauce   225  0.75       si    475
+      23 Llimpo               Ruta 835 km 14 lugar    55  1.00       si     96
+      24 (sin nombre)         Ruta D-697 km  lugar     7  0.40       no      -
+      25 Cutun                Ruta 41        lugar   225  0.80       si    601
+      26 El Maite             Ruta D-577     lugar    23  0.96       si   1927
+     137 Los Rincones         Ruta 427       cauce     4  0.13       si   2629
+    aciertos 9 de 11; esperable al azar en las mismas rutas 6.6; P(azar >= 9) = 0.065
+    vigilando solo los primeros K puntos de la lista:
+           K  % lista  cortes cubiertos  al azar  P(azar >=)
+         100       1%                 2      1.9       0.619
+         250       3%                 2      2.5       0.808
+         500       5%                 4      3.7       0.553
+        1000      11%                 5      4.0       0.367
+        2000      21%                 6      5.4       0.491
+        9424     100%                 9      6.6       0.065
+
+  M3 actual: con inundacion y area en la prioridad -- MOTIVO EL CAMBIO: 9424 candidatos
+      id quebrada             via              loc cand.  azar  acierto  rango
+      11 Tambillos            Ruta D-43      lugar    71  0.47       no      -
+      12 Las Barrancas        Ruta D-427     lugar     4  0.17       si   1087
+      14 Cajon del Romero     Ruta D-205     cauce    35  0.35       si    370
+      17 Los Loros            ruta Vicuna-Pe cauce   225  0.75       si    181
+      19 El Porotal           Ruta CH-41 km  lugar   225  0.80       si    144
+      20 Leiva                Ruta CH-41 km  cauce   225  0.75       si    181
+      23 Llimpo               Ruta 835 km 14 lugar    55  1.00       si    674
+      24 (sin nombre)         Ruta D-697 km  lugar     7  0.40       no      -
+      25 Cutun                Ruta 41        lugar   225  0.80       si    106
+      26 El Maite             Ruta D-577     lugar    23  0.96       si   2134
+     137 Los Rincones         Ruta 427       cauce     4  0.13       si   1087
+    aciertos 9 de 11; esperable al azar en las mismas rutas 6.6; P(azar >= 9) = 0.065
+    vigilando solo los primeros K puntos de la lista:
+           K  % lista  cortes cubiertos  al azar  P(azar >=)
+         100       1%                 0      0.3       1.000
+         250       3%                 4      1.0       0.006
+         500       5%                 5      2.1       0.019
+        1000      11%                 6      4.2       0.156
+        2000      21%                 8      5.5       0.053
+        9424     100%                 9      6.6       0.065
+
+  tabla -> m5_cortes.csv
