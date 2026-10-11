@@ -430,10 +430,17 @@ alcance urbano es una decisión de modelo y queda para M5.
 ## Cómo se corre M4
 
 ```bash
-python src/m4_lluvia.py              # usa el cache de data/raw/lluvia/
+python src/m4_lluvia.py              # usa el cache de data/raw/lluvia/<inicio>_<fin>/
 python src/m4_lluvia.py --refrescar  # vuelve a pegarle a VIPNET
 python src/m4_umbrales.py            # imprime los umbrales con sus citas
 ```
+
+Desde octubre de 2026 la ventana cubre tres inviernos, del 1 de junio de 2024 al
+23 de agosto de 2026, y la lluvia de cada cuenca ya no es la de su estación más
+cercana. Lo que cambió y por qué está en
+[Tres inviernos y la lluvia de la cuenca](#tres-inviernos-y-la-lluvia-de-la-cuenca),
+al final de esta sección. Lo que sigue documenta la corrida de un invierno, que
+es la línea base contra la que se comprobó que el cambio no movió nada de 2026.
 
 M2 dijo qué quebradas *pueden* generar un flujo. M4 responde la otra mitad:
 *cuándo*. Se expresa como un umbral intensidad-duración (I-D), una curva
@@ -712,6 +719,83 @@ documenta. Queda como el primer pendiente de M4: son dos números en
 | `outputs/m4_umbral_id.png` | log-log con las curvas y los episodios encima |
 | `outputs/m4_episodios.csv` | los 448 episodios, legibles sin abrir un SIG |
 | `outputs/m4_control_cordura.csv` | *pendiente*: las quebradas documentadas contra los umbrales. El inventario ya existe en `docs/`; falta geolocalizarlo. Es M5 |
+| `outputs/m4_interpolacion_validacion.csv` | la validación dejando una estación fuera, par por par |
+
+### Tres inviernos y la lluvia de la cuenca
+
+Corrida: [`2026-10-10_m4_tres_inviernos.txt`](docs/corridas/2026-10-10_m4_tres_inviernos.txt).
+
+**Por qué tres inviernos.** Con el temporal de 2026 solo, todas las observaciones
+son positivas: hay activaciones y no hay ningún episodio donde lloviera y no
+pasara nada. VIPNET tiene dato útil desde el 30 de junio de 2024, y 2025 tuvo
+lluvia real —La Serena 122,2 mm de junio a agosto, contra 175,8 en 2026— con
+activaciones mayormente menores. Eso es lo que permite calibrar en M5.
+
+Extender la ventana obligó a cuatro cambios, y ninguno es de forma:
+
+* **La hora.** El desfase fijo de 4 horas era válido solo en invierno; la ventana
+  nueva cruza seis cambios de hora. Ahora se usa `zoneinfo` con
+  `America/Santiago` y la grilla vive en tiempo absoluto: el día que se adelanta
+  la hora tiene 46 pasos y el que se atrasa, 50. Sobre la ventana vieja el cambio
+  reproduce la corrida anterior al número.
+* **El cache.** Era una carpeta plana, y cambiar la ventana leía en silencio la
+  serie vieja. Ahora hay una subcarpeta por ventana.
+* **Los saltos del contador.** Con tres años, R4 pasó de botar 4 estaciones a
+  botar 13, y casi ninguna por nieve: el 9 y 10 de abril de 2026 cinco estaciones
+  registran a la vez cientos de milímetros en un paso entre ceros (Huintil 739,
+  Cogotí Embalse 660, Cuncumén 598). En tres inviernos, el paso de 30 minutos más
+  grande que no está aislado es de 16 mm; los aislados se separan solos en una
+  familia de 22 a 81 mm y otra de 163 a 739. Un paso aislado de más de 100 mm se
+  anula, como ya se anulaba el salto hacia abajo.
+* **R2 y R4 por estación e invierno.** Por estación, una falla de abril botaba a
+  Cuncumén también para julio, y Río Mostazal en Cuestecita —99% de cobertura en
+  2026— caía por no existir en 2024. Es el mismo cambio de granularidad que ya
+  tuvo R3, también hecho después de mirar los datos, y la corrida reporta las dos
+  versiones: por estación quedaban 88 de 107; por invierno son válidas 98, 101 y
+  101.
+
+Resultado: **1.188 episodios en 104 estaciones**, 98 eventos regionales.
+
+| | 2024 | 2025 | 2026 |
+|---|---|---|---|
+| Episodios | 223 | 503 | 462 |
+| Superan Caine (episodio) | 3 | 7 | 26 |
+| Superan Caine (ventana crítica) | 10 | 17 | 41 |
+
+**La lluvia de la cuenca.** El diagnóstico ya había medido que la estación más
+cercana es casi ruido: dejando una estación fuera, le gana apenas a la media
+regional en error absoluto y le pierde en R². Ahora la cantidad de lluvia de cada
+cuenca la predice un random forest sobre latitud, longitud, altitud y distancia a
+la costa, más dos rasgos del evento —su media regional y la latitud donde se
+concentró—. Predice **por evento regional**, no el total del invierno, porque el
+umbral se aplica a episodios. La cuenca conserva el reloj de su estación cercana
+(cuándo empezó, cuánto duró) y la cantidad se escala por el cociente entre la
+predicción y lo medido. Los pares sobre la isoterma 0 quedan fuera del
+entrenamiento, para que el bosque no aprenda como física la nieve que la cubeta
+no mide. Todo está en `src/m4_interpolacion.py`.
+
+La regla era adoptarlo solo si le ganaba a la estación cercana dejando
+estaciones fuera. Le gana:
+
+| Método | MAE | RMSE | R² | R² dentro del evento |
+|---|---|---|---|---|
+| media regional | 39,5 mm | 65,5 | 0,62 | −0,02 |
+| estación cercana | 36,8 mm | 76,9 | 0,48 | −0,41 |
+| **random forest** | **29,9 mm** | **59,1** | **0,69** | **0,17** |
+| gradient boosting | 30,7 mm | 58,1 | 0,70 | 0,19 |
+
+La última columna dice cuánto gana de verdad: 0,17 de R² repartiendo la lluvia
+dentro de un evento es poco, y el bosque gana sobre todo porque la estación
+cercana es **peor** que la media regional. Además se entrena con solo 5 eventos
+regionales; los 93 restantes son demasiado chicos y quedan con factor 1. Sobre el
+total del invierno de 2026, que es como se hizo el diagnóstico, el orden se
+repite: media regional 125,8 mm de MAE, estación cercana 158,2, bosque 107,7.
+
+La interpolación no cambia el recall de M5 leyendo el episodio entero, y lo sube
+en la ventana crítica de 40% a 72%. Pero también marca más cuencas (de 856 a
+1.000 en 2026), así que sin negativos no se sabía si eso era mejora. La
+calibración de M5 lo contesta, y la respuesta es que no.
+
 ---
 
 ## Cómo se corre M5
@@ -807,7 +891,81 @@ comparten la estación más cercana y por eso repiten exactamente la misma razó
 observaciones.
 
 Para calibrar en serio hace falta un inventario con episodios **sin** activación
-documentada. Eso es lo que no existe hoy y es el primer pendiente del proyecto.
+documentada. Eso se armó en octubre de 2026 y está en la sección siguiente.
+
+### Calibración con negativos: entrenar en 2024-2025, probar en 2026
+
+```bash
+python src/m5_calibracion.py                    # positivos: aluvión, activación y activación menor
+python src/m5_calibracion.py --positivos fuerte # solo aluvión y activación
+```
+
+Corrida: [`2026-10-10_m5_tres_inviernos.txt`](docs/corridas/2026-10-10_m5_tres_inviernos.txt).
+
+**El inventario nuevo.**
+[`docs/inventario_activaciones_2024-2025.csv`](docs/inventario_activaciones_2024-2025.csv)
+tiene 44 entradas de cuatro eventos, con el mismo formato y criterio que el de
+2026, y su documento explica cada juicio. Las filas sin nombre ("se activaron 41
+quebradas") no son positivos, pero **excluyen** su comuna y su fecha de los
+negativos. El inventario de 2026 sumó El Porotal, que **no es de julio sino del
+15 de agosto**, y las demás quebradas de las mismas fuentes: pasó de 18 a 33. La
+entrada 9, el aluvión del Islón, ya tiene quebrada: Santa Gracia.
+
+**La unidad es la estación y el episodio**, no la cuenca: un umbral I-D es un
+umbral de lluvia, y las cuencas de una estación comparten el reloj de su lluvia.
+Un episodio es positivo si una activación documentada cae a menos de 3 km de una
+cuenca de su zona, en su fecha ±1 día. Los negativos son **presuntos**: un
+episodio sin activación reportada. Por eso la precisión es una **cota
+inferior**.
+
+**La precisión de Caine publicado, que antes no se podía calcular:**
+
+| Invierno 2026 | Recall | Precisión (cota inf.) | Falsos positivos | AUC |
+|---|---|---|---|---|
+| Caine publicado | 3% | 4,5% | 6% | 0,47 |
+| Caine, ventana crítica | 15% | 13% | 10% | 0,49 |
+| Ajustada sobre 2024-2025 | 48% | 9% | 45% | 0,49 |
+
+La curva ajustada por máxima verosimilitud es más empinada que Caine,
+`I = 28,9 · D^(−0,60)` a probabilidad 0,5 (β entre 0,23 y 0,83), y en el punto
+de operación elegido en el entrenamiento queda bastante más baja. **Baja el
+umbral pero no discrimina mejor**: el AUC es el mismo. Cambia falsos negativos
+por falsos positivos a lo largo de la misma ordenación. Es el diagnóstico previo
+—mover el umbral no arregla el ranking—, ahora medido con negativos y sobre un
+invierno que el ajuste no vio.
+
+**Y el AUC de 0,47 esconde dos temporales distintos:**
+
+| Evento de 2026 | Positivos | Lluvia mediana | AUC Caine | Recall ajustada |
+|---|---|---|---|---|
+| 16 de julio | 13 | 59,2 mm | 0,77 | 92% |
+| 13 de agosto | 20 | 4,6 mm | 0,27 | 20% |
+
+Dentro del temporal de julio el I-D sí ordena. En agosto las zonas activadas
+recibieron 4,6 mm de mediana y se activaron donde **menos** llovió: El Día lo
+atribuyó al "derretimiento acelerado de la nieve acumulada" sobre suelos ya
+saturados. Ningún umbral de lluvia puede ver eso.
+
+**Lo que no se puede concluir.** Hay 12 positivos de entrenamiento y salen de
+dos eventos, así que el intervalo de β es optimista aunque ya es ancho. Con
+evidencia fuerte quedan 6 positivos de un solo evento, y esa variante no se usa.
+La regresión con Melton, antecedente de 72 h y altitud pide 50 positivos y hay
+12: no se ajustó.
+
+### El piloto satelital
+
+`python src/m5_satelite_piloto.py` compara Sentinel-2 antes y después sobre
+cuatro quebradas con activación documentada. Usa los datos abiertos de AWS, que
+no piden cuenta, en vez de Copernicus Data Space o Earth Engine, que sí la piden.
+De julio a septiembre domina el reverdecimiento después de la lluvia. Septiembre
+de 2025 contra septiembre de 2026 limpia las sombras y deja una señal real —más
+suelo desnudo a lo largo de los cauces—, pero en **toda** la red de drenaje y no
+solo en la quebrada reportada. Lo que el satélite ve con claridad es por dónde
+corrió agua con energía. Separar un flujo de detritos de una crecida pide un
+clasificador entrenado, y para entrenarlo hacen falta las etiquetas que se
+querían producir. Lo que sí entrega ya es la otra mitad: **qué cauces no
+cambiaron**, que es un negativo mucho mejor que la ausencia de una nota de
+prensa.
 
 ---
 
@@ -817,8 +975,8 @@ documentada. Eso es lo que no existe hoy y es el primer pendiente del proyecto.
 - [x] **M1 — Terreno**: DEM descargado; cuencas y red de quebradas delineadas.
 - [x] **M2 — Susceptibilidad**: mapa de quebradas rankeadas por peligro (razón de Melton).
 - [x] **M3 — Exposición**: cruce con red vial y zonas urbanas → 3.669 puntos de corte en 14 comunas.
-- [x] **M4 — Gatillo de lluvia**: 448 episodios de 30 min; 668 de 2.589 cuencas superan Caine.
-- [x] **M5 — Validación**: 18 activaciones documentadas; recall 27%, y las fallas caen a 0,75 de Caine.
+- [x] **M4 — Gatillo de lluvia**: tres inviernos, 1.188 episodios de 30 min; lluvia de cada cuenca interpolada con random forest.
+- [x] **M5 — Validación y calibración**: 33 activaciones de 2026 y 44 de 2024-2025. Con negativos, Caine publicado tiene precisión de 4,5% (cota inferior) y calibrar baja el umbral sin mejorar el AUC.
 - [ ] **M6 — Entrega**: mapa o visor final y documentación.
 
 M0 a M3 forman la versión mínima mostrable (v0). M4 y M5 son calibración y
@@ -865,7 +1023,9 @@ La corrida de referencia es
 [`2026-10-10_subcuencas_confluencia.txt`](docs/corridas/2026-10-10_subcuencas_confluencia.txt),
 que cubre M1 extendido, M2, M3 y M4 sobre las 3.757 unidades, con la cobertura
 del DEM verificada al 100% de la superficie regional y el extracto de OSM del 8
-de octubre.
+de octubre. M4 y M5 sobre tres inviernos están en
+[`2026-10-10_m4_tres_inviernos.txt`](docs/corridas/2026-10-10_m4_tres_inviernos.txt)
+y [`2026-10-10_m5_tres_inviernos.txt`](docs/corridas/2026-10-10_m5_tres_inviernos.txt).
 
 Quedan guardadas también las dos corridas previas del mismo día, sobre las 444
 cuencas costeras: [`2026-10-10_reconstruccion_m1_m2_m4.txt`](docs/corridas/2026-10-10_reconstruccion_m1_m2_m4.txt)

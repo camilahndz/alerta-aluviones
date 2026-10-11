@@ -61,8 +61,8 @@ observados.
 | **M1** | Terreno: DEM, flujo, cuencas costeras y subcuencas de confluencia | Cerrado y reproducible en local — 3.757 unidades (corrida 2026-10-10) |
 | **M2** | Susceptibilidad: variables de terreno + quebradas rankeadas (razón de Melton) | Cerrado y reproducible en local — 2.589 susceptibles (corrida 2026-10-10) |
 | **M3** | Exposición: cruce de trayectorias con red vial (OSM) y zonas urbanas | Cerrado y reproducible en local — 3.669 puntos de corte en 14 comunas (corrida 2026-10-10, extracto OSM del 08-10) |
-| **M4** | Gatillo: lluvia sub-diaria de VIPNET + umbrales publicados aplicados | Cerrado y reproducible en local (corrida 2026-10-10). 668 de 2.589 cuencas superan Caine, todas en valles interiores |
-| **M5** | Validación contra las activaciones documentadas de julio 2026 | Cerrado (corrida 2026-10-10). Recall 27%; las fallas caen a 0,75 de Caine. **No hay matriz de confusión ni AUC**: el inventario de prensa no tiene negativos observados |
+| **M4** | Gatillo: lluvia sub-diaria de VIPNET + umbrales publicados aplicados | Cerrado y reproducible en local. Desde el 10-10 cubre tres inviernos (2024-2026), 1.188 episodios, con la lluvia de cada cuenca interpolada por random forest (MAE 29,9 mm contra 36,8 de la estación cercana) |
+| **M5** | Validación contra las activaciones documentadas de 2026 y calibración con 2024-2025 | Cerrado (corrida 2026-10-10, tres inviernos). Con negativos presuntos, Caine publicado tiene precisión de 4,5% (cota inferior) y AUC 0,47 en 2026; la curva ajustada baja el umbral sin mejorar el AUC. En el temporal de julio el I-D ordena (AUC 0,77); el bloque de agosto, de deshielo, no lo ve ningún umbral de lluvia |
 | **M6** | Entrega: visor y documentación | No iniciado |
 
 M4 cambió de contenido respecto de lo que este documento proyectaba. Decía
@@ -161,6 +161,21 @@ Hidrología: pysheds o richdem (o GRASS GIS si se requiere `r.watershed` /
   intensidades de 30 minutos enormes y perfectamente falsas. La señal que los
   delata es la forma: la lluvia real sube y baja, un artefacto es un escalón
   entre ceros.
+
+  Con tres inviernos apareció la versión extrema: el 9 y 10 de abril de 2026
+  cinco estaciones registran a la vez entre 350 y 739 mm en un solo paso. Y
+  apareció algo peor que el artefacto mismo: una regla que decide sobre la
+  estación entera la bota por toda su historia. R4 por estación eliminaba a
+  Cuncumén del temporal de julio por una falla de abril. **Una regla de calidad
+  tiene que aplicarse con la misma granularidad que el daño que vigila**: R3
+  pasó de la estación al episodio por eso, y R2 y R4 pasaron al invierno.
+
+- **Suponer que todo lo que se activa lo gatilla la lluvia.** El bloque del 13
+  al 17 de agosto de 2026 activó 20 zonas con una lluvia mediana de 4,6 mm, y
+  el AUC de Caine sobre ese evento es 0,27: se activaron donde menos llovió. La
+  prensa lo atribuyó al deshielo sobre suelos saturados. Un umbral I-D no tiene
+  ninguna variable que vea eso, y evaluarlo contra esas activaciones mezcla dos
+  mecanismos en una sola cifra.
 
 - **Que la unidad de análisis no coincida con el fenómeno.** Es el error más caro
   que tuvo este proyecto y conviene dejarlo escrito completo. M1 cortaba cuencas
