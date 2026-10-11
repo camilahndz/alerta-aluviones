@@ -245,3 +245,43 @@ Repaso: el final de cada temporal regional, contra m5_niveles (nivel con el mode
 
   json    -> outputs/alerta_en_vivo.json
   boletin -> outputs/boletines/boletin_2026-10-11_1430.md
+
+########################################################################
+# 5. Despues de la auditoria: segunda estacion y modelo recalibrado
+########################################################################
+El boletin de las 14:30 ponia a Choapa en naranja por una sola estacion (Rio
+Cuncumen antes junta Choapa, 94,5 mm; sus vecinas a 1-2 km, 36,6 y 41,8 mm).
+Con la segunda estacion y el modelo recalibrado (b0 4,860371, b1 7,526972):
+
+  python src/m6_alerta_en_vivo.py --repasar
+
+Repaso: el final de cada temporal regional, contra m5_niveles (nivel con el modelo de los tres inviernos)
+  temporal     Elqui                     Limari                    Choapa                    
+  01-08-2024   ! roja     (excluida)     ! roja     (excluida)     ! roja     (excluida)     
+  06-10-2024   = ninguna  (ninguna)      = ninguna  (ninguna)      = ninguna  (ninguna)      
+  11-06-2025   = amarilla (amarilla)     = naranja  (naranja)      = naranja  (naranja)      
+  16-06-2025   = ninguna  (ninguna)      = amarilla (amarilla)     = amarilla (amarilla)     
+  22-06-2025   = ninguna  (ninguna)      = ninguna  (ninguna)      = ninguna  (ninguna)      
+  31-07-2025   = roja     (roja)         = roja     (roja)         = roja     (roja)         
+  18-08-2025   = naranja  (naranja)      = ninguna  (ninguna)      = ninguna  (ninguna)      
+  21-08-2025   = ninguna  (ninguna)      = ninguna  (ninguna)      = amarilla (amarilla)     
+  26-09-2025   = ninguna  (ninguna)      = ninguna  (ninguna)      = ninguna  (ninguna)      
+  06-11-2025   = ninguna  (ninguna)      = ninguna  (ninguna)      = ninguna  (ninguna)      
+  05-12-2025   = ninguna  (ninguna)      = ninguna  (ninguna)      = ninguna  (ninguna)      
+  10-06-2026   = ninguna  (ninguna)      = ninguna  (ninguna)      = ninguna  (ninguna)      
+  15-07-2026   = roja     (roja)         ! roja     (excluida)     = roja     (roja)         
+  30-07-2026   = naranja  (naranja)      = amarilla (amarilla)     = amarilla (amarilla)     
+  11-08-2026   = naranja  (naranja)      = roja     (roja)         = amarilla (amarilla)     
+
+  mismo nivel en 41 de 41 provincias-temporal
+
+  python src/m6_alerta_en_vivo.py
+
+11-10-2026 17:00  (temporal desde 05-10 12:00; 107 estaciones transmitiendo; VIPNET en vivo)
+  Elqui   -         P 0.12    12% de la normal
+  Limari  AMARILLA  P 0.41    20% de la normal
+  Choapa  NARANJA   P 0.62    26% de la normal
+  deshielo (experimental): ACTIVO
+
+  json    -> outputs/alerta_en_vivo.json
+  boletin -> outputs/boletines/boletin_2026-10-11_1700.md

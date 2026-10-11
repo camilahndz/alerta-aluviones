@@ -41,7 +41,12 @@ LAS DECISIONES QUE HAY QUE PODER DEFENDER
        menos 24 horas (VIPNET a veces completa datos tarde). El almacen esta
        en data/raw/vivo/.
 
-    5. Repaso. Con --momento se corre "como si fuera" un momento pasado. Si
+    5. Dos estaciones, no una. El nivel lo fija la segunda estacion mas
+       mojada de la provincia. Asi un pluviometro que mide de mas no puede
+       poner sola a una provincia en alerta, que es lo que paso el 11-10-2026
+       con Choapa. Ver m5_niveles.py.
+
+    6. Repaso. Con --momento se corre "como si fuera" un momento pasado. Si
        cae dentro de la ventana de M4, los datos salen del cache de M4 y no se
        le pide nada a VIPNET. Asi se valida: --repasar corre el final de cada
        temporal regional de tres inviernos y compara con m5_niveles, y
@@ -84,10 +89,13 @@ ZONA = m4.ZONA_CHILE
 
 # --- El modelo congelado ------------------------------------------------------
 # De m5_niveles.py, corrida 2026-10-11_m5_niveles.txt: logistica sobre los tres
-# inviernos, 98 provincias-temporal, 12 positivas.
-B0 = 5.568862
-B1 = 9.776656
-CALIBRACION = "m5_niveles.py, 11-10-2026, inviernos 2024-2026"
+# inviernos, 98 provincias-temporal, 12 positivas, con la fraccion de la normal
+# en la SEGUNDA estacion mas mojada de cada provincia. La primera version usaba
+# la mas mojada (b0 5,568862, b1 9,776656); se cambio el mismo 11-10 porque una
+# sola estacion sospechosa ponia a Choapa en naranja. Ver m5_niveles.py.
+B0 = 4.860371
+B1 = 7.526972
+CALIBRACION = "m5_niveles.py, 11-10-2026, inviernos 2024-2026, segunda estacion"
 
 VENTANA_LLUVIA_D = 21       # el temporal mas largo de tres inviernos duro 13 dias
 VENTANA_DATOS_D = 40        # el deshielo mira la linea de nieve de 30 dias atras
@@ -251,12 +259,14 @@ def verificar_modelo():
 # La evaluacion de un momento
 # =============================================================================
 
-def probabilidad(fraccion: float) -> float:
-    return 1 / (1 + math.exp(-(B0 + B1 * math.log10(max(fraccion, niv.PISO_FRACCION)))))
+def probabilidad(fraccion: float, modelo=None) -> float:
+    b0, b1 = modelo or (B0, B1)
+    return 1 / (1 + math.exp(-(b0 + b1 * math.log10(max(fraccion, niv.PISO_FRACCION)))))
 
 
-def fraccion_para(p: float) -> float:
-    return 10 ** ((math.log(p / (1 - p)) - B0) / B1)
+def fraccion_para(p: float, modelo=None) -> float:
+    b0, b1 = modelo or (B0, B1)
+    return 10 ** ((math.log(p / (1 - p)) - b0) / b1)
 
 
 def nivel_de(p: float) -> str:
@@ -348,7 +358,9 @@ def _num(v, dec=1):
     return None if v is None or not np.isfinite(v) else round(float(v), dec)
 
 
-def evaluar(momento, fuente, fijo) -> dict:
+def evaluar(momento, fuente, fijo, modelo=None) -> dict:
+    """El boletin de un momento. `modelo` = (b0, b1) reemplaza al congelado:
+    lo usa el visor para repasar un invierno con el modelo que no lo vio."""
     cat = fijo["catalogos"]
     datos = bajar_todo(fuente, cat, momento)
     episodios, estado = episodios_en_ventana(datos, cat, momento)
@@ -370,21 +382,23 @@ def evaluar(momento, fuente, fijo) -> dict:
 
     for p in alerta.PROVINCIAS:
         sel = totales[totales["provincia"] == p] if len(totales) else totales
-        if len(sel):
-            top = sel.loc[sel["fraccion"].idxmax()]
-            frac, prob = float(top["fraccion"]), probabilidad(float(top["fraccion"]))
-        else:
-            top, frac, prob = None, 0.0, probabilidad(0.0)
+        orden = sel.sort_values("fraccion", ascending=False) if len(sel) else sel
+        # El nivel lo fija la SEGUNDA estacion mas mojada: hacen falta dos que
+        # lo digan. Ver m5_niveles.py.
+        primera = orden.iloc[0] if len(orden) else None
+        segunda = orden.iloc[1] if len(orden) > 1 else None
+        frac = float(segunda["fraccion"]) if segunda is not None else 0.0
+        prob = probabilidad(frac, modelo)
         nivel = nivel_de(prob) if tor is not None else "ninguna"
         siguiente = None
         for nombre, umbral in niv.NIVELES:
             if prob < umbral:
-                f = fraccion_para(umbral)
-                # Lo que le falta a la estacion que esta mas cerca de ese
-                # corte, en mm de su propia normal.
-                if len(sel):
-                    falta = (f * sel["normal_mm"] - sel["lluvia_mm"]).clip(lower=0)
-                    i = falta.idxmin()
+                f = fraccion_para(umbral, modelo)
+                # Lo que falta para que DOS estaciones lleguen al corte: el
+                # segundo menor faltante, en mm de la normal de cada una.
+                if len(sel) > 1:
+                    falta = (f * sel["normal_mm"] - sel["lluvia_mm"]).clip(lower=0).sort_values()
+                    i = falta.index[1]
                     siguiente = {"nivel": nombre, "falta_mm": _num(falta[i]),
                                  "estacion": sel.loc[i, "nombre"]}
                 else:
@@ -393,9 +407,12 @@ def evaluar(momento, fuente, fijo) -> dict:
         provincias[p] = {
             "nivel": nivel, "probabilidad": _num(prob, 3),
             "fraccion_normal": _num(frac, 3),
-            "estacion_mas_mojada": None if top is None else top["nombre"],
-            "lluvia_temporal_mm": None if top is None else _num(top["lluvia_mm"]),
-            "normal_anual_mm": None if top is None else _num(top["normal_mm"], 0),
+            "estacion_que_fija": None if segunda is None else segunda["nombre"],
+            "lluvia_temporal_mm": None if segunda is None else _num(segunda["lluvia_mm"]),
+            "normal_anual_mm": None if segunda is None else _num(segunda["normal_mm"], 0),
+            "estacion_mas_mojada": None if primera is None else primera["nombre"],
+            "lluvia_mas_mojada_mm": None if primera is None else _num(primera["lluvia_mm"]),
+            "fraccion_mas_mojada": None if primera is None else _num(primera["fraccion"], 3),
             "siguiente_nivel": siguiente,
             "estaciones_transmitiendo": int(n_vigentes.get(p, 0)),
             "datos_insuficientes": bool(n_vigentes.get(p, 0) < MIN_ESTACIONES),
@@ -455,12 +472,13 @@ def boletin(r: dict) -> str:
         dur = (m - ini).total_seconds() / 86400
         lineas += [f"**Temporal en curso** desde el {ini:%d-%m-%Y %H:%M} ({dur:.1f} dias), "
                    f"con {t['estaciones_sobre_5mm']} estaciones sobre 5 mm.", ""]
-    lineas += ["| Provincia | Nivel | Probabilidad | Lluvia del temporal | % de la normal anual "
-               "| Para el siguiente nivel | Estaciones transmitiendo |",
+    lineas += ["| Provincia | Nivel | Probabilidad | Las dos estaciones mas mojadas | "
+               "% de la normal (la segunda) | Para el siguiente nivel | Estaciones transmitiendo |",
                "|---|---|---|---|---|---|---|"]
     for p, v in r["provincias"].items():
-        lluvia = (f"{v['lluvia_temporal_mm']:.0f} mm en {v['estacion_mas_mojada']}"
-                  if v["estacion_mas_mojada"] else "-")
+        lluvia = (f"{v['estacion_mas_mojada']} {v['lluvia_mas_mojada_mm']:.0f} mm, "
+                  f"{v['estacion_que_fija']} {v['lluvia_temporal_mm']:.0f} mm"
+                  if v["estacion_que_fija"] else "-")
         s = v["siguiente_nivel"]
         if s is None:
             sig = "ya en roja"
@@ -492,9 +510,10 @@ def boletin(r: dict) -> str:
             lineas.append(f"| {c['provincia']} | {c['via']} ({c['tipo_via']}) | {c['comuna']} | "
                           f"{c['area_cruce_km2']} km2 | {c['clase']} | {c['lat']}, {c['lon']} |")
     lineas += ["", "## Como leer este boletin", "",
-               "El nivel de una provincia sale de la lluvia del temporal en su estacion mas "
-               "mojada, como fraccion de lo que llueve ahi en un anio normal (CR2MET "
-               "1991-2020). Amarilla: una de cada cuatro provincias en esa situacion tuvo "
+               "El nivel de una provincia sale de la lluvia del temporal en su SEGUNDA "
+               "estacion mas mojada, como fraccion de lo que llueve ahi en un anio normal "
+               "(CR2MET 1991-2020): hacen falta dos estaciones que lo digan, porque un "
+               "pluviometro solo puede fallar. Amarilla: una de cada cuatro provincias en esa situacion tuvo "
                "activaciones de quebradas en 2024-2026; naranja, una de cada dos; roja, tres "
                "de cada cuatro. Dice en que provincias es probable que haya activaciones, "
                "no cuales quebradas: eso los pluviometros no lo resuelven. Calibrado con 12 "
