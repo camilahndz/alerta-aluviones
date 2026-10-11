@@ -963,9 +963,59 @@ suelo desnudo a lo largo de los cauces—, pero en **toda** la red de drenaje y 
 solo en la quebrada reportada. Lo que el satélite ve con claridad es por dónde
 corrió agua con energía. Separar un flujo de detritos de una crecida pide un
 clasificador entrenado, y para entrenarlo hacen falta las etiquetas que se
-querían producir. Lo que sí entrega ya es la otra mitad: **qué cauces no
-cambiaron**, que es un negativo mucho mejor que la ausencia de una nota de
-prensa.
+querían producir.
+
+### Negativos desde satélite: no se lograron, y el porqué es el hallazgo
+
+```bash
+python src/m5_satelite_cauces.py    # las 2.589 unidades, septiembre contra septiembre (~30 min)
+python src/m5_satelite_troncos.py   # el mismo detector sobre los troncos reportados
+```
+
+Corrida: [`2026-10-10_m5_satelite.txt`](docs/corridas/2026-10-10_m5_satelite.txt).
+
+El objetivo era reemplazar los negativos presuntos de la calibración por
+negativos **observados**: cauces que Sentinel-2 ve sin cambio entre un
+septiembre y el siguiente. La métrica es cuánto suelo desnudo ganó el cauce
+principal de cada unidad frente a sus propias laderas. El umbral sale de líneas
+paralelas a 200 m del cauce, que no son cauces, y no de las etiquetas. Todo eso
+se fijó antes de correr, junto con la prueba: las quebradas reportadas tienen
+que cambiar más que las demás.
+
+**La prueba falló.** En 2026 las unidades cerca de las quebradas reportadas
+cambiaron **menos** que el resto (AUC 0,37). Esos negativos no se usan.
+
+**El porqué es más importante que los negativos.** Sobre el *tronco* de las
+mismas quebradas, el detector ve las activaciones de 2026 con claridad: 66% de
+los tramos con cambio y AUC 0,89 contra sus nulos. Santa Gracia cambió en el
+82% de sus tramos, Marquesa en el 72%. Lo que fallaba era el objeto:
+
+| | Área drenada |
+|---|---|
+| Santa Gracia (aluvión del Islón) | 1.073 km² |
+| Marquesa | 736 km² |
+| El Arrayán | 562 km² |
+| San Carlos | 259 km² |
+| **Mediana de las 23 reportadas** | **113 km²** |
+| Tope de una unidad de M1 | 50 km² |
+
+**15 de las 23 quebradas reportadas son más grandes que cualquier unidad del
+modelo.** M1 las ve solo a través de afluentes chicos que pasan cerca, y el
+satélite dice que esos afluentes mayormente no hicieron nada. Es el mismo error
+que M1 tuvo hasta octubre —la unidad no coincide con el fenómeno—, ahora de
+escala en vez de ubicación. Y es la explicación más directa de por qué el
+modelo rankea mal: el umbral se aplica a la lluvia de unidades que no son las
+que se activaron.
+
+Dos resultados más, que acotan lo que el satélite puede dar:
+
+* **2025 no dejó huella.** Los troncos reportados en 2025 no cambiaron (AUC
+  0,18). Calza con que fueron activaciones menores: agua, no sedimento.
+* **Tampoco hay negativos a escala de tronco.** De 60 quebradas que nadie
+  reportó en las mismas comunas, el 46% de los tramos cambió en 2026, contra
+  66% de las reportadas. O la prensa reportó solo una parte de lo que bajó, o el
+  reverdecimiento del lecho frente a las laderas pesa más de lo que el método
+  descuenta. Estos datos no separan una cosa de la otra.
 
 ---
 
@@ -977,6 +1027,7 @@ prensa.
 - [x] **M3 — Exposición**: cruce con red vial y zonas urbanas → 3.669 puntos de corte en 14 comunas.
 - [x] **M4 — Gatillo de lluvia**: tres inviernos, 1.188 episodios de 30 min; lluvia de cada cuenca interpolada con random forest.
 - [x] **M5 — Validación y calibración**: 33 activaciones de 2026 y 44 de 2024-2025. Con negativos, Caine publicado tiene precisión de 4,5% (cota inferior) y calibrar baja el umbral sin mejorar el AUC.
+- [ ] **M1 — Unidades troncales**: 15 de 23 quebradas reportadas drenan más de 50 km², el tope de las unidades. Ver M5, negativos desde satélite.
 - [ ] **M6 — Entrega**: mapa o visor final y documentación.
 
 M0 a M3 forman la versión mínima mostrable (v0). M4 y M5 son calibración y

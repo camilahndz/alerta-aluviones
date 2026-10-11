@@ -199,3 +199,15 @@ Hidrología: pysheds o richdem (o GRASS GIS si se requiere `r.watershed` /
   La moraleja es general y vale para cualquier modelo espacial: **antes de creerle
   a un resultado agregado, conviene preguntarse sobre qué objetos se calculó y si
   esos objetos existen donde el fenómeno ocurre.**
+
+  **Y volvió a pasar, esta vez de escala.** En octubre de 2026 el satélite
+  (`src/m5_satelite_troncos.py`) mostró que las quebradas que la prensa reportó
+  activadas cambiaron en su tronco y no en las unidades del modelo que las tocan.
+  15 de 23 drenan más de 50 km², el tope de una subcuenca de confluencia:
+  Santa Gracia, la del aluvión del Islón, 1.073 km²; Marquesa, 736. El modelo
+  las evalúa a través de afluentes chicos que, según el satélite, no hicieron
+  nada. La corrección de M1 puso unidades donde faltaban, pero con un tope de
+  tamaño que deja fuera justamente las quebradas grandes que se activaron. Ahí
+  Melton ya no está calibrado —Wilford trabajó entre 0,1 y 10 km²—, así que la
+  solución no es subir el tope sino agregar una segunda clase de unidad, el
+  tronco, con su propio criterio.
