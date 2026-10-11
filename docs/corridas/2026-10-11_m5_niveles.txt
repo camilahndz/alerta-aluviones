@@ -64,6 +64,7 @@ Los niveles para operar, ajustados con los tres inviernos
     amarilla   20.8% de la normal anual   (P >= 0.25)
     naranja    26.9% de la normal anual   (P >= 0.50)
     roja       34.9% de la normal anual   (P >= 0.75)
+  coeficientes: P = 1 / (1 + exp(-(5.568862 + 9.776656 * log10(fraccion))))
 
   Los temporales regionales con el nivel que habria tenido cada provincia
   (validacion cruzada; + activaciones, - nada, D deshielo):

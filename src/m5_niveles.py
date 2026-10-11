@@ -102,6 +102,7 @@ Uso:
 
 from __future__ import annotations
 
+import json
 import sys
 import warnings
 from pathlib import Path
@@ -329,6 +330,13 @@ def main():
     print("  en alguna estacion de la provincia, la lluvia del temporal llega a:")
     for nombre, umbral in NIVELES:
         print(f"    {nombre:<9} {corte(b, umbral):>6.1%} de la normal anual   (P >= {umbral:.2f})")
+    # Los coeficientes con todos sus decimales: m6_alerta_en_vivo.py los copia
+    # como constantes congeladas, y este JSON es contra lo que se verifica.
+    print(f"  coeficientes: P = 1 / (1 + exp(-({b[0]:.6f} + {b[1]:.6f} * log10(fraccion))))")
+    (RAIZ / "outputs" / "m5_niveles_modelo.json").write_text(json.dumps({
+        "b0": float(b[0]), "b1": float(b[1]), "piso_fraccion": PISO_FRACCION,
+        "niveles": dict(NIVELES), "positivos": int(d["y"].sum()), "casos": int(len(d)),
+    }, indent=2))
     d["p_final"] = probabilidad(b, x)
     d["nivel"] = nivel(d["p_final"])
 

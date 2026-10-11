@@ -166,10 +166,41 @@ def cargar_osm() -> gpd.GeoDataFrame:
     return osm.to_crs(CRS_METRICO)
 
 
+COMUNAS_LOCAL = RAIZ / "data" / "raw" / "limites" / "geoBoundaries-CHL-ADM3.geojson"
+
+
 def cargar_comunas() -> gpd.GeoDataFrame:
-    """Limites comunales, de la misma fuente y el mismo commit que usa M3."""
+    """Limites comunales, de la misma fuente y el mismo commit que usa M3.
+
+    Se bajan una vez y quedan en data/raw/limites/. Hasta octubre de 2026 se
+    leian de GitHub en cada corrida, y dos veces el mismo dia llego el archivo
+    cortado a la mitad: pyogrio aborta con "Unterminated object", que al menos
+    es un error que se ve. Para la alerta en vivo, que corre cada hora, depender
+    de esa descarga no sirve. La URL apunta a un commit fijo, asi que la copia
+    local es byte a byte el mismo dato. Antes de guardarla se comprueba que el
+    JSON este completo: una copia truncada en disco seria peor que la descarga.
+    """
+    import json
+    import time
+
+    import requests
     from m3_exposicion import URL_COMUNAS
-    comunas = gpd.read_file(URL_COMUNAS).to_crs(CRS_METRICO)
+
+    if not COMUNAS_LOCAL.exists():
+        for intento in range(5):
+            try:
+                r = requests.get(URL_COMUNAS, timeout=180)
+                r.raise_for_status()
+                if not json.loads(r.content).get("features"):
+                    raise ValueError("el GeoJSON llego sin comunas")
+                COMUNAS_LOCAL.parent.mkdir(parents=True, exist_ok=True)
+                COMUNAS_LOCAL.write_bytes(r.content)
+                break
+            except (requests.RequestException, ValueError) as e:
+                if intento == 4:
+                    sys.exit(f"No pude bajar las comunas de {URL_COMUNAS}: {e}")
+                time.sleep(10 * (intento + 1))
+    comunas = gpd.read_file(COMUNAS_LOCAL).to_crs(CRS_METRICO)
     comunas["clave"] = comunas["shapeName"].map(sin_tildes)
     return comunas[["shapeName", "clave", "geometry"]].rename(
         columns={"shapeName": "comuna"})
