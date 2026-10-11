@@ -1,0 +1,198 @@
+M5 - Etiquetas satelitales de cauces y diagnostico de escala
+10 de octubre de 2026, local, .venv con Python 3.12
+Imagenes: Sentinel-2 L2A de AWS (earth-search.aws.element84.com), sin cuenta,
+leidas por ventana. Septiembre de 2024, 2025 y 2026.
+
+Comandos, en este orden:
+  python src/m5_satelite_cauces.py
+  python src/m5_satelite_troncos.py
+
+########################################################################
+# 1. python src/m5_satelite_cauces.py
+########################################################################
+==========================================================================
+M5 - Etiquetas satelitales de cauces, septiembre contra septiembre
+==========================================================================
+
+Cauces principales de cuencas susceptibles (M3): 2589
+  24 cauces sin una tesela que los contenga en las tres fechas
+
+Escenas elegidas (nube de la tesela, %):
+  19HBE  2024-09-14 (2.1)  2025-09-09 (0.5)  2026-08-30 (0.8)   142 cauces
+  19HCE  2024-09-14 (5.2)  2025-09-04 (0.0)  2026-09-04 (0.3)   300 cauces
+  19JBF  2024-09-14 (7.7)  2025-09-19 (0.2)  2026-08-30 (0.1)   159 cauces
+  19JBG  2024-09-04 (5.1)  2025-09-09 (1.6)  2026-09-01 (0.2)   150 cauces
+  19JBH  2024-09-02 (17.1)  2025-09-09 (3.3)  2026-08-28 (15.4)    60 cauces
+  19JCF  2024-09-04 (2.9)  2025-09-04 (0.0)  2026-09-14 (0.0)   444 cauces
+  19JCG  2024-09-04 (0.0)  2025-09-14 (0.0)  2026-09-14 (0.3)   987 cauces
+  19JCH  2024-09-04 (0.2)  2025-09-14 (0.1)  2026-09-01 (0.0)   308 cauces
+  19JDG  2024-09-04 (0.0)  2025-09-14 (0.0)  2026-09-14 (0.0)    15 cauces
+
+Leyendo ventanas de 5 bandas x 3 fechas...
+  19HBE: 142 cauces
+    92 s
+  19HCE: 300 cauces
+    304 s
+  19JBF: 159 cauces
+    387 s
+  19JBG: 150 cauces
+    479 s
+  19JBH: 60 cauces
+    514 s
+  19JCF: 444 cauces
+    765 s
+  19JCG: 987 cauces
+    1392 s
+  19JCH: 308 cauces
+    1606 s
+  19JDG: 15 cauces
+    1619 s
+
+Nulo (lineas paralelas a 200 m) y clases, por temporada:
+  2025: nulo n=4933, p75 +0.0058, p95 +0.0259 | sin_cambio 1460, dudoso 419, cambio 177, sin_dato 509
+        delta del cauce: p25 -0.0105, mediana -0.0002, p75 +0.0077
+  2026: nulo n=4766, p75 +0.0031, p95 +0.0148 | sin_cambio 1238, dudoso 448, cambio 278, sin_dato 601
+        delta del cauce: p25 -0.0071, mediana -0.0004, p75 +0.0071
+
+--------------------------------------------------------------------------
+Prueba del detector: las quebradas de la prensa contra las demas
+--------------------------------------------------------------------------
+
+  temporada 2025: 38 cuencas reportadas por la prensa (37 con dato)
+    AUC del delta, reportadas contra todas:          0.626
+    AUC del delta, contra las de sus mismas comunas: 0.628  (750 cauces)
+    reportadas  sin_cambio 39%, dudoso 16%, cambio 11%, sin_dato 34%
+    resto       sin_cambio 57%, dudoso 16%, cambio 7%, sin_dato 20%
+
+  temporada 2026: 120 cuencas reportadas por la prensa (115 con dato)
+    AUC del delta, reportadas contra todas:          0.368
+    AUC del delta, contra las de sus mismas comunas: 0.390  (1193 cauces)
+    reportadas  sin_cambio 53%, dudoso 9%, cambio 11%, sin_dato 27%
+    resto       sin_cambio 48%, dudoso 18%, cambio 11%, sin_dato 23%
+
+  capa  -> satelite_cauces.gpkg
+  tabla -> m5_satelite_cauces.csv, m5_satelite_reportadas.csv
+
+########################################################################
+# 2. python src/m5_satelite_troncos.py
+########################################################################
+==========================================================================
+M5 - El detector satelital sobre los troncos de las quebradas
+==========================================================================
+Umbrales de m5_satelite_cauces, temporada 2025: p75 +0.0058, p95 +0.0259
+Umbrales de m5_satelite_cauces, temporada 2026: p75 +0.0031, p95 +0.0148
+
+--------------------------------------------------------------------------
+1. Cambio sobre el tronco de las quebradas reportadas (tramos de 2 km)
+--------------------------------------------------------------------------
+  temporada   tramos  cambio  sin_cambio  delta med  AUC vs nulo
+  2025            95       2          84    -0.0215        0.175
+  2026           115      76          14    +0.0224        0.891
+
+  Por quebrada, temporada 2026:
+                      tramos  delta_mediana  fraccion_cambio
+quebrada                                                    
+Leiva                      1          0.062            1.000
+El Arrayan                22          0.043            0.864
+Santa Gracia              28          0.027            0.821
+Quebrada de Martinez       5          0.023            0.800
+Marquesa                  25          0.022            0.720
+Tres Cruces                3          0.018            0.667
+El Tambo                   3          0.050            0.667
+San Carlos                 9          0.019            0.667
+Los Loros                  7         -0.002            0.143
+El Rincon                  5         -0.004            0.000
+Uchumi                     7          0.005            0.000
+
+--------------------------------------------------------------------------
+2. Control: quebradas que nadie reporto, en las mismas comunas, 2026
+--------------------------------------------------------------------------
+  60 quebradas no reportadas, 290 tramos con dato
+                  tramos   cambio  delta med  AUC vs nulo
+  reportadas         115      66%    +0.0224        0.891
+  no reportadas      290      46%    +0.0116        0.708
+  AUC reportadas contra no reportadas: 0.642
+
+--------------------------------------------------------------------------
+3. Area que drena cada quebrada reportada (raster de acumulacion de M1)
+--------------------------------------------------------------------------
+            quebrada  temporada        evidencia  area_km2
+         Tres Cruces       2026       activacion       4.2
+             El Toro       2025 activacion_menor      23.9
+           Los Loros       2026 activacion_menor      25.6
+           El Rincon       2026       activacion      28.6
+            La Coipa       2025 activacion_menor      34.3
+              Culimo       2025 activacion_menor      35.3
+            El Peral       2025 activacion_menor      46.4
+               Leiva       2026       activacion      46.9
+Quebrada de Martinez       2026       activacion      52.3
+             La Laja       2025 activacion_menor      80.6
+              Uchumi       2026       activacion      97.7
+         Maitencillo       2025 activacion_menor     113.3
+            El Tambo       2026       activacion     128.5
+           Las Canas       2026    escurrimiento     174.0
+        Los Rincones       2025       activacion     226.4
+          San Carlos       2026 activacion_menor     258.5
+      Espiritu Santo       2025 activacion_menor     275.2
+          El Ingenio       2025       activacion     293.7
+         San Antonio       2025       activacion     303.5
+          El Arrayan       2026       activacion     561.5
+            Marquesa       2026       activacion     735.8
+ Estero de Punitaqui       2026    escurrimiento     903.4
+        Santa Gracia       2026          aluvion    1072.6
+
+  mediana 113 km2; 15 de 23 pasan de 50 km2, el tope de las unidades de m1_subcuencas.py
+
+  tablas -> m5_satelite_troncos.csv, m5_satelite_control.csv, m5_area_quebradas_reportadas.csv
+
+
+========================================================================
+VERIFICACIONES DERIVADAS
+========================================================================
+
+EL OBJETIVO ERA PRODUCIR NEGATIVOS OBSERVADOS, Y NO SE LOGRO
+
+  El metodo, el umbral (percentiles 75 y 95 de lineas nulas a 200 m) y la
+  prueba se fijaron antes de correr. La prueba fallo en 2026: las unidades
+  cerca de las quebradas reportadas cambiaron MENOS que el resto (AUC 0,37).
+  Los negativos no se usan, y m5_calibracion.py sigue con negativos
+  presuntos.
+
+POR QUE FALLO: EL OBJETO, NO EL SENSOR
+
+  Sobre el tronco de las mismas quebradas el detector las ve: 66% de los
+  tramos de 2026 con cambio, AUC 0,89 contra sus nulos. El problema es que
+  15 de las 23 quebradas reportadas con cauce en OSM drenan mas de 50 km2, y
+  las unidades de M1 llegan hasta 50:
+
+    Santa Gracia   1.073 km2   aluvion del Islon
+    Marquesa         736 km2
+    El Arrayan       562 km2
+    San Carlos       259 km2
+    mediana          113 km2
+
+  El modelo evalua esas quebradas a traves de afluentes chicos que pasan
+  cerca, y el satelite dice que esos afluentes mayormente no cambiaron. Es el
+  mismo tipo de error que M1 tuvo hasta octubre -la unidad no coincide con el
+  fenomeno-, ahora de escala en vez de ubicacion. Y es la explicacion mas
+  directa del diagnostico de ranking: el umbral se aplica a la lluvia de
+  unidades que no son las que se activaron.
+
+  El area sale del raster de acumulacion de M1, recorriendo la linea de OSM y
+  sin sus 150 m extremos. Una linea de OSM que se pegue al valle receptor
+  inflaria el area; por eso se cortan las puntas, pero es una estimacion.
+
+2025 NO DEJO HUELLA
+
+  Los troncos reportados en 2025 no cambiaron (AUC 0,18, la mayoria con
+  delta negativo). Calza con que fueron "activaciones menores": agua, no
+  sedimento. El satelite a 10 m no ve una quebrada que solo llevo agua.
+
+TAMPOCO SIRVE PARA NEGATIVOS A ESCALA DE TRONCO
+
+  De 60 quebradas que nadie reporto en las mismas comunas, el 46% de los
+  tramos cambio en 2026, contra 66% de las reportadas (AUC 0,64 entre unas y
+  otras). Hay dos lecturas y estos datos no las separan: o la prensa reporto
+  solo una parte de lo que bajo -el delegado dijo que "se activaron muchas
+  quebradas que nunca habian tenido agua"-, o el reverdecimiento diferencial
+  entre lecho y laderas pesa mas de lo que la resta del anillo descuenta.

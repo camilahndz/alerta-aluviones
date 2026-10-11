@@ -49,10 +49,10 @@ LO QUE SALIO, Y QUE CONDICIONA LA LINEA SATELITAL
        para entrenarlo hacen falta etiquetas... que es lo que se queria
        producir.
 
-    O sea que la linea satelital es viable pero no es un atajo. Lo que si
-    entrega ya, y es valioso, es la otra mitad: que cauces NO cambiaron. Un
-    cauce sin cambio en un temporal de 40 anios es un negativo mucho mejor que
-    la ausencia de una nota de prensa.
+    O sea que la linea satelital es viable pero no es un atajo. La conclusion
+    que este piloto dejaba -que al menos entregaria negativos, cauces que NO
+    cambiaron- se probo despues en m5_satelite_cauces.py sobre la region
+    entera, y no se sostuvo. Ver ese archivo y m5_satelite_troncos.py.
 
 Uso:
 
