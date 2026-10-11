@@ -82,6 +82,7 @@ Escribe outputs/m5_validacion.csv con una fila por entrada del inventario.
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 import unicodedata
 import warnings
@@ -112,16 +113,31 @@ EVIDENCIA_FUERTE = ("aluvion", "activacion")
 # Entradas cuyo nombre en prensa no calza literal con OSM. Cada alias es un
 # juicio y por eso van con su motivo a la vista, en vez de escondidos en una
 # funcion de normalizacion mas agresiva.
+#
+# La entrada 9 tenia el alias 'islon' porque el inventario no sabia que
+# quebrada habia bajado y se ubicaba por el pueblo. Desde octubre de 2026 la
+# entrada nombra la quebrada -Santa Gracia, segun SENAPRED- y se ubica por su
+# cauce como todas las demas.
 ALIAS = {
     "4": ("estero punitaqui",
           "la prensa escribe 'estero de Punitaqui', OSM 'Estero Punitaqui'"),
     "8": ("quebrada martinez",
           "la prensa escribe 'Quebrada de Martinez', OSM 'Quebrada Martinez'"),
-    "9": ("islon",
-          "el aluvion se reporta en 'sector El Islon'; OSM tiene el pueblo 'Islon'"),
     "13": ("cutun alto",
            "la prensa escribe 'Cutum' y 'Cutun'; OSM tiene 'Cutun Alto'"),
+    "25": ("cutun alto",
+           "la prensa escribe 'Cutun'; OSM tiene 'Cutun Alto'. Igual que la 13"),
 }
+
+# La ventana que se valida. gatillo.gpkg cubre tres inviernos desde octubre de
+# 2026, y una cuenca que supero Caine en agosto de 2025 no predijo nada de julio
+# de 2026. Sin este filtro el recall sube solo por tener mas anios en la capa.
+VALIDACION_DESDE = "2026-06-01"
+VALIDACION_HASTA = "2026-08-24"    # exclusivo: incluye todo el 23 de agosto
+
+# Si una entrada trae comuna, solo valen los cauces que caen en ella o a menos
+# de esto de su borde. Ver ubicar().
+MARGEN_COMUNA_M = 2000.0
 
 
 def sin_tildes(texto) -> str:
@@ -149,27 +165,97 @@ def cargar_osm() -> gpd.GeoDataFrame:
     return osm.to_crs(CRS_METRICO)
 
 
-def ubicar(fila: dict, osm: gpd.GeoDataFrame):
+def cargar_comunas() -> gpd.GeoDataFrame:
+    """Limites comunales, de la misma fuente y el mismo commit que usa M3."""
+    from m3_exposicion import URL_COMUNAS
+    comunas = gpd.read_file(URL_COMUNAS).to_crs(CRS_METRICO)
+    comunas["clave"] = comunas["shapeName"].map(sin_tildes)
+    return comunas[["shapeName", "clave", "geometry"]].rename(
+        columns={"shapeName": "comuna"})
+
+
+def _texto(valor) -> str:
+    """Un campo del inventario como texto; un campo vacio llega como NaN."""
+    return "" if pd.isna(valor) else str(valor)
+
+
+def ubicar(fila: dict, osm: gpd.GeoDataFrame, comunas: gpd.GeoDataFrame | None = None):
     """Devuelve (geometria, como_se_encontro) para una entrada del inventario.
 
     Los cauces van primero: una entrada que nombra una quebrada se ubica mejor
     por su cauce que por el pueblo del mismo nombre, porque el cauce tiene largo
     y el pueblo es un punto.
+
+    SI LA ENTRADA TRAE COMUNA, SE BUSCA EN ESA COMUNA
+
+        La primera version unia todos los cauces de la region que contenian el
+        nombre. Con 18 entradas de julio no se notaba; con el inventario de
+        2024-2025 si: hay una Quebrada Las Barrancas en Canela y otra en
+        Tongoycillo, y "San Carlos" o "El Arrayan" se repiten en varios valles.
+        Unirlas le daba a cada entrada las unidades de todas sus homonimas, y
+        un acierto en Tongoycillo contaba para Canela.
+
+        Ahora, si hay comuna, el orden es: un cauce dentro de ella, un lugar
+        dentro de ella, y recien entonces lo que haya en la region, con la nota
+        FUERA DE COMUNA para que se vea. La comuna lleva un margen de 2 km,
+        porque un cauce de borde se dibuja a veces del otro lado.
+
+    EL NOMBRE SE BUSCA COMO PALABRAS COMPLETAS
+
+        Con una busqueda de subcadena, "El Maite" de Monte Patria calzaba con
+        "Quebrada El Maiten" de otra comuna. Se exige que el nombre empiece y
+        termine en un limite de palabra.
     """
     alias = ALIAS.get(str(fila["id"]))
-    clave = alias[0] if alias else sin_tildes(fila["quebrada"] or fila["sector"])
+    clave = alias[0] if alias else sin_tildes(_texto(fila["quebrada"]) or _texto(fila["sector"]))
     if not clave:
         return None, "sin nombre en el inventario"
 
-    for capa in ("cauce", "lugar"):
-        hits = osm[(osm["capa"] == capa) & osm["clave"].str.contains(clave, na=False)]
+    zona = None
+    comuna = sin_tildes(_texto(fila.get("comuna")))
+    if comunas is not None and comuna:
+        sel = comunas[comunas["clave"] == comuna]
+        if not sel.empty:
+            zona = sel.geometry.union_all().buffer(MARGEN_COMUNA_M)
+
+    patron = rf"\b{re.escape(clave)}\b"
+    candidatos = {capa: osm[(osm["capa"] == capa)
+                            & osm["clave"].str.contains(patron, na=False, regex=True)]
+                  for capa in ("cauce", "lugar")}
+    sufijo = f" (alias: {alias[1]})" if alias else ""
+
+    if zona is not None:
+        for capa, hits in candidatos.items():
+            dentro = hits[hits.intersects(zona)]
+            if not dentro.empty:
+                nota = f"{capa}: {dentro['name'].iloc[0]}"
+                if len(dentro) < len(hits):
+                    nota += f" ({len(dentro)} de {len(hits)} homonimos, los de {fila['comuna']})"
+                return dentro.geometry.union_all(), nota + sufijo
+
+    for capa, hits in candidatos.items():
         if not hits.empty:
             nota = f"{capa}: {hits['name'].iloc[0]}"
-            if alias:
-                nota += f" (alias: {alias[1]})"
-            return hits.geometry.union_all(), nota
+            if zona is not None:
+                nota += f" FUERA DE COMUNA (ninguno en {fila['comuna']}; {len(hits)} en la region)"
+            return hits.geometry.union_all(), nota + sufijo
 
     return None, "no esta en OSM"
+
+
+def positivas_en_ventana(gatillo: pd.DataFrame, columna: str,
+                         desde: str = VALIDACION_DESDE,
+                         hasta: str = VALIDACION_HASTA) -> set:
+    """Cuencas que superan el umbral en algun episodio que empieza en la ventana.
+
+    gatillo.gpkg guarda las fechas en UTC; la ventana se fija en hora de Chile.
+    """
+    inicio = pd.to_datetime(gatillo["inicio"], utc=True).dt.tz_convert("America/Santiago")
+    desde = pd.Timestamp(desde, tz="America/Santiago")
+    hasta = pd.Timestamp(hasta, tz="America/Santiago")
+    en_ventana = (inicio >= desde) & (inicio < hasta)
+    supera = gatillo[columna].fillna(False).astype(bool)
+    return set(gatillo.loc[en_ventana & supera, "id_cuenca"])
 
 
 def main():
@@ -191,7 +277,7 @@ def main():
             sys.exit(f"Falta {ruta}")
 
     print("=" * 74)
-    print("M5 - Validacion contra el temporal de julio de 2026")
+    print("M5 - Validacion contra el invierno de 2026 (julio y agosto)")
     print("=" * 74)
 
     inventario = pd.read_csv(INVENTARIO, dtype=str)
@@ -202,11 +288,28 @@ def main():
     unidades = gpd.read_file(ruta_susc).to_crs(CRS_METRICO)
     susceptibles = unidades[unidades["clase"].isin(CLASES_SUSCEPTIBLES)]
     gatillo = gpd.read_file(ruta_gat)
+    # Solo los episodios de la ventana que se valida: ver VALIDACION_DESDE.
+    inicio = pd.to_datetime(gatillo["inicio"], utc=True).dt.tz_convert("America/Santiago")
+    en_ventana = ((inicio >= pd.Timestamp(VALIDACION_DESDE, tz="America/Santiago"))
+                  & (inicio < pd.Timestamp(VALIDACION_HASTA, tz="America/Santiago")))
+    print(f"Pares cuenca-episodio en gatillo.gpkg: {len(gatillo):,}; en la ventana "
+          f"{VALIDACION_DESDE} a {VALIDACION_HASTA}: {int(en_ventana.sum()):,}")
+    gatillo = gatillo[en_ventana]
     # Las dos lecturas del mismo umbral, que M4 guarda en columnas distintas:
     # el episodio entero contra su peor ventana. Ver m4_umbrales.razon_critica.
     LECTURAS = {"episodio": "supera_caine", "ventana critica": "supera_caine_critico"}
+    # Las mismas dos lecturas con la lluvia de la estacion, sin interpolar. M4
+    # guarda las columnas originales con sufijo _estacion; compararlas mide
+    # cuanto del recall viene de la interpolacion y cuanto del umbral.
+    if "i_media_mm_h_estacion" in gatillo.columns:
+        gatillo["supera_caine_sin_interp"] = (
+            gatillo["i_media_mm_h_estacion"]
+            >= caine_intensidad_critica(gatillo["duracion_h"].to_numpy()))
+        gatillo["supera_critico_sin_interp"] = gatillo["razon_caine_critica_estacion"] >= 1.0
+        LECTURAS.update({"episodio, estacion": "supera_caine_sin_interp",
+                         "critica, estacion": "supera_critico_sin_interp"})
     positivas_por_lectura = {
-        etiqueta: set(gatillo.loc[gatillo[col].astype(bool), "id_cuenca"])
+        etiqueta: positivas_en_ventana(gatillo, col)
         for etiqueta, col in LECTURAS.items() if col in gatillo.columns
     }
     positivas = positivas_por_lectura["episodio"]
@@ -216,14 +319,15 @@ def main():
 
     print("\nUbicando cada entrada en OpenStreetMap...")
     osm = cargar_osm()
+    comunas = cargar_comunas()
 
     radio_m = args.radio_km * 1000
     filas = []
     for _, entrada in inventario.iterrows():
-        geo, como = ubicar(entrada.to_dict(), osm)
+        geo, como = ubicar(entrada.to_dict(), osm, comunas)
         # `or` no sirve: un campo vacio llega como NaN, que es verdadero.
-        nombre = (entrada["quebrada"] if pd.notna(entrada["quebrada"])
-                  else entrada["sector"])
+        nombre = (_texto(entrada["quebrada"]) or _texto(entrada["sector"])
+                  or "(sin nombre)")
 
         if geo is None:
             filas.append({**entrada, "nombre": nombre, "ubicacion": como,
@@ -303,17 +407,25 @@ def main():
     if len(positivas_por_lectura) > 1:
         print("\n" + "-" * 74)
         print("Recall segun como se lea Caine:")
-        print(f"  {'lectura':<18} {'todas':>14} {'evidencia fuerte':>18}")
+        # Julio son las 18 entradas con que se cerro M5 la primera vez; agosto
+        # es el bloque del 14 al 17, que entro al inventario en octubre de 2026
+        # junto con El Porotal. Se separan para que el numero de julio siga
+        # siendo comparable con la corrida anterior.
+        julio = res[res["fecha"].str.startswith("2026-07")]
+        agosto = res[res["fecha"].str.startswith("2026-08")]
+        print(f"  {'lectura':<18} {'todas':>14} {'evidencia fuerte':>18} "
+              f"{'julio':>14} {'agosto':>14}")
         for etiqueta, conjunto in positivas_por_lectura.items():
             ids = {str(i) for i in conjunto}
             linea = []
-            for grupo in (res, res[res["evidencia"].isin(EVIDENCIA_FUERTE)]):
+            for grupo in (res, res[res["evidencia"].isin(EVIDENCIA_FUERTE)], julio, agosto):
                 ev = grupo[~grupo["veredicto"].isin(("sin_cobertura", "sin_ubicar"))]
                 aciertos = sum(1 for _, f in ev.iterrows()
                                if set(str(f["ids_cercanas"]).split()) & ids)
                 linea.append(f"{aciertos}/{len(ev)} "
                              f"({100 * aciertos / max(len(ev), 1):.0f}%)")
-            print(f"  {etiqueta:<18} {linea[0]:>14} {linea[1]:>18}")
+            print(f"  {etiqueta:<18} {linea[0]:>14} {linea[1]:>18} "
+                  f"{linea[2]:>14} {linea[3]:>14}")
 
 
     # --- Donde cayo la lluvia de las que se activaron ---
@@ -349,9 +461,10 @@ def main():
         print("  ajustar el modelo contra su propia validacion: el numero que saldria")
         print("  despues no mediria nada. Ademas las entradas no son independientes")
         print("  -varias comparten la estacion mas cercana, y por eso repiten razon-")
-        print("  asi que los 15 casos valen bastante menos de 15 observaciones.")
+        print(f"  asi que los {len(evaluadas)} casos valen bastante menos de "
+              f"{len(evaluadas)} observaciones.")
         print("  Para calibrar en serio hacen falta episodios sin activacion")
-        print("  documentada, que es lo que este inventario no tiene.")
+        print("  documentada. Eso lo hace m5_calibracion.py, con 2024-2025.")
 
     dir_out = RAIZ / "outputs"
     dir_out.mkdir(parents=True, exist_ok=True)
