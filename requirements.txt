@@ -29,3 +29,8 @@ requests>=2.31
 
 # Visualizacion
 matplotlib>=3.8
+
+# Desarrollo: pruebas (tests/) y revision de estilo. No los usa el pipeline,
+# pero sin ellos no se puede comprobar que un arreglo no rompio otra cosa.
+pytest>=9.0
+ruff>=0.17
