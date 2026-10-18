@@ -1,0 +1,284 @@
+M4 - Fase 1B: el antecedente sin su propio paso (A2) y el catalogo en el cache (A6)
+17 de octubre de 2026, local, .venv con Python 3.12
+Codigo: commit d70926f (fase 1A). Cache de VIPNET: data/raw/lluvia/2024-06-01_2026-08-23/
+
+Comandos, en este orden:
+  python src/m4_lluvia.py        # con cache, 3 min 44 s
+  python src/m4_deshielo.py      # 6 s
+
+Por que se corrio de nuevo: la auditoria del 17-10 (docs/auditoria_2026-10-17.md)
+encontro dos errores en M4, y la fase 1A los corrigio con prueba primero
+(docs/corridas/2026-10-17_pruebas_fase1a.txt):
+  - A2. detectar_episodios contaba el primer paso de cada episodio como lluvia
+    antecedente: la ventana del antecedente terminaba en el inicio del episodio
+    y `.loc` incluye los dos extremos. Ahora termina en el paso anterior.
+  - A6. El catalogo de estaciones (la regla R1) se le pedia a VIPNET en cada
+    corrida aunque las series salieran del cache. Ahora se guarda junto a las
+    series, en catalogo_<tipo>.json, y se reutiliza salvo --refrescar.
+
+Lo esperado, fijado antes de correr: en outputs/m4_episodios.csv cambian solo
+las columnas antecedente_*; la lluvia, la duracion y las intensidades quedan
+identicas a la corrida del 10-10. Si cambiaba otra cosa, se detenia la fase.
+
+Antes de correr, el catalogo de hoy contra las series del cache. Se bajo a una
+carpeta temporal, sin escribir en data/, y se compararon los codigos de la
+region (script de chequeo fuera del repositorio):
+  tipo 0 (precipitacion)   catalogo de hoy 107 estaciones; series en cache 107; mismos codigos
+  tipo 1 (temperatura)     113; 113; mismos codigos
+  tipo 3 (nieve)            10;  10; mismos codigos
+R1 sigue en 107 estaciones, como el 10-10: la corrida es comparable.
+
+Corrida anterior equivalente: 2026-10-10_m4_tres_inviernos.txt (de R1 a las
+tablas de sensibilidad) y 2026-10-10_troncos.txt, seccion 4 (desde el cruce con
+las cuencas, ya con los 93 troncos). Esa es la corrida que dejo los outputs
+vigentes hasta hoy; se copiaron aparte antes de correr para compararlos.
+
+########################################################################
+# 1. python src/m4_lluvia.py
+########################################################################
+==========================================================================
+M4 - ventana 2024-06-01 a 2026-08-23, paso 30 min
+     corte seco 12 h, usando cache
+==========================================================================
+  catalogo tipo 0: bajado de VIPNET (1056 estaciones del pais) -> catalogo_0.json
+
+R1  estaciones de precipitacion en Coquimbo: 107
+
+Bajando series de precipitacion...
+  20/107
+  40/107
+  60/107
+  80/107
+  100/107
+  107/107
+
+Ajustando la isoterma 0 observada, dia a dia...
+  catalogo tipo 1: bajado de VIPNET (1032 estaciones del pais) -> catalogo_1.json
+  106 de 814 dias con isoterma ajustada
+  mediana de julio: 2643 m
+
+Saltos del contador anulados (aislados, > 100 mm en 30 min): 19 pasos en 10 estaciones
+    GLACIAR TAPADO EN LOS CORRALES     2026-07-17 09:30    233.8 mm
+    RIVADAVIA                          2024-10-23 12:00    241.9 mm
+    RIVADAVIA                          2026-08-01 00:00    162.9 mm
+    RIO CLARO EN RIVADAVIA             2025-08-16 16:30    225.9 mm
+    RIO CLARO EN RIVADAVIA             2025-08-21 09:00    225.9 mm
+    RIO ELQUI EN ALMENDRAL             2026-04-10 01:00    350.3 mm
+    COGOTI 18                          2026-04-09 17:00    589.2 mm
+    COGOTI EMBALSE                     2026-04-09 17:00    660.2 mm
+    CUNCUMEN                           2026-04-09 14:00    598.2 mm
+    RIO CUNCUMEN ANTES JUNTA CHOAPA (C 2025-07-15 09:30    391.2 mm
+    RIO CUNCUMEN ANTES JUNTA CHOAPA (C 2025-07-18 07:30    391.2 mm
+    HUINTIL                            2026-04-09 18:30    739.1 mm
+    ESTERO PUPIO EN EL ROMERO          2025-07-09 10:30    737.7 mm
+    ESTERO PUPIO EN EL ROMERO          2025-07-09 11:30    737.2 mm
+    ESTERO PUPIO EN EL ROMERO          2025-07-09 12:30    736.9 mm
+    ESTERO PUPIO EN EL ROMERO          2025-07-09 13:30    736.5 mm
+    ESTERO PUPIO EN EL ROMERO          2025-07-09 14:30    736.5 mm
+    ESTERO PUPIO EN EL ROMERO          2025-07-09 15:30    737.3 mm
+    ESTERO PUPIO EN EL ROMERO          2025-07-09 16:30    737.3 mm
+
+R2 y R4 por estacion e invierno:
+                                 2024   2025   2026
+  R2  descartadas                   8      5      3
+  R4  descartadas                   1      1      3
+      validas                      98    101    101
+      ambiguas (no se descartan)      6     14     18
+  Con la version anterior (por estacion sobre toda la ventana y sin anular saltos):
+    R2 6, R4 13, quedan 88 de 107 estaciones
+    104 de 107 estaciones validas en al menos un invierno
+
+Detectando episodios con corte seco de 12 h...
+R3  episodios descartados por hueco de transmision: 139
+R5  episodios descartados por estar sobre la isoterma 0: 16
+    quedan 1188 episodios en 104 estaciones
+    98 eventos regionales
+
+Episodios que superan cada umbral, por invierno:
+                                     2024   2025   2026  total
+  episodios                           223    503    462   1188
+  Caine (1980)                          3      7     26     36
+  Ben David-Novak et al. (2004)         0      0      0      0
+  Caine sobre la ventana critica       10     17     41     68
+
+Sensibilidad al corte seco (cuantas horas separan dos episodios):
+   corte (h)   episodios   D mediana   superan Caine
+           6        1407         6.5              43
+          12        1204         8.0              36  <- el usado
+          24        1065         9.0              28
+
+Sensibilidad al umbral de paso seco (que cuenta como no llover):
+   seco < mm   episodios   D mediana   superan Caine
+         0.0        1253        11.5              28
+         0.1        1257        10.0              31
+         0.2        1204         8.0              36  <- el usado
+         0.5        1104         6.0              41
+
+Cuencas de M2: 3850; susceptibles (flujo_detritos + crecida_detritos + tronco): 2682
+  invierno 2024: mediana de distancia cuenca-estacion 6.9 km; 170 cuencas sobre el criterio de 30 km, marcadas en la capa
+  invierno 2025: mediana de distancia cuenca-estacion 6.9 km; 158 cuencas sobre el criterio de 30 km, marcadas en la capa
+  invierno 2026: mediana de distancia cuenca-estacion 6.7 km; 158 cuencas sobre el criterio de 30 km, marcadas en la capa
+
+--------------------------------------------------------------------------
+Interpolacion de la lluvia por evento (dejando una estacion fuera)
+--------------------------------------------------------------------------
+  eventos regionales: 98; con media >= 5 mm y >= 20 estaciones completas: 5
+  pares estacion-evento para entrenar: 449 (24 fuera por estar sobre la isoterma 0)
+
+  metodo                 MAE mm  RMSE mm      R2  R2 evento
+  media regional           39.5     65.5   0.620     -0.023
+  estacion cercana         36.8     76.9   0.476     -0.411
+  random forest            29.9     59.1   0.691      0.167
+  gradient boosting        30.7     58.1   0.701      0.194
+
+  Total del invierno 2026 (1-jun a 23-ago), 72 estaciones con >= 95% de dato, 4 variables fijas:
+  media regional          125.8    165.7  -0.028
+  estacion cercana        158.2    230.3  -0.986
+  random forest           107.7    157.6   0.070
+
+  SE ADOPTA random forest: MAE 29.9 contra 36.8 mm de la estacion cercana.
+  lluvia areal: 2360 puntos para 93 troncos
+  pares interpolados: 22639 de 30499 (el resto cae en eventos chicos y queda con factor 1)
+  factor: mediana 1.00, p10 0.71, p90 1.79; 1202 recortados a [0.25, 4.0]
+
+Pares cuenca-episodio: 30499
+  cuencas que superan, por invierno (de 2682):
+                                       2024   2025   2026
+  Caine (1980)                           11    163    628
+  Ben David-Novak et al. (2004)           0      0     20
+  Caine sobre la ventana critica        321    338   1039
+
+  De que se sostiene cada positivo (cuencas, por invierno):
+                                           2024   2025   2026
+  estacion marcada como ambigua               0      0     58
+  episodio de un solo paso de 30 min          0     97      1
+  estacion a mas de 30 km                     0      0      0
+  sin objeciones                             11     66    570
+
+  Estaciones que sostienen los positivos (cuencas, todos los inviernos):
+    RIO CHOAPA EN CUNCUMEN                          70
+    LAMBERT                                         48
+    SALALA                                          47
+    LA CANELA                                       44
+    RIO COGOTI EN FRAGUITA                          40
+    RIO CHOAPA EN SALAMANCA                         39
+    CAIMANES                                        38
+    COIRON                                          35
+    EL TOME                                         29
+    HUINTIL                                         29
+
+  capa    -> gatillo.gpkg
+  figura  -> m4_umbral_id.png
+  tabla   -> m4_episodios.csv
+
+########################################################################
+# 2. python src/m4_deshielo.py
+########################################################################
+==========================================================================
+M4 - Indicador experimental de deshielo, 2024-06-01 a 2026-08-23
+==========================================================================
+  catalogo tipo 3: bajado de VIPNET (98 estaciones del pais) -> catalogo_3.json
+
+Estaciones de nieve en Coquimbo: 10; las de referencia (ESTACIONES_NIEVE): 4 de 4
+  CERRO OLIVARES                    3566 m  cobertura  96%  referencia
+  GLACIAR TAPADO EN LOS CORRALES    4065 m  cobertura  96%  referencia
+  LA LAGUNA EMBALSE                 3160 m  cobertura   6%
+  EL INDIO                          3800 m  cobertura   7%
+  CUESTA BLANCA                     3284 m  cobertura  33%
+  CERRO VEGA NEGRA                  3529 m  cobertura  64%
+  LOS AZULES                        3408 m  cobertura  48%
+  QUEBRADA LARGA                    3550 m  cobertura  96%  referencia
+  EL SOLDADO                        3293 m  cobertura  96%  referencia
+  EL ENCANTO                        3540 m  cobertura  20%
+  catalogo tipo 1: cache del 2026-10-18 (1032 estaciones del pais, catalogo_1.json)
+
+Estaciones de temperatura sobre 3000 m: 10
+
+Nieve maxima por invierno (mediana de las estaciones usadas):
+  2024:    40 cm, el 03-08
+  2025:    23 cm, el 01-08
+  2026:   157 cm, el 24-07
+
+Dias con condicion de deshielo: 35
+  19-07-2026 al 20-07-2026
+  22-07-2026 al 23-08-2026
+
+  tabla  -> m4_deshielo.csv
+  figura -> m4_deshielo.png
+
+========================================================================
+VERIFICACION
+========================================================================
+
+LA CONSOLA ES IDENTICA, SALVO LAS LINEAS DEL CATALOGO
+
+  diff contra 2026-10-10_m4_tres_inviernos.txt (de R1 a la sensibilidad) y
+  contra 2026-10-10_troncos.txt seccion 4 (desde el cruce): las unicas lineas
+  nuevas son las del catalogo. R1 107, R2/R4 98-101-101, R3 139, R5 16, 1.188
+  episodios en 104 estaciones, 98 eventos regionales, las tablas de
+  sensibilidad, la validacion de la interpolacion (MAE 29,9 contra 36,8 mm) y
+  las cuencas sobre cada umbral (Caine 11 / 163 / 628; ventana critica 321 /
+  338 / 1.039) salen al numero.
+
+  m4_deshielo.py, contra 2026-10-11_m4_deshielo.txt: iguales salvo las dos
+  lineas del catalogo (tipo 3 bajado, tipo 1 leido del cache que dejo M4).
+  35 dias con condicion de deshielo, los mismos.
+
+  Los catalogos quedaron en data/raw/lluvia/2024-06-01_2026-08-23/ como
+  catalogo_0.json, catalogo_1.json y catalogo_3.json. La fecha que imprimen
+  ("cache del 2026-10-18") es la hora de bajada en UTC: aca eran las 22:35 del
+  17-10.
+
+OUTPUTS/M4_EPISODIOS.CSV: SOLO CAMBIA EL ANTECEDENTE
+
+  1.188 filas antes y despues. 19 de 22 columnas identicas valor por valor
+  (lluvia, duracion, intensidades, razon contra Caine, isoterma, evento, las
+  tres columnas supera_*). Cambian antecedente_24h_mm, antecedente_72h_mm y
+  antecedente_168h_mm, y en las 1.188 filas bajan:
+
+    baja del antecedente: minimo 0,2 mm | mediana 0,5 | maximo 18,4
+    la baja es la misma en las tres ventanas, fila por fila
+    siempre >= 0,2 mm, que es el umbral de paso seco: es el primer paso del
+    episodio, que un episodio siempre tiene mojado
+
+  Episodios con mas de 50 mm en las 72 h previas:
+                                         10-10    17-10
+    1-jun a 23-ago de 2026 (450 ep.)        35       34
+    tres inviernos (1.188 ep.)              40       39
+  Sale uno solo: RIO HURTADO EN SAN AGUSTIN, episodio del 22-07-2026 12:30,
+  40,2 mm, con antecedente de 57,8 mm que baja a 49,0.
+
+  Las dos cifras que cita el README (episodio del 19 de julio de 2026):
+                                lluvia   I media   antecedente 72 h
+    RIO CHOAPA EN SALAMANCA   135,8 mm  2,26 mm/h   265,6 -> 265,2 mm
+    CAIMANES                  123,6 mm  2,13 mm/h   239,4 -> 239,0 mm
+
+DATA/PROCESSED/GATILLO.GPKG: EL ANTECEDENTE, Y RUIDO DE PUNTO FLOTANTE
+
+  30.499 filas antes y despues. Cambian las seis columnas de antecedente (las
+  interpoladas y las _estacion). Ademas difieren lluvia_mm, i_media_mm_h,
+  i_max_60min_mm_h, razon_caine_critica, factor_interpolacion y
+  lluvia_pred_mm en 6.590 a 8.026 filas, pero por menos de 9e-16 en terminos
+  relativos (la mayor diferencia absoluta es 1,7e-13 mm): es el ultimo bit del
+  numero. El random forest de m4_interpolacion.py corre con n_jobs=-1 y suma
+  los 300 arboles en paralelo, en un orden que cambia de una corrida a otra.
+  Ninguna columna supera_* cambia, y los conteos de la consola son identicos.
+  No es un cambio del modelo.
+
+  Nota para la fase 2: la regla "m4_episodios.csv identico byte a byte" se
+  cumple (no pasa por el bosque), pero gatillo.gpkg no va a salir identico
+  byte a byte entre dos corridas aunque nada cambie.
+
+  outputs/m4_interpolacion_validacion.csv: identico (mismo hash).
+  outputs/m4_deshielo.csv: identico (mismo hash).
+
+LO QUE ESTO NO CAMBIA
+
+  Ningun modelo ajustado usa el antecedente. m5_calibracion.py lo guarda en
+  sus observaciones (mediana de antecedente_72h_mm), pero la regresion que lo
+  usaria no se ajusta: pide 50 positivos y hay 12. Ver
+  2026-10-17_m5_m6_validacion_fecha.txt.
+
+  Sigue pendiente M2 de la auditoria: el factor de interpolacion del episodio
+  tambien escala el antecedente_* de gatillo.gpkg, que es lluvia de episodios
+  anteriores. m4_episodios.csv, que es por estacion, no tiene ese problema.

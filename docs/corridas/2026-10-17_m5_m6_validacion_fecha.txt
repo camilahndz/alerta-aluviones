@@ -1,0 +1,790 @@
+M5 y M6 - Fase 1B: la validacion empareja por fecha (A1)
+17 de octubre de 2026, local, .venv con Python 3.12
+Codigo: commit d70926f (fase 1A). Entrada: gatillo.gpkg y m4_episodios.csv de
+2026-10-17_m4_antecedente.txt
+
+Comandos, en este orden:
+  python src/m5_validacion.py --sin-troncos     # 44 s
+  python src/m5_validacion.py --solo-fuertes    # 21 s
+  python src/m5_validacion.py                   # 27 s
+  python src/m5_calibracion.py                  # 58 s
+  python src/m5_alerta_sector.py                # 11 s
+  python src/m5_niveles.py                      # 11 s
+  python src/m6_alerta_en_vivo.py --repasar     # 2 min 22 s, lee el cache de M4
+Las tres variantes de m5_validacion.py escriben el mismo outputs/m5_validacion.csv:
+la normal va al final para que quede el completo.
+
+Por que: hallazgo A1 de la auditoria del 17-10. m5_validacion.py marcaba una
+entrada como predicha si alguna unidad cercana superaba Caine en CUALQUIER
+episodio de la ventana 2026-06-01 a 2026-08-24, y sacaba de todos esos
+episodios la razon contra Caine, la lluvia y la duracion que reporta. Una
+activacion de agosto quedaba "predicha" con la lluvia del temporal de julio
+(Llimpo, 15-08, con 216,0 mm en 53,5 h). Desde la fase 1A cada entrada se
+compara solo con los episodios de su fecha +-1 dia (emparejar_entrada), la misma
+regla de m5_calibracion.py (config.HOLGURA_DIAS).
+
+Lo esperado, fijado antes de correr: cambia m5_validacion. La calibracion, la
+alerta por provincia y los niveles no deberian cambiar, porque ya emparejaban
+por fecha o no pasan por esa funcion; la calibracion si guarda el antecedente
+de M4 en sus observaciones. m6 --repasar debe seguir en 41 de 41. Si b0 y b1
+de m5_niveles cambiaban, no se tocaban los congelados de m6.
+
+Corridas anteriores equivalentes:
+  validacion con troncos   2026-10-10_troncos.txt, seccion 7 (outputs vigentes hasta hoy)
+  validacion sin troncos   2026-10-10_troncos.txt, seccion 6, y
+                           2026-10-10_m5_tres_inviernos.txt, seccion 1
+  calibracion              2026-10-10_m5_tres_inviernos.txt, seccion 2
+  alerta por provincia     2026-10-11_m5_alerta_sector.txt
+  niveles                  2026-10-11_m5_niveles.txt
+  repaso de m6             2026-10-11_m6_alerta_en_vivo.txt, seccion 5 (ya con la
+                           segunda estacion; la seccion 1 es del modelo anterior)
+
+########################################################################
+# 1. python src/m5_validacion.py --sin-troncos
+########################################################################
+==========================================================================
+M5 - Validacion contra el invierno de 2026 (julio y agosto)
+==========================================================================
+
+Entradas del inventario: 33
+Sin unidades troncales (--sin-troncos)
+Pares cuenca-episodio en gatillo.gpkg: 29,556; en la ventana 2026-06-01 a 2026-08-24: 11,639
+Unidades susceptibles: 2,589
+Unidades que superan Caine (episodio) en algun episodio de la ventana: 606
+Unidades que superan Caine (ventana critica) en algun episodio de la ventana: 1,000
+Unidades que superan Caine (episodio, estacion) en algun episodio de la ventana: 668
+Unidades que superan Caine (critica, estacion) en algun episodio de la ventana: 856
+Cada entrada se empareja solo con los episodios de su fecha, con 1 dia de holgura (la regla de m5_calibracion.py)
+
+Ubicando cada entrada en OpenStreetMap...
+
+ id quebrada                 evidencia          susc  pos  veredicto
+  1 El Rincon                activacion           10   10  predicho
+  2 Marquesa                 activacion           57    0  no_predicho
+  3 Batuco                   escurrimiento        18    9  predicho
+  4 Estero de Punitaqui      escurrimiento        24   15  predicho
+  5 Las Canas                escurrimiento        26    0  no_predicho
+  6 Carcamo                  escurrimiento        11   11  predicho
+  7 Cruz de Cana             activacion            0    0  sin_cobertura
+  8 Quebrada de Martinez     activacion            4    0  no_predicho
+  9 Santa Gracia             aluvion              30    0  no_predicho
+ 10 Tres Cruces              activacion           24    0  no_predicho
+ 11 Tambillos                activacion            0    0  sin_cobertura
+ 12 Las Barrancas            activacion            0    0  sin_cobertura
+ 13 Cutum                    activacion_menor      9    0  no_predicho
+ 14 Cajon del Romero         activacion            0    0  sin_cobertura
+ 15 Santa Gracia             activacion_menor     30    0  no_predicho
+ 16 Arrayan Costero          alerta_preventiva    12    0  no_predicho
+ 17 Los Loros                activacion_menor     16    0  no_predicho
+ 18 San Carlos               activacion_menor     24    0  no_predicho
+ 19 El Porotal               activacion           15    0  no_predicho
+ 20 Leiva                    activacion           14    0  no_predicho
+ 21 Marquesa                 activacion           57    0  no_predicho
+ 22 El Lucho                 activacion            0    0  sin_ubicar
+ 23 Llimpo                   activacion           11    0  no_predicho
+ 24 (sin nombre)             activacion            0    0  sin_ubicar
+ 25 Cutun                    activacion            9    0  no_predicho
+ 26 El Maite                 activacion            0    0  sin_ubicar
+ 27 Pichasca                 activacion_menor     15    0  no_predicho
+ 28 Uchumi                   activacion           24    0  no_predicho
+ 29 Los Loros                activacion           16    0  no_predicho
+ 30 El Tambo                 activacion           12    0  no_predicho
+ 31 San Carlos               activacion           24    0  no_predicho
+ 32 El Arrayan               activacion           32    0  no_predicho
+ 33 Los Mates                activacion            0    0  sin_ubicar
+
+todas las entradas: 33
+  sin ubicar en OSM          4
+  sin cobertura del modelo   4
+  evaluadas y no predichas  21
+  predichas                  4
+  RECALL sobre las evaluadas: 4/25 = 16%
+
+solo evidencia fuerte: 23
+  sin ubicar en OSM          4
+  sin cobertura del modelo   4
+  evaluadas y no predichas  14
+  predichas                  1
+  RECALL sobre las evaluadas: 1/15 = 7%
+
+  La precision NO se reporta y no es un olvido: el inventario no tiene
+  negativos observados. Ver la cabecera de este archivo.
+
+--------------------------------------------------------------------------
+Recall segun como se lea Caine:
+  lectura                     todas   evidencia fuerte          julio         agosto
+  episodio               4/25 (16%)          1/15 (7%)     4/14 (29%)      0/11 (0%)
+  ventana critica        9/25 (36%)         4/15 (27%)     9/14 (64%)      0/11 (0%)
+  episodio, estacion     4/25 (16%)          1/15 (7%)     4/14 (29%)      0/11 (0%)
+  critica, estacion      6/25 (24%)         3/15 (20%)     6/14 (43%)      0/11 (0%)
+
+--------------------------------------------------------------------------
+Que tan lejos estuvo el umbral en las que fallo:
+  minimo 0.08 | mediana 0.41 | maximo 0.94
+  2 de 18 caen entre 0,55 y 0,80 de lo que Caine pide
+
+Recall que daria un umbral escalado (Caine multiplicado por k):
+      k         recall
+    1.0       4/25 ( 16%)   <- Caine sin tocar
+    0.9       6/25 ( 24%)
+    0.8       9/25 ( 36%)
+    0.7      10/25 ( 40%)
+    0.6      10/25 ( 40%)
+    0.5      11/25 ( 44%)
+
+  ESTE ESCALAMIENTO NO SE ADOPTA, Y LA RAZON IMPORTA.
+  Elegir el k que maximiza el recall sobre este mismo inventario es
+  ajustar el modelo contra su propia validacion: el numero que saldria
+  despues no mediria nada. Ademas las entradas no son independientes
+  -varias comparten la estacion mas cercana, y por eso repiten razon-
+  asi que los 25 casos valen bastante menos de 25 observaciones.
+  Para calibrar en serio hacen falta episodios sin activacion
+  documentada. Eso lo hace m5_calibracion.py, con 2024-2025.
+
+  tabla -> m5_validacion.csv
+
+########################################################################
+# 2. python src/m5_validacion.py --solo-fuertes
+########################################################################
+==========================================================================
+M5 - Validacion contra el invierno de 2026 (julio y agosto)
+==========================================================================
+
+Entradas del inventario: 23
+Con 93 unidades troncales: el recall de 2026 con troncos NO es validacion, los motivo este inventario
+Pares cuenca-episodio en gatillo.gpkg: 30,499; en la ventana 2026-06-01 a 2026-08-24: 12,011
+Unidades susceptibles: 2,682
+Unidades que superan Caine (episodio) en algun episodio de la ventana: 628
+Unidades que superan Caine (ventana critica) en algun episodio de la ventana: 1,039
+Unidades que superan Caine (episodio, estacion) en algun episodio de la ventana: 684
+Unidades que superan Caine (critica, estacion) en algun episodio de la ventana: 881
+Cada entrada se empareja solo con los episodios de su fecha, con 1 dia de holgura (la regla de m5_calibracion.py)
+
+Ubicando cada entrada en OpenStreetMap...
+
+ id quebrada                 evidencia          susc  pos  veredicto
+  1 El Rincon                activacion           13   11  predicho
+  2 Marquesa                 activacion           61    0  no_predicho
+  7 Cruz de Cana             activacion            0    0  sin_cobertura
+  8 Quebrada de Martinez     activacion            6    0  no_predicho
+  9 Santa Gracia             aluvion              37    0  no_predicho
+ 10 Tres Cruces              activacion           24    0  no_predicho
+ 11 Tambillos                activacion            0    0  sin_cobertura
+ 12 Las Barrancas            activacion            0    0  sin_cobertura
+ 14 Cajon del Romero         activacion            3    0  no_predicho
+ 19 El Porotal               activacion           15    0  no_predicho
+ 20 Leiva                    activacion           14    0  no_predicho
+ 21 Marquesa                 activacion           61    0  no_predicho
+ 22 El Lucho                 activacion            0    0  sin_ubicar
+ 23 Llimpo                   activacion           12    0  no_predicho
+ 24 (sin nombre)             activacion            0    0  sin_ubicar
+ 25 Cutun                    activacion           11    0  no_predicho
+ 26 El Maite                 activacion            0    0  sin_ubicar
+ 28 Uchumi                   activacion           27    0  no_predicho
+ 29 Los Loros                activacion           18    0  no_predicho
+ 30 El Tambo                 activacion           15    0  no_predicho
+ 31 San Carlos               activacion           27    0  no_predicho
+ 32 El Arrayan               activacion           35    0  no_predicho
+ 33 Los Mates                activacion            0    0  sin_ubicar
+
+todas las entradas: 23
+  sin ubicar en OSM          4
+  sin cobertura del modelo   3
+  evaluadas y no predichas  15
+  predichas                  1
+  RECALL sobre las evaluadas: 1/16 = 6%
+
+solo evidencia fuerte: 23
+  sin ubicar en OSM          4
+  sin cobertura del modelo   3
+  evaluadas y no predichas  15
+  predichas                  1
+  RECALL sobre las evaluadas: 1/16 = 6%
+
+  La precision NO se reporta y no es un olvido: el inventario no tiene
+  negativos observados. Ver la cabecera de este archivo.
+
+--------------------------------------------------------------------------
+Recall segun como se lea Caine:
+  lectura                     todas   evidencia fuerte          julio         agosto
+  episodio                1/16 (6%)          1/16 (6%)      1/6 (17%)      0/10 (0%)
+  ventana critica        5/16 (31%)         5/16 (31%)      4/6 (67%)     1/10 (10%)
+  episodio, estacion     2/16 (12%)         2/16 (12%)      2/6 (33%)      0/10 (0%)
+  critica, estacion      4/16 (25%)         4/16 (25%)      4/6 (67%)      0/10 (0%)
+
+--------------------------------------------------------------------------
+Que tan lejos estuvo el umbral en las que fallo:
+  minimo 0.07 | mediana 0.24 | maximo 0.94
+  1 de 14 caen entre 0,55 y 0,80 de lo que Caine pide
+
+Recall que daria un umbral escalado (Caine multiplicado por k):
+      k         recall
+    1.0       1/16 (  6%)   <- Caine sin tocar
+    0.9       2/16 ( 12%)
+    0.8       4/16 ( 25%)
+    0.7       5/16 ( 31%)
+    0.6       5/16 ( 31%)
+    0.5       5/16 ( 31%)
+
+  ESTE ESCALAMIENTO NO SE ADOPTA, Y LA RAZON IMPORTA.
+  Elegir el k que maximiza el recall sobre este mismo inventario es
+  ajustar el modelo contra su propia validacion: el numero que saldria
+  despues no mediria nada. Ademas las entradas no son independientes
+  -varias comparten la estacion mas cercana, y por eso repiten razon-
+  asi que los 16 casos valen bastante menos de 16 observaciones.
+  Para calibrar en serio hacen falta episodios sin activacion
+  documentada. Eso lo hace m5_calibracion.py, con 2024-2025.
+
+  tabla -> m5_validacion.csv
+
+########################################################################
+# 3. python src/m5_validacion.py
+########################################################################
+==========================================================================
+M5 - Validacion contra el invierno de 2026 (julio y agosto)
+==========================================================================
+
+Entradas del inventario: 33
+Con 93 unidades troncales: el recall de 2026 con troncos NO es validacion, los motivo este inventario
+Pares cuenca-episodio en gatillo.gpkg: 30,499; en la ventana 2026-06-01 a 2026-08-24: 12,011
+Unidades susceptibles: 2,682
+Unidades que superan Caine (episodio) en algun episodio de la ventana: 628
+Unidades que superan Caine (ventana critica) en algun episodio de la ventana: 1,039
+Unidades que superan Caine (episodio, estacion) en algun episodio de la ventana: 684
+Unidades que superan Caine (critica, estacion) en algun episodio de la ventana: 881
+Cada entrada se empareja solo con los episodios de su fecha, con 1 dia de holgura (la regla de m5_calibracion.py)
+
+Ubicando cada entrada en OpenStreetMap...
+
+ id quebrada                 evidencia          susc  pos  veredicto
+  1 El Rincon                activacion           13   11  predicho
+  2 Marquesa                 activacion           61    0  no_predicho
+  3 Batuco                   escurrimiento        18    9  predicho
+  4 Estero de Punitaqui      escurrimiento        30   19  predicho
+  5 Las Canas                escurrimiento        33    0  no_predicho
+  6 Carcamo                  escurrimiento        12   12  predicho
+  7 Cruz de Cana             activacion            0    0  sin_cobertura
+  8 Quebrada de Martinez     activacion            6    0  no_predicho
+  9 Santa Gracia             aluvion              37    0  no_predicho
+ 10 Tres Cruces              activacion           24    0  no_predicho
+ 11 Tambillos                activacion            0    0  sin_cobertura
+ 12 Las Barrancas            activacion            0    0  sin_cobertura
+ 13 Cutum                    activacion_menor     11    0  no_predicho
+ 14 Cajon del Romero         activacion            3    0  no_predicho
+ 15 Santa Gracia             activacion_menor     37    0  no_predicho
+ 16 Arrayan Costero          alerta_preventiva    12    0  no_predicho
+ 17 Los Loros                activacion_menor     18    0  no_predicho
+ 18 San Carlos               activacion_menor     27    0  no_predicho
+ 19 El Porotal               activacion           15    0  no_predicho
+ 20 Leiva                    activacion           14    0  no_predicho
+ 21 Marquesa                 activacion           61    0  no_predicho
+ 22 El Lucho                 activacion            0    0  sin_ubicar
+ 23 Llimpo                   activacion           12    0  no_predicho
+ 24 (sin nombre)             activacion            0    0  sin_ubicar
+ 25 Cutun                    activacion           11    0  no_predicho
+ 26 El Maite                 activacion            0    0  sin_ubicar
+ 27 Pichasca                 activacion_menor     16    0  no_predicho
+ 28 Uchumi                   activacion           27    0  no_predicho
+ 29 Los Loros                activacion           18    0  no_predicho
+ 30 El Tambo                 activacion           15    0  no_predicho
+ 31 San Carlos               activacion           27    0  no_predicho
+ 32 El Arrayan               activacion           35    0  no_predicho
+ 33 Los Mates                activacion            0    0  sin_ubicar
+
+todas las entradas: 33
+  sin ubicar en OSM          4
+  sin cobertura del modelo   3
+  evaluadas y no predichas  22
+  predichas                  4
+  RECALL sobre las evaluadas: 4/26 = 15%
+
+solo evidencia fuerte: 23
+  sin ubicar en OSM          4
+  sin cobertura del modelo   3
+  evaluadas y no predichas  15
+  predichas                  1
+  RECALL sobre las evaluadas: 1/16 = 6%
+
+  La precision NO se reporta y no es un olvido: el inventario no tiene
+  negativos observados. Ver la cabecera de este archivo.
+
+--------------------------------------------------------------------------
+Recall segun como se lea Caine:
+  lectura                     todas   evidencia fuerte          julio         agosto
+  episodio               4/26 (15%)          1/16 (6%)     4/15 (27%)      0/11 (0%)
+  ventana critica       10/26 (38%)         5/16 (31%)     9/15 (60%)      1/11 (9%)
+  episodio, estacion     6/26 (23%)         2/16 (12%)     6/15 (40%)      0/11 (0%)
+  critica, estacion      8/26 (31%)         4/16 (25%)     8/15 (53%)      0/11 (0%)
+
+--------------------------------------------------------------------------
+Que tan lejos estuvo el umbral en las que fallo:
+  minimo 0.07 | mediana 0.38 | maximo 0.94
+  2 de 21 caen entre 0,55 y 0,80 de lo que Caine pide
+
+Recall que daria un umbral escalado (Caine multiplicado por k):
+      k         recall
+    1.0       4/26 ( 15%)   <- Caine sin tocar
+    0.9       6/26 ( 23%)
+    0.8       9/26 ( 35%)
+    0.7      10/26 ( 38%)
+    0.6      10/26 ( 38%)
+    0.5      11/26 ( 42%)
+
+  ESTE ESCALAMIENTO NO SE ADOPTA, Y LA RAZON IMPORTA.
+  Elegir el k que maximiza el recall sobre este mismo inventario es
+  ajustar el modelo contra su propia validacion: el numero que saldria
+  despues no mediria nada. Ademas las entradas no son independientes
+  -varias comparten la estacion mas cercana, y por eso repiten razon-
+  asi que los 26 casos valen bastante menos de 26 observaciones.
+  Para calibrar en serio hacen falta episodios sin activacion
+  documentada. Eso lo hace m5_calibracion.py, con 2024-2025.
+
+  tabla -> m5_validacion.csv
+
+########################################################################
+# 4. python src/m5_calibracion.py
+########################################################################
+==========================================================================
+M5 - Calibracion de Caine: entrena en 2024-2025, prueba en 2026
+==========================================================================
+Positivos: aluvion, activacion, activacion_menor
+
+Cargando OSM y comunas...
+
+Inventario: 77 entradas
+tipo
+sin_cobertura     7
+sin_nombre       12
+sin_ubicar       13
+ubicada          45
+
+Observaciones estacion-episodio: 1092
+etiqueta  excluido  negativo  positivo
+conjunto                              
+entreno        209       439        12
+fuera            2         9         0
+prueba          45       343        33
+
+  positivos de entreno por evento regional:
+    evento   51 (2025-06-16): 6
+    evento   61 (2025-07-31): 6
+
+  positivos de prueba por evento regional:
+    evento   91 (2026-07-16): 13
+    evento   92 (2026-08-13): 20
+
+--------------------------------------------------------------------------
+Caine publicado, ahora con negativos (precision = cota inferior)
+--------------------------------------------------------------------------
+  conjunto   lectura            VP    FP   FN    VN  recall  precision    FPR    AUC
+  entreno    episodio            0     3   12   436    0.00      0.000  0.007  0.899
+  entreno    ventana critica     1     7   11   432    0.08      0.125  0.016  0.886
+  prueba     episodio            1    21   32   322    0.03      0.045  0.061  0.469
+  prueba     ventana critica     5    33   28   310    0.15      0.132  0.096  0.486
+
+--------------------------------------------------------------------------
+Ajuste por maxima verosimilitud sobre 2024-2025
+--------------------------------------------------------------------------
+  451 observaciones, 12 positivas
+  b0 =  -7.838 (ee 1.450)
+  bD =   3.193 (ee 1.027)   coeficiente de log10 D
+  bI =   5.365 (ee 1.336)   coeficiente de log10 I
+
+  curva                                  alfa             IC 95%   beta           IC 95%
+  Caine (1980) publicado                14.82                      0.39
+  ajustada, p = 0,50                    28.90      [9.74, 48.18]   0.60     [0.23, 0.83]
+  ajustada, p = 0.028 (Youden 0.70)      6.35      [2.54, 12.36]   0.60
+  remuestreo por eventos: 873 de 1000 validos (127 sin positivos o sin convergencia)
+
+  Prueba sobre 2026 con la curva ya fija (p de Youden del entrenamiento):
+  curva                        VP    FP   FN    VN  recall  precision    FPR    AUC
+  Caine publicado               1    21   32   322    0.03      0.045  0.061  0.469
+  Caine ventana critica         5    33   28   310    0.15      0.132  0.096  0.486
+  ajustada (Youden)            16   155   17   188    0.48      0.094  0.452  0.488
+
+  Prueba por evento regional con positivos (AUC contra todos los
+  negativos de la prueba; recall = positivos del evento que marca cada curva):
+  evento                  pos  lluvia med  AUC Caine  critica  ajustada  recall C  critica  ajust.
+  91 (2026-07-16)          13     59.2 mm      0.774    0.795     0.776      0.08     0.38    0.92
+  92 (2026-08-13)          20      4.6 mm      0.271    0.285     0.301      0.00     0.00    0.20
+
+  ATENCION: los positivos de entrenamiento salen de 2 evento(s). Los intervalos
+  del remuestreo no miden incertidumbre real con tan pocos eventos.
+
+--------------------------------------------------------------------------
+Regresion con log10_D, log10_I, melton, antecedente_72h_mm, altitud_m
+  hacen falta 50 positivos de entrenamiento (10 por variable); hay 12.
+  NO SE AJUSTA. Con menos positivos que eso los coeficientes
+  describen el ruido de esta muestra, no el fenomeno.
+
+  observaciones -> m5_calibracion_observaciones.csv
+  inventario    -> m5_calibracion_inventario.csv
+  figura        -> m5_calibracion.png
+
+########################################################################
+# 5. python src/m5_alerta_sector.py
+########################################################################
+==========================================================================
+M5 - La alerta por provincia y por temporal
+==========================================================================
+
+Temporales: 34 (episodios de 5 mm o mas, pausa de 24 h); regionales, con 5 estaciones o mas: 15
+
+Cuencas con lluvia en M4: 2682; por provincia: Elqui 1039, Limari 948, Choapa 690; fuera de la region por el centroide: 5
+
+Entradas del inventario fuera de todo temporal medido: 9
+  2024-06-13: 9 entradas (101, 102, 103, 104, 105, 106, 107, 108, 109)
+
+Temporales con condicion de deshielo (m4_deshielo.py): 15-07-2026, 30-07-2026, 04-08-2026, 11-08-2026
+
+--------------------------------------------------------------------------
+Los temporales regionales
+--------------------------------------------------------------------------
+  + positivo, - negativo, x excluido; entre parentesis, cuencas sobre Caine;
+  D, condicion de deshielo
+  temporal                est.  mm max     Elqui           Limari          Choapa          
+  01-08-2024 al 06-08       76     146     x (0)           x (11)          x (0)           
+  06-10-2024 al 09-10       18      14     - (0)           - (0)           - (0)           
+  11-06-2025 al 13-06       47      72     - (0)           - (0)           - (0)           
+  16-06-2025 al 16-06       51      51     + (0)           + (0)           + (0)           
+  22-06-2025 al 22-06        6       9     - (0)           - (0)           - (0)           
+  31-07-2025 al 08-08       71     238     + (0)           + (14)          + (47)          
+  18-08-2025 al 18-08       14      25     - (0)           - (0)           - (0)           
+  21-08-2025 al 23-08       60      40     - (14)          - (10)          - (0)           
+  26-09-2025 al 27-09       32      20     - (0)           - (0)           - (0)           
+  06-11-2025 al 07-11        6      11     - (0)           - (0)           - (0)           
+  05-12-2025 al 06-12        5      22     - (0)           - (0)           - (0)           
+  10-06-2026 al 10-06        7      40     - (0)           - (0)           - (0)           
+  15-07-2026 al 27-07       58     413  D  + (0)           x (255)         + (355)         
+  30-07-2026 al 02-08       70      78  D  + (0)           - (18)          - (1)           
+  11-08-2026 al 18-08       83     107  D  + (0)           + (0)           + (0)           
+
+--------------------------------------------------------------------------
+Por provincia y temporal
+--------------------------------------------------------------------------
+
+  todos los temporales: 12 positivos, 86 negativos, 4 excluidos
+    alerta Caine (alguna cuenca lo supera)   VP  3  FP  7  FN  9  VN 79  |  recall 0.25  precision 0.30  falsas alarmas 0.08
+    Caine o deshielo (experimental)          VP  8  FP  9  FN  4  VN 77  |  recall 0.67  precision 0.47  falsas alarmas 0.10
+    AUC (ordena los positivos sobre los negativos?):  razon maxima 0.88   razon critica 0.91   lluvia maxima 0.95
+
+  solo los regionales: 12 positivos, 29 negativos, 4 excluidos
+    alerta Caine (alguna cuenca lo supera)   VP  3  FP  4  FN  9  VN 25  |  recall 0.25  precision 0.43  falsas alarmas 0.14
+    Caine o deshielo (experimental)          VP  8  FP  4  FN  4  VN 25  |  recall 0.67  precision 0.67  falsas alarmas 0.14
+    AUC (ordena los positivos sobre los negativos?):  razon maxima 0.78   razon critica 0.83   lluvia maxima 0.86
+
+--------------------------------------------------------------------------
+Por temporal, la region entera
+--------------------------------------------------------------------------
+
+  todos los temporales: 6 positivos, 28 negativos, 0 excluidos
+    alerta Caine (alguna cuenca lo supera)   VP  4  FP  4  FN  2  VN 24  |  recall 0.67  precision 0.50  falsas alarmas 0.14
+    Caine o deshielo (experimental)          VP  5  FP  4  FN  1  VN 24  |  recall 0.83  precision 0.56  falsas alarmas 0.14
+    AUC (ordena los positivos sobre los negativos?):  razon maxima 0.90   razon critica 0.93   lluvia maxima 0.98
+
+  solo los regionales: 6 positivos, 9 negativos, 0 excluidos
+    alerta Caine (alguna cuenca lo supera)   VP  4  FP  1  FN  2  VN  8  |  recall 0.67  precision 0.80  falsas alarmas 0.11
+    Caine o deshielo (experimental)          VP  5  FP  1  FN  1  VN  8  |  recall 0.83  precision 0.83  falsas alarmas 0.11
+    AUC (ordena los positivos sobre los negativos?):  razon maxima 0.91   razon critica 0.94   lluvia maxima 0.94
+
+  tablas -> m5_temporales.csv, m5_alerta_provincia.csv, m5_alerta_region.csv
+
+########################################################################
+# 6. python src/m5_niveles.py
+########################################################################
+==========================================================================
+M5 - Niveles de alerta por provincia: la lluvia del temporal contra el clima
+==========================================================================
+  catalogo tipo 0: cache del 2026-10-18 (1056 estaciones del pais, catalogo_0.json)
+
+Estaciones con episodios: 104; normal anual CR2MET 1991-2020: mediana 204 mm, de 56 a 444
+  Elqui    38 estaciones, normal mediana  164 mm
+  Limari   36 estaciones, normal mediana  217 mm
+  Choapa   30 estaciones, normal mediana  264 mm
+
+Provincias-temporal: 98 (12 positivas), 4 excluidas
+  entrenamiento 2024-2025: 81 (6 positivas); prueba 2026: 17 (6 positivas)
+
+--------------------------------------------------------------------------
+1. Entrenar con 2024-2025, probar en 2026
+--------------------------------------------------------------------------
+
+  fraccion de la normal: AUC en 2026 0.97 (regionales 0.93), Brier 0.066
+    nivel       casos  con activaciones   tasa
+    ninguna         9                 0   0.00
+    amarilla        3                 1   0.33
+    naranja         2                 2   1.00
+    roja            3                 3   1.00
+
+  lluvia absoluta (mm): AUC en 2026 0.95 (regionales 0.90), Brier 0.084
+
+  fraccion, estacion mas mojada (version anterior): AUC en 2026 1.00 (regionales 1.00), Brier 0.062
+
+--------------------------------------------------------------------------
+2. Dejando fuera un temporal a la vez, tres inviernos
+--------------------------------------------------------------------------
+
+  fraccion de la normal: AUC 0.96 (regionales 0.89), Brier 0.059
+    por provincia (AUC):  Choapa 0.95   Elqui 0.95   Limari 0.98
+    nivel       casos  con activaciones   tasa
+    ninguna        82                 3   0.04
+    amarilla        4                 1   0.25
+    naranja         4                 2   0.50
+    roja            8                 6   0.75
+
+  lluvia absoluta (mm): AUC 0.95 (regionales 0.86), Brier 0.060
+    por provincia (AUC):  Choapa 0.94   Elqui 0.96   Limari 0.95
+
+  fraccion, estacion mas mojada (version anterior): AUC 0.95 (regionales 0.87), Brier 0.063
+    por provincia (AUC):  Choapa 0.96   Elqui 0.94   Limari 0.93
+
+  referencia, Caine sin ajustar (m5_alerta_sector): AUC 0.88 (regionales 0.78); solo 2026, 0.68
+    por provincia (AUC):  Choapa 0.91   Elqui 0.91   Limari 0.84
+
+--------------------------------------------------------------------------
+Los niveles para operar, ajustados con los tres inviernos
+--------------------------------------------------------------------------
+  en al menos dos estaciones de la provincia, la lluvia del temporal llega a:
+    amarilla   16.2% de la normal anual   (P >= 0.25)
+    naranja    22.6% de la normal anual   (P >= 0.50)
+    roja       31.6% de la normal anual   (P >= 0.75)
+  coeficientes: P = 1 / (1 + exp(-(4.860371 + 7.526972 * log10(fraccion))))
+  sin el invierno 2024: amarilla 16.0%, naranja 22.6%, roja 31.8%
+  sin el invierno 2025: amarilla 19.3%, naranja 20.5%, roja 21.9%
+  sin el invierno 2026: amarilla 16.9%, naranja 25.2%, roja 37.7%
+
+  Los temporales regionales con el nivel que habria tenido cada provincia
+  (validacion cruzada; + activaciones, - nada, D deshielo):
+    temporal     Elqui                     Limari                    Choapa                    
+    06-10-2024   - ninguna     6%          - ninguna     2%          - ninguna     3%          
+    11-06-2025   - naranja    22%          - roja       26%          - roja       25%          
+    16-06-2025   + ninguna    15%          + ninguna    20%          + ninguna    22%          
+    22-06-2025   - ninguna     0%          - ninguna     2%          - ninguna     2%          
+    31-07-2025   + roja       55%          + roja       51%          + roja       44%          
+    18-08-2025   - naranja    26%          - ninguna     3%          - ninguna     0%          
+    21-08-2025   - ninguna     9%          - ninguna     9%          - amarilla   17%          
+    26-09-2025   - ninguna     0%          - ninguna     6%          - ninguna     7%          
+    06-11-2025   - ninguna     0%          - ninguna     2%          - ninguna     2%          
+    05-12-2025   - ninguna     2%          - ninguna     0%          - ninguna     3%          
+    10-06-2026   - ninguna     0%          - ninguna     1%          - ninguna     4%          
+    15-07-2026   + roja      207%          x (excluida)              + roja      146%           D
+    30-07-2026   + naranja    26%          - amarilla   20%          - amarilla   20%           D
+    11-08-2026   + naranja    28%          + roja       41%          + amarilla   20%           D
+
+  tabla -> m5_niveles.csv
+
+########################################################################
+# 7. python src/m6_alerta_en_vivo.py --repasar
+########################################################################
+==========================================================================
+M6 - Alerta en vivo por provincia
+==========================================================================
+  catalogo tipo 0: cache del 2026-10-18 (1056 estaciones del pais, catalogo_0.json)
+  catalogo tipo 1: cache del 2026-10-18 (1032 estaciones del pais, catalogo_1.json)
+  catalogo tipo 3: cache del 2026-10-18 (98 estaciones del pais, catalogo_3.json)
+
+Repaso: el final de cada temporal regional, contra m5_niveles (nivel con el modelo de los tres inviernos)
+  temporal     Elqui                     Limari                    Choapa                    
+  01-08-2024   ! roja     (excluida)     ! roja     (excluida)     ! roja     (excluida)     
+  06-10-2024   = ninguna  (ninguna)      = ninguna  (ninguna)      = ninguna  (ninguna)      
+  11-06-2025   = amarilla (amarilla)     = naranja  (naranja)      = naranja  (naranja)      
+  16-06-2025   = ninguna  (ninguna)      = amarilla (amarilla)     = amarilla (amarilla)     
+  22-06-2025   = ninguna  (ninguna)      = ninguna  (ninguna)      = ninguna  (ninguna)      
+  31-07-2025   = roja     (roja)         = roja     (roja)         = roja     (roja)         
+  18-08-2025   = naranja  (naranja)      = ninguna  (ninguna)      = ninguna  (ninguna)      
+  21-08-2025   = ninguna  (ninguna)      = ninguna  (ninguna)      = amarilla (amarilla)     
+  26-09-2025   = ninguna  (ninguna)      = ninguna  (ninguna)      = ninguna  (ninguna)      
+  06-11-2025   = ninguna  (ninguna)      = ninguna  (ninguna)      = ninguna  (ninguna)      
+  05-12-2025   = ninguna  (ninguna)      = ninguna  (ninguna)      = ninguna  (ninguna)      
+  10-06-2026   = ninguna  (ninguna)      = ninguna  (ninguna)      = ninguna  (ninguna)      
+  15-07-2026   = roja     (roja)         ! roja     (excluida)     = roja     (roja)         
+  30-07-2026   = naranja  (naranja)      = amarilla (amarilla)     = amarilla (amarilla)     
+  11-08-2026   = naranja  (naranja)      = roja     (roja)         = amarilla (amarilla)     
+
+  mismo nivel en 41 de 41 provincias-temporal
+
+========================================================================
+VERIFICACION
+========================================================================
+
+EL RECALL ANTES Y DESPUES DE A1
+
+  Con troncos (la corrida por defecto). Antes: 2026-10-10_troncos.txt, seccion 7.
+
+  lectura                 todas           evidencia fuerte   julio           agosto
+  episodio                6/26 -> 4/26    2/16 -> 1/16       4/15 -> 4/15    2/11 -> 0/11
+  ventana critica        20/26 -> 10/26  11/16 -> 5/16      12/15 -> 9/15    8/11 -> 1/11
+  episodio, estacion     11/26 -> 6/26    6/16 -> 2/16       7/15 -> 6/15    4/11 -> 0/11
+  critica, estacion      15/26 -> 8/26    8/16 -> 4/16      11/15 -> 8/15    4/11 -> 0/11
+
+  Sin troncos. Antes: 2026-10-10_m5_tres_inviernos.txt, seccion 1 (y troncos, seccion 6).
+
+  lectura                 todas           evidencia fuerte   julio           agosto
+  episodio                6/25 -> 4/25    2/15 -> 1/15       4/14 -> 4/14    2/11 -> 0/11
+  ventana critica        18/25 -> 9/25   10/15 -> 4/15      11/14 -> 9/14    7/11 -> 0/11
+  episodio, estacion      6/25 -> 4/25    3/15 -> 1/15       4/14 -> 4/14    2/11 -> 0/11
+  critica, estacion      10/25 -> 6/25    5/15 -> 3/15       8/14 -> 6/14    2/11 -> 0/11
+
+  La columna "julio" incluye las 6 entradas del 31-07, que con A1 se miden
+  contra el episodio del 31 de julio y ya no contra el temporal del 17 al 22.
+  Agosto queda en cero en todas las lecturas salvo una (ventana critica, con
+  troncos): el bloque de deshielo no lo ve ningun umbral de lluvia, ahora
+  tambien en esta validacion.
+
+  --solo-fuertes reproduce la columna "evidencia fuerte" de la corrida normal
+  en las cuatro lecturas (1/16, 5/16, 2/16, 4/16).
+
+  La interpolacion, sin troncos: leyendo el episodio entero el recall es el
+  mismo con y sin interpolar (4/25); en la ventana critica pasa de 6/25 (24%)
+  leyendo la estacion a 9/25 (36%) interpolando. Antes de A1 eran 40% y 72%.
+
+ENTRADA POR ENTRADA (outputs/m5_validacion.csv, antes y hoy)
+
+  La ubicacion de cada entrada y las unidades susceptibles cercanas son
+  identicas: A1 no toca la geografia, solo con que episodios se compara cada
+  entrada. Ubicacion de las 33: 17 en un cauce con nombre, 12 en un lugar,
+  3 no estan en OSM y 1 no tiene nombre en el inventario.
+
+  entradas: antes 33, hoy 33, en las dos 33
+  columnas que no dependen de la lluvia (ubicacion, susceptibles cercanas): identicas
+  
+   id quebrada             fecha       veredicto antes          hoy          razon      lluvia mm     duracion h
+    1 El Rincon            2026-07-17         predicho     predicho   1.326->1.326   222.6->222.6    53.5->53.5  
+    2 Marquesa             2026-07-17      no_predicho  no_predicho   0.898->0.898   242.5->242.5   116.5->116.5 
+    3 Batuco               2026-07-17         predicho     predicho   1.279->1.279   398.9->398.9   147.5->147.5 
+    4 Estero de Punitaqui  2026-07-17         predicho     predicho   1.554->1.554   245.8->245.8    48.5->48.5  
+    5 Las Canas            2026-07-17      no_predicho  no_predicho   0.886->0.886   227.8->227.8   121.5->121.5 
+    6 Carcamo              2026-07-17         predicho     predicho   1.064->1.064   296.2->296.2   122.5->122.5 
+    7 Cruz de Cana         2026-07-19    sin_cobertura sin_cobertura     nan->nan       nan->nan       nan->nan   
+    8 Quebrada de Martinez 2026-07-19      no_predicho  no_predicho   0.852->0.852   236.0->236.0   121.5->121.5 
+    9 Santa Gracia         2026-07-20      no_predicho  no_predicho   0.937->0.937   181.0->181.0    84.5->84.5  
+   10 Tres Cruces          2026-07-21      no_predicho  no_predicho   0.853->0.703   184.8->184.8   111.5->111.5  *
+   11 Tambillos            2026-07-31    sin_cobertura sin_cobertura     nan->nan       nan->nan       nan->nan   
+   12 Las Barrancas        2026-07-31    sin_cobertura sin_cobertura     nan->nan       nan->nan       nan->nan   
+   13 Cutum                2026-07-31      no_predicho  no_predicho   0.898->0.407   242.5->28.9    116.5->17.5   *
+   14 Cajon del Romero     2026-07-31      no_predicho  no_predicho   0.539->0.379    22.6->19.2      5.5->7.5    *
+   15 Santa Gracia         2026-07-31      no_predicho  no_predicho   0.937->0.553   181.0->24.5     84.5->6.0    *
+   16 Arrayan Costero      2026-07-31      no_predicho  no_predicho   0.688->0.406    64.4->18.0     20.5->6.0    *
+   17 Los Loros            2026-07-31      no_predicho  no_predicho   0.342->0.257    28.5->12.5     17.0->7.0    *
+   18 San Carlos           2026-07-31      no_predicho  no_predicho   0.912->0.912    67.6->67.6     14.0->14.0  
+   19 El Porotal           2026-08-15      no_predicho  no_predicho   0.912->nan     171.9->nan     112.0->nan    *
+   20 Leiva                2026-08-15      no_predicho  no_predicho   0.207->0.121    15.7->6.8      14.5->9.0    *
+   21 Marquesa             2026-08-15      no_predicho  no_predicho   0.898->0.08    242.5->1.5     116.5->1.5    *
+   23 Llimpo               2026-08-15         predicho  no_predicho   1.286->0.351   216.0->29.8     53.5->17.5   *
+   25 Cutun                2026-08-16      no_predicho  no_predicho   0.898->0.462   242.5->28.3    116.5->11.5   *
+   27 Pichasca             2026-08-16         predicho  no_predicho   1.038->0.359    83.4->23.0     16.0->11.0   *
+   28 Uchumi               2026-08-15      no_predicho  no_predicho   0.729->0.122   191.6->6.9     111.5->9.0    *
+   29 Los Loros            2026-08-15      no_predicho  no_predicho   0.342->0.121    28.5->6.8      17.0->9.0    *
+   30 El Tambo             2026-08-15      no_predicho  no_predicho   0.912->0.122    67.6->6.9      14.0->9.0    *
+   31 San Carlos           2026-08-15      no_predicho  no_predicho   0.912->0.122    67.6->6.9      14.0->9.0    *
+   32 El Arrayan           2026-08-15      no_predicho  no_predicho   0.976->0.065   242.5->2.1     116.5->3.5    *
+  
+  entradas con algun cambio (*): 17
+  cambian de veredicto: Llimpo (2026-08-15: predicho -> no_predicho), Pichasca (2026-08-16: predicho -> no_predicho)
+
+  Las 9 entradas del temporal del 17 al 22 de julio quedan iguales salvo la
+  razon de Tres Cruces (21-07), que bajo de 0,853 a 0,703: su maximo venia de
+  un episodio fuera de su fecha. Las del 31 de julio y las de agosto ahora se
+  miden con su propia lluvia, y dos cambian de veredicto: Llimpo (15-08) y
+  Pichasca (16-08), que estaban "predichas" con la lluvia de julio. El Porotal
+  (15-08) queda sin ningun episodio en su fecha en las unidades cercanas.
+
+LA RAZON CONTRA CAINE, POR GRUPO DE FECHAS
+
+  Se calcula del CSV de cada corrida (script aparte, de solo lectura). Antes,
+  con troncos (outputs del 10-10):
+
+  grupo            evaluadas predichas  razon de las fallas (min / mediana / max)
+  julio (17-22)            9         4  0.85 / 0.89 / 0.94
+  31 de julio              6         0  0.34 / 0.79 / 0.94
+  agosto (14-17)          11         2  0.21 / 0.90 / 0.98
+  
+  Recall con Caine x k, por grupo (aciertos = razon >= k):
+       k    julio (17-22)      31 de julio   agosto (14-17)      todas
+     1.0              4/9              0/6             2/11 6/ 26
+     0.9              5/9              2/6             6/11 13/ 26
+     0.8              9/9              3/6             8/11 20/ 26
+     0.7              9/9              3/6             9/11 21/ 26
+     0.6              9/9              4/6             9/11 22/ 26
+     0.5              9/9              5/6             9/11 23/ 26
+  
+  Veredictos por mes de la fecha de la entrada (julio = 17-22 y 31 de julio):
+                                           todas  evidencia fuerte             julio            agosto     julio, fuerte
+    entradas                                  33                23                18                15                 9
+    sin ubicar en OSM                          4                 4                 0                 4                 0
+    sin cobertura del modelo                   3                 3                 3                 0                 3
+    evaluadas y no predichas                  20                14                11                 9                 5
+    predichas                                  6                 2                 4                 2                 1
+    recall sobre las evaluadas        6/26 (23%)        2/16 (12%)        4/15 (27%)        2/11 (18%)         1/6 (17%)
+  
+  Julio entero (17-22 y 31): 15 evaluadas; 11 fallas con razon, min 0.34 | mediana 0.89 | max 0.94; 1 entre 0,55 y 0,80
+    k 1.0: 4/15   k 0.9: 7/15   k 0.8: 12/15   k 0.7: 12/15   k 0.6: 13/15   k 0.5: 14/15
+  
+  Razones repetidas (entradas que comparten estacion y episodio): 0.898 x4, 0.912 x4, 0.937 x2, 0.342 x2
+
+  Hoy, con troncos:
+
+  grupo            evaluadas predichas  razon de las fallas (min / mediana / max)
+  julio (17-22)            9         4  0.70 / 0.89 / 0.94
+  31 de julio              6         0  0.26 / 0.41 / 0.91
+  agosto (14-17)          11         0  0.07 / 0.12 / 0.46   (1 sin episodio en su fecha)
+  
+  Recall con Caine x k, por grupo (aciertos = razon >= k):
+       k    julio (17-22)      31 de julio   agosto (14-17)      todas
+     1.0              4/9              0/6             0/11 4/ 26
+     0.9              5/9              1/6             0/11 6/ 26
+     0.8              8/9              1/6             0/11 9/ 26
+     0.7              9/9              1/6             0/11 10/ 26
+     0.6              9/9              1/6             0/11 10/ 26
+     0.5              9/9              2/6             0/11 11/ 26
+  
+  Veredictos por mes de la fecha de la entrada (julio = 17-22 y 31 de julio):
+                                           todas  evidencia fuerte             julio            agosto     julio, fuerte
+    entradas                                  33                23                18                15                 9
+    sin ubicar en OSM                          4                 4                 0                 4                 0
+    sin cobertura del modelo                   3                 3                 3                 0                 3
+    evaluadas y no predichas                  22                15                11                11                 5
+    predichas                                  4                 1                 4                 0                 1
+    recall sobre las evaluadas        4/26 (15%)         1/16 (6%)        4/15 (27%)         0/11 (0%)         1/6 (17%)
+  
+  Julio entero (17-22 y 31): 15 evaluadas; 11 fallas con razon, min 0.26 | mediana 0.70 | max 0.94; 2 entre 0,55 y 0,80
+    k 1.0: 4/15   k 0.9: 6/15   k 0.8: 9/15   k 0.7: 10/15   k 0.6: 10/15   k 0.5: 11/15
+  
+  Razones repetidas (entradas que comparten estacion y episodio): 0.122 x3, 0.121 x2
+
+  Lo que cambia en la lectura: la tabla de Caine x k salta mucho menos. Sobre
+  las 15 evaluadas de julio, antes pasaba de 4/15 con k = 1,0 a 12/15 con
+  k = 0,8; hoy pasa a 9/15, y a 10/15 con k = 0,7. Sobre las 26 de 2026, antes
+  de 6 a 20 con k = 0,8, hoy de 4 a 9. La diferencia la ponen las entradas que
+  se median fuera de su fecha: en julio, 2 del 31 de julio y Tres Cruces; en
+  agosto, todas. Con cada una en su fecha:
+    - temporal del 17 al 22 de julio: las 5 fallas quedan entre 0,70 y 0,94 de
+      lo que Caine pide; con k = 0,7 se marcan las 9 evaluadas. Ahi el "30% alto"
+      se sostiene, sobre 9 entradas.
+    - 31 de julio: las 6 fallas, entre 0,26 y 0,91 (mediana 0,41).
+    - agosto: entre 0,07 y 0,46 (mediana 0,12), y una sin episodio en su fecha.
+      Ningun factor de escala las alcanza: es otro mecanismo.
+
+LO QUE NO CAMBIO
+
+  m5_calibracion.py: consola identica, linea por linea, a la seccion 2 de
+  2026-10-10_m5_tres_inviernos.txt (diff vacio). m5_calibracion_inventario.csv
+  identico (mismo hash). En m5_calibracion_observaciones.csv cambia solo la
+  columna antecedente_72h_mm, en las 1.092 filas: es la mediana del
+  antecedente de M4, que ya no cuenta su primer paso (A2). Ningun ajuste la usa:
+  la regresion que la incluiria pide 50 positivos y hay 12.
+
+  m5_alerta_sector.py: consola identica a 2026-10-11_m5_alerta_sector.txt (64
+  lineas). m5_temporales.csv, m5_alerta_provincia.csv y m5_alerta_region.csv:
+  mismo hash.
+
+  m5_niveles.py: consola identica a 2026-10-11_m5_niveles.txt salvo la linea
+  nueva del catalogo, que ahora lee del cache. m5_niveles.csv y
+  m5_niveles_modelo.json: mismo hash. b0 = 4,860371 y b1 = 7,526972, los mismos
+  B0 y B1 congelados de src/m6_alerta_en_vivo.py (lineas 96-97). No se toco m6.
+
+  m6_alerta_en_vivo.py --repasar: mismo nivel en 41 de 41 provincias-temporal,
+  y la tabla es identica a la seccion 5 de 2026-10-11_m6_alerta_en_vivo.txt.
+  Lee los tres catalogos del cache, sin pedirle nada a VIPNET. El repaso no
+  escribe outputs/alerta_en_vivo.json ni boletines (mismo hash, mismos 3
+  boletines).
