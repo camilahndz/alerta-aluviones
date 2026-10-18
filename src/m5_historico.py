@@ -75,7 +75,6 @@ from __future__ import annotations
 import json
 import re
 import sys
-import unicodedata
 import warnings
 import zipfile
 from pathlib import Path
@@ -84,23 +83,23 @@ import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import comun  # noqa: E402
 import m4_cr2met_diario as diario  # noqa: E402
 import m4_lluvia as m4  # noqa: E402
-import m5_alerta_sector as alerta  # noqa: E402
 import m5_calibracion as cal  # noqa: E402
 import m5_niveles as niv  # noqa: E402
-import m5_validacion as m5  # noqa: E402
+from comun import sin_tildes  # noqa: E402
 
 RAIZ = Path(__file__).resolve().parent.parent
 HISTORICO = RAIZ / "data" / "raw" / "historico"
 
 PROVINCIA_DE = {
-    **alerta.PROVINCIA_DE,
+    **comun.PROVINCIA_DE,
     "chanaral": "Chanaral", "diego de almagro": "Chanaral",
     "copiapo": "Copiapo", "caldera": "Copiapo", "tierra amarilla": "Copiapo",
     "vallenar": "Huasco", "freirina": "Huasco", "huasco": "Huasco", "alto del carmen": "Huasco",
 }
-REGION_DE = {p: ("Coquimbo" if p in alerta.PROVINCIAS else "Atacama") for p in set(PROVINCIA_DE.values())}
+REGION_DE = {p: ("Coquimbo" if p in comun.PROVINCIAS else "Atacama") for p in set(PROVINCIA_DE.values())}
 
 UMBRAL_DIA_MM = 5.0
 HOLGURA_DIAS = 2
@@ -126,11 +125,6 @@ TIPOS_MASA = ("aluvion", "avenida torrencial", "deslizamiento")
 PALABRAS_QUEBRADA = (r"quebrada|aluvi|barro|lodo|derrumbe|rodado|deslizamient|crecida|desborde|"
                      r"avenida|activaci|se activ|activaron")
 PALABRAS_MINA = r"\bmina\b|minero|pique|yacimiento|pirquin|socav|mineral\b"
-
-
-def sin_tildes(s) -> str:
-    return "".join(c for c in unicodedata.normalize("NFD", str(s or "").lower())
-                   if unicodedata.category(c) != "Mn")
 
 
 # =============================================================================
@@ -181,9 +175,9 @@ def estaciones_virtuales():
         cat, RAIZ / "data" / "processed" / "precipitacion_media_anual.tif"))
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        comunas = m5.cargar_comunas()
+        comunas = comun.cargar_comunas()
     pts = gpd.GeoDataFrame(cat, geometry=gpd.points_from_xy(cat["lon"], cat["lat"]),
-                           crs="EPSG:4326").to_crs(m5.CRS_METRICO)
+                           crs="EPSG:4326").to_crs(comun.CRS_METRICO)
     pts = gpd.sjoin(pts, comunas[["clave", "geometry"]], how="left", predicate="within")
     cat["provincia"] = pts.drop_duplicates("codigo").set_index("codigo")["clave"].map(
         PROVINCIA_DE).reindex(cat["codigo"]).to_numpy()

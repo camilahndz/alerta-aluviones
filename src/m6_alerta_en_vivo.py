@@ -78,11 +78,11 @@ import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import comun  # noqa: E402
 import m4_deshielo as desh  # noqa: E402
 import m4_lluvia as m4  # noqa: E402
 import m5_alerta_sector as alerta  # noqa: E402
 import m5_niveles as niv  # noqa: E402
-import m5_validacion as m5  # noqa: E402
 
 RAIZ = Path(__file__).resolve().parent.parent
 ZONA = m4.ZONA_CHILE
@@ -199,18 +199,44 @@ class AlmacenVivo:
         return [d for d in todos if desde <= _fecha(d) <= hasta]
 
 
-def bajar_todo(fuente, catalogos, momento) -> dict:
+def bajar_todo(fuente, catalogos, momento):
+    """Los registros de cada estacion. Devuelve (datos, fallidas).
+
+    Una estacion que no responde queda sin dato y en `fallidas`, y el boletin
+    dice cuantas fueron. Hasta octubre de 2026 la excepcion de una sola
+    estacion caida tumbaba el boletin entero, sin aviso a nadie: justo en un
+    temporal, que es cuando las estaciones fallan (auditoria 17-10, M7). Sin
+    dato no es cero: una estacion sin registros no cuenta como transmitiendo,
+    y su provincia puede salir con "datos insuficientes".
+
+    Si no responde NINGUNA de lluvia se aborta: eso es VIPNET caido, no una
+    region sin temporal, y un boletin de "sin temporal" seria el peor error
+    posible.
+    """
     desde = momento - pd.Timedelta(days=VENTANA_DATOS_D)
     tareas = [(nombre, cod) for nombre, cat in catalogos.items() for cod in cat["codigo"]]
 
     def una(t):
         nombre, cod = t
-        return t, fuente.registros(cod, TIPOS[nombre], desde, momento)
+        try:
+            return t, fuente.registros(cod, TIPOS[nombre], desde, momento), False
+        except RuntimeError as e:
+            print(f"  AVISO: {nombre} {cod} no respondio, queda sin dato ({e})")
+            return t, [], True
 
     if isinstance(fuente, AlmacenVivo):
         with ThreadPoolExecutor(6) as ex:
-            return dict(ex.map(una, tareas))
-    return dict(map(una, tareas))
+            resultados = list(ex.map(una, tareas))
+    else:
+        resultados = list(map(una, tareas))
+
+    datos = {t: registros for t, registros, _ in resultados}
+    fallidas = [t for t, _, fallo in resultados if fallo]
+    n_lluvia = len(catalogos["lluvia"])
+    if n_lluvia and sum(1 for nombre, _ in fallidas if nombre == "lluvia") == n_lluvia:
+        sys.exit(f"Ninguna de las {n_lluvia} estaciones de lluvia respondio. Eso es VIPNET "
+                 "caido, no una region sin temporal: no se emite boletin.")
+    return datos, fallidas
 
 
 # =============================================================================
@@ -229,18 +255,18 @@ def preparar() -> dict:
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        comunas = m5.cargar_comunas()
+        comunas = comun.cargar_comunas()
     pts = gpd.GeoDataFrame(lluvia, geometry=gpd.points_from_xy(lluvia["lon"], lluvia["lat"]),
-                           crs="EPSG:4326").to_crs(m5.CRS_METRICO)
+                           crs="EPSG:4326").to_crs(comun.CRS_METRICO)
     pts = gpd.sjoin(pts, comunas[["clave", "geometry"]], how="left", predicate="within")
-    prov = pts.drop_duplicates("codigo").set_index("codigo")["clave"].map(alerta.PROVINCIA_DE)
+    prov = pts.drop_duplicates("codigo").set_index("codigo")["clave"].map(comun.PROVINCIA_DE)
     lluvia["provincia"] = lluvia["codigo"].map(prov)
 
     ruta_cortes = RAIZ / "data" / "processed" / "puntos_corte.gpkg"
     if not ruta_cortes.exists():
         sys.exit("Falta puntos_corte.gpkg. Corre antes: python src/m3_exposicion.py")
     cortes = gpd.read_file(ruta_cortes, ignore_geometry=True)
-    cortes["provincia"] = cortes["comuna"].map(lambda c: alerta.PROVINCIA_DE.get(m5.sin_tildes(c)))
+    cortes["provincia"] = cortes["comuna"].map(lambda c: comun.PROVINCIA_DE.get(comun.sin_tildes(c)))
     return {"catalogos": catalogos, "cortes": cortes}
 
 
@@ -362,7 +388,7 @@ def evaluar(momento, fuente, fijo, modelo=None) -> dict:
     """El boletin de un momento. `modelo` = (b0, b1) reemplaza al congelado:
     lo usa el visor para repasar un invierno con el modelo que no lo vio."""
     cat = fijo["catalogos"]
-    datos = bajar_todo(fuente, cat, momento)
+    datos, fallidas = bajar_todo(fuente, cat, momento)
     episodios, estado = episodios_en_ventana(datos, cat, momento)
     tor = temporal_en_curso(episodios, momento)
     lluvia = cat["lluvia"]
@@ -380,7 +406,7 @@ def evaluar(momento, fuente, fijo, modelo=None) -> dict:
         totales = totales[totales["provincia"].notna() & totales["normal_mm"].notna()]
         totales["fraccion"] = totales["lluvia_mm"] / totales["normal_mm"]
 
-    for p in alerta.PROVINCIAS:
+    for p in comun.PROVINCIAS:
         sel = totales[totales["provincia"] == p] if len(totales) else totales
         orden = sel.sort_values("fraccion", ascending=False) if len(sel) else sel
         # El nivel lo fija la SEGUNDA estacion mas mojada: hacen falta dos que
@@ -450,7 +476,10 @@ def evaluar(momento, fuente, fijo, modelo=None) -> dict:
              "fraccion_normal": _num(f["fraccion"], 3)} for _, f in totales.iterrows()],
         "estaciones": {"lluvia": int(len(lluvia)),
                        "validas_en_ventana": int(estado["descartada_por"].eq("").sum()),
-                       "transmitiendo": int(len(vigentes))},
+                       "transmitiendo": int(len(vigentes)),
+                       # Lluvia, temperatura o nieve que no respondieron: ver bajar_todo.
+                       "sin_respuesta": len(fallidas),
+                       "sin_respuesta_codigos": [f"{n} {c}" for n, c in fallidas]},
     }
 
 
@@ -489,6 +518,15 @@ def boletin(r: dict) -> str:
         trans = f"{v['estaciones_transmitiendo']}" + (" (DATOS INSUFICIENTES)" if v["datos_insuficientes"] else "")
         lineas.append(f"| {p} | **{SIGNO[v['nivel']]}** | {v['probabilidad']:.0%} | {lluvia} | "
                       f"{v['fraccion_normal']:.0%} | {sig} | {trans} |")
+    n_mudas = r["estaciones"].get("sin_respuesta", 0)
+    if n_mudas:
+        plural = n_mudas != 1
+        lineas += ["", f"**{n_mudas} estacion{'es' if plural else ''} no "
+                   f"respondi{'eron' if plural else 'o'} a VIPNET** y "
+                   f"queda{'n' if plural else ''} sin dato en este boletin: "
+                   f"{', '.join(r['estaciones']['sin_respuesta_codigos'])}. Sin dato no es "
+                   "cero: si una provincia queda con pocas estaciones, sale marcada "
+                   "DATOS INSUFICIENTES."]
     d = r["deshielo"]
     lineas += ["", f"**Deshielo (experimental):** {'ACTIVO' if d['activo'] else 'inactivo'} "
                f"(ultimo dia completo, {d['dia']}). "
@@ -529,6 +567,9 @@ def imprimir(r: dict):
         f"temporal desde {pd.Timestamp(t['inicio']):%d-%m %H:%M}"
     print(f"\n{m:%d-%m-%Y %H:%M}  ({cab}; {r['estaciones']['transmitiendo']} estaciones "
           f"transmitiendo; {r['fuente']})")
+    if r["estaciones"].get("sin_respuesta"):
+        print(f"  {r['estaciones']['sin_respuesta']} estaciones no respondieron y quedan "
+              "sin dato")
     for p, v in r["provincias"].items():
         aviso = "  DATOS INSUFICIENTES" if v["datos_insuficientes"] else ""
         print(f"  {p:<7} {SIGNO[v['nivel']]:<9} P {v['probabilidad']:.2f}  "
@@ -558,13 +599,13 @@ def repasar(fijo, cache):
     ref = pd.read_csv(RAIZ / "outputs" / "m5_niveles.csv")
     print("\nRepaso: el final de cada temporal regional, contra m5_niveles "
           "(nivel con el modelo de los tres inviernos)")
-    print(f"  {'temporal':<12} " + "".join(f"{p:<26}" for p in alerta.PROVINCIAS))
+    print(f"  {'temporal':<12} " + "".join(f"{p:<26}" for p in comun.PROVINCIAS))
     iguales = total = 0
     for _, t in tor[tor["regional"]].iterrows():
         momento = (t["fin"] + pd.Timedelta(minutes=30)).floor("30min")
         r = evaluar(momento, cache, fijo)
         celdas = []
-        for p in alerta.PROVINCIAS:
+        for p in comun.PROVINCIAS:
             vivo = r["provincias"][p]
             f = ref[(ref["temporal"] == t["temporal"]) & (ref["provincia"] == p)]
             esperado = f["nivel"].iloc[0] if len(f) else "excluida"

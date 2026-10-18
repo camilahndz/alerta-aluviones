@@ -68,7 +68,20 @@ LOS TRES VEREDICTOS
     no_predicho     hay unidades susceptibles cerca y ninguna supero un umbral
                     de lluvia. Esto si es un error del modelo.
 
-    predicho        al menos una unidad susceptible cerca supero Caine.
+    predicho        al menos una unidad susceptible cerca supero Caine en un
+                    episodio de la fecha de la entrada.
+
+LA FECHA TAMBIEN CUENTA
+
+    Una entrada solo puede acertar con los episodios de su fecha: los que
+    empiezan a lo sumo un dia despues y terminan a lo sumo un dia antes de la
+    fecha reportada (HOLGURA_DIAS, la misma regla de m5_calibracion.py). Lo
+    mismo para la lluvia que se reporta junto al veredicto.
+
+    Hasta octubre de 2026 se tomaba toda la ventana de validacion, de junio a
+    agosto, y una activacion de agosto salia "predicha" con la lluvia de julio:
+    Llimpo (15-08) con 216 mm en 53,5 h y Cutun (16-08) con 242,5 mm en
+    116,5 h, cifras del temporal de julio. Auditoria del 17-10-2026, A1.
 
 Uso:
 
@@ -85,7 +98,6 @@ from __future__ import annotations
 import argparse
 import re
 import sys
-import unicodedata
 import warnings
 from pathlib import Path
 
@@ -95,10 +107,16 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from clases_cuenca import CLASES_SUSCEPTIBLES  # noqa: E402
+# cargar_comunas y sin_tildes viven en comun.py desde octubre de 2026. Se
+# importan aca tambien porque ocho scripts de M5 y M6 los llaman como
+# m5.cargar_comunas y m5.sin_tildes: es la misma funcion, no una copia.
+from comun import COMUNAS_LOCAL, cargar_comunas, sin_tildes  # noqa: E402, F401
+from config import HOLGURA_DIAS  # noqa: E402
 from m4_umbrales import caine_intensidad_critica  # noqa: E402
 
 RAIZ = Path(__file__).resolve().parent.parent
 CRS_METRICO = "EPSG:32719"
+ZONA = "America/Santiago"
 
 INVENTARIO = RAIZ / "docs" / "inventario_activaciones_2026-07.csv"
 OSM = RAIZ / "data" / "raw" / "osm" / "chile.gpkg"
@@ -141,12 +159,6 @@ VALIDACION_HASTA = "2026-08-24"    # exclusivo: incluye todo el 23 de agosto
 MARGEN_COMUNA_M = 2000.0
 
 
-def sin_tildes(texto) -> str:
-    bajo = str(texto or "").lower()
-    return "".join(c for c in unicodedata.normalize("NFD", bajo)
-                   if unicodedata.category(c) != "Mn")
-
-
 def cargar_osm() -> gpd.GeoDataFrame:
     """Cauces y lugares con nombre del extracto, en un solo marco."""
     if not OSM.exists():
@@ -164,46 +176,6 @@ def cargar_osm() -> gpd.GeoDataFrame:
         pd.concat([cauces[cols], lugares[cols]], ignore_index=True), crs=cauces.crs)
     osm["clave"] = osm["name"].map(sin_tildes)
     return osm.to_crs(CRS_METRICO)
-
-
-COMUNAS_LOCAL = RAIZ / "data" / "raw" / "limites" / "geoBoundaries-CHL-ADM3.geojson"
-
-
-def cargar_comunas() -> gpd.GeoDataFrame:
-    """Limites comunales, de la misma fuente y el mismo commit que usa M3.
-
-    Se bajan una vez y quedan en data/raw/limites/. Hasta octubre de 2026 se
-    leian de GitHub en cada corrida, y dos veces el mismo dia llego el archivo
-    cortado a la mitad: pyogrio aborta con "Unterminated object", que al menos
-    es un error que se ve. Para la alerta en vivo, que corre cada hora, depender
-    de esa descarga no sirve. La URL apunta a un commit fijo, asi que la copia
-    local es byte a byte el mismo dato. Antes de guardarla se comprueba que el
-    JSON este completo: una copia truncada en disco seria peor que la descarga.
-    """
-    import json
-    import time
-
-    import requests
-    from m3_exposicion import URL_COMUNAS
-
-    if not COMUNAS_LOCAL.exists():
-        for intento in range(5):
-            try:
-                r = requests.get(URL_COMUNAS, timeout=180)
-                r.raise_for_status()
-                if not json.loads(r.content).get("features"):
-                    raise ValueError("el GeoJSON llego sin comunas")
-                COMUNAS_LOCAL.parent.mkdir(parents=True, exist_ok=True)
-                COMUNAS_LOCAL.write_bytes(r.content)
-                break
-            except (requests.RequestException, ValueError) as e:
-                if intento == 4:
-                    sys.exit(f"No pude bajar las comunas de {URL_COMUNAS}: {e}")
-                time.sleep(10 * (intento + 1))
-    comunas = gpd.read_file(COMUNAS_LOCAL).to_crs(CRS_METRICO)
-    comunas["clave"] = comunas["shapeName"].map(sin_tildes)
-    return comunas[["shapeName", "clave", "geometry"]].rename(
-        columns={"shapeName": "comuna"})
 
 
 def _texto(valor) -> str:
@@ -290,6 +262,59 @@ def positivas_en_ventana(gatillo: pd.DataFrame, columna: str,
     return set(gatillo.loc[en_ventana & supera, "id_cuenca"])
 
 
+def emparejar_entrada(gatillo: pd.DataFrame, ids_cercanas, fecha,
+                      lecturas: dict[str, str],
+                      holgura_dias: int = HOLGURA_DIAS) -> dict:
+    """Que dijo el modelo sobre una entrada, solo con los episodios de su fecha.
+
+    Toma los pares cuenca-episodio de las unidades cercanas cuya ventana
+    [inicio - holgura, fin + holgura] contiene la fecha de la entrada, y
+    devuelve:
+
+        aciertos          {lectura: ids de cuenca que superan el umbral}
+        razon_max_caine   la mayor razon I / I_Caine(D) de esos pares
+        lluvia_max_mm     la lluvia del par mas lluvioso
+        duracion_h        y su duracion
+
+    Las fechas se comparan como dias de Chile. gatillo.gpkg guarda UTC, y un
+    episodio que termina a las 22:00 de Chile ya es el dia siguiente en UTC:
+    leido asi, la holgura se correria un dia. Es la misma cuenta de
+    m5_calibracion.etiquetar.
+
+    Sin pares en la fecha, no hay aciertos y la lluvia queda NaN: el modelo no
+    vio ningun episodio ese dia, que es distinto de ver uno que no alcanzo.
+    """
+    pares = gatillo[gatillo["id_cuenca"].isin(set(ids_cercanas))]
+    dia = pd.Timestamp(fecha).normalize()
+    holgura = pd.Timedelta(days=holgura_dias)
+    ini = (pd.to_datetime(pares["inicio"], utc=True).dt.tz_convert(ZONA)
+           .dt.tz_localize(None).dt.normalize())
+    fin = (pd.to_datetime(pares["fin"], utc=True).dt.tz_convert(ZONA)
+           .dt.tz_localize(None).dt.normalize())
+    pares = pares[(ini - holgura <= dia) & (dia <= fin + holgura)]
+
+    aciertos = {
+        etiqueta: set(pares.loc[pares[col].fillna(False).astype(bool), "id_cuenca"])
+        for etiqueta, col in lecturas.items() if col in pares.columns
+    }
+    if pares.empty:
+        return {"aciertos": aciertos, "razon_max_caine": float("nan"),
+                "lluvia_max_mm": float("nan"), "duracion_h": float("nan")}
+
+    critica = caine_intensidad_critica(pares["duracion_h"].to_numpy())
+    razones = pares["i_media_mm_h"].to_numpy() / critica
+    mayor = pares.loc[pares["lluvia_mm"].idxmax()]
+    return {"aciertos": aciertos,
+            "razon_max_caine": float(np.nanmax(razones)),
+            "lluvia_max_mm": float(mayor["lluvia_mm"]),
+            "duracion_h": float(mayor["duracion_h"])}
+
+
+def _redondeado(valor: float, decimales: int):
+    """Un numero para el CSV; NaN queda como campo vacio."""
+    return round(valor, decimales) if pd.notna(valor) else ""
+
+
 def main():
     ap = argparse.ArgumentParser(
         description="M5 - Compara el modelo contra las activaciones documentadas.")
@@ -319,6 +344,12 @@ def main():
     if args.solo_fuertes:
         inventario = inventario[inventario["evidencia"].isin(EVIDENCIA_FUERTE)]
     print(f"\nEntradas del inventario: {len(inventario)}")
+    # Cada entrada se empareja por fecha (ver emparejar_entrada). Una sin fecha
+    # legible no podria acertar nunca y saldria como falla del modelo.
+    sin_fecha = inventario[pd.to_datetime(inventario["fecha"], errors="coerce").isna()]
+    if len(sin_fecha):
+        sys.exit(f"Entradas sin fecha legible en {INVENTARIO.name}: "
+                 f"{', '.join(sin_fecha['id'])}. Sin fecha no se pueden emparejar.")
 
     unidades = gpd.read_file(ruta_susc).to_crs(CRS_METRICO)
     susceptibles = unidades[unidades["clase"].isin(CLASES_SUSCEPTIBLES)]
@@ -334,9 +365,9 @@ def main():
         print(f"Con {int((susceptibles['clase'] == 'tronco').sum())} unidades troncales: "
               "el recall de 2026 con troncos NO es validacion, los motivo este inventario")
     # Solo los episodios de la ventana que se valida: ver VALIDACION_DESDE.
-    inicio = pd.to_datetime(gatillo["inicio"], utc=True).dt.tz_convert("America/Santiago")
-    en_ventana = ((inicio >= pd.Timestamp(VALIDACION_DESDE, tz="America/Santiago"))
-                  & (inicio < pd.Timestamp(VALIDACION_HASTA, tz="America/Santiago")))
+    inicio = pd.to_datetime(gatillo["inicio"], utc=True).dt.tz_convert(ZONA)
+    en_ventana = ((inicio >= pd.Timestamp(VALIDACION_DESDE, tz=ZONA))
+                  & (inicio < pd.Timestamp(VALIDACION_HASTA, tz=ZONA)))
     print(f"Pares cuenca-episodio en gatillo.gpkg: {len(gatillo):,}; en la ventana "
           f"{VALIDACION_DESDE} a {VALIDACION_HASTA}: {int(en_ventana.sum()):,}")
     gatillo = gatillo[en_ventana]
@@ -353,14 +384,16 @@ def main():
         gatillo["supera_critico_sin_interp"] = gatillo["razon_caine_critica_estacion"] >= 1.0
         LECTURAS.update({"episodio, estacion": "supera_caine_sin_interp",
                          "critica, estacion": "supera_critico_sin_interp"})
+    LECTURAS = {e: c for e, c in LECTURAS.items() if c in gatillo.columns}
     positivas_por_lectura = {
-        etiqueta: positivas_en_ventana(gatillo, col)
-        for etiqueta, col in LECTURAS.items() if col in gatillo.columns
+        etiqueta: positivas_en_ventana(gatillo, col) for etiqueta, col in LECTURAS.items()
     }
-    positivas = positivas_por_lectura["episodio"]
     print(f"Unidades susceptibles: {len(susceptibles):,}")
     for etiqueta, conjunto in positivas_por_lectura.items():
-        print(f"Unidades que superan Caine ({etiqueta}): {len(conjunto):,}")
+        print(f"Unidades que superan Caine ({etiqueta}) en algun episodio de la "
+              f"ventana: {len(conjunto):,}")
+    print(f"Cada entrada se empareja solo con los episodios de su fecha, con "
+          f"{HOLGURA_DIAS} dia de holgura (la regla de m5_calibracion.py)")
 
     print("\nUbicando cada entrada en OpenStreetMap...")
     osm = cargar_osm()
@@ -368,6 +401,8 @@ def main():
 
     radio_m = args.radio_km * 1000
     filas = []
+    # Los aciertos de cada fila bajo cada lectura, para la tabla de recall.
+    aciertos_por_fila = []
     for _, entrada in inventario.iterrows():
         geo, como = ubicar(entrada.to_dict(), osm, comunas)
         # `or` no sirve: un campo vacio llega como NaN, que es verdadero.
@@ -379,10 +414,18 @@ def main():
                           "n_susceptibles": 0, "n_positivas": 0,
                           "veredicto": "sin_ubicar", "ids_positivas": "",
                           "ids_cercanas": ""})
+            aciertos_por_fila.append({})
             continue
 
         cerca = susceptibles[susceptibles.geometry.distance(geo) <= radio_m]
-        acertadas = cerca[cerca["id_cuenca"].isin(positivas)]
+        # Que tan cerca estuvo la lluvia de lo que Caine pide, en los episodios
+        # de la fecha de la entrada. Es el numero que convierte una falla en
+        # informacion: una quebrada que se activo con el 0,7 de lo que el umbral
+        # exige dice donde deberia estar un umbral local, mientras que una que
+        # se activo con el 0,05 diria que el mecanismo es otro.
+        r = emparejar_entrada(gatillo, cerca["id_cuenca"], entrada["fecha"], LECTURAS)
+        acertadas = cerca[cerca["id_cuenca"].isin(r["aciertos"]["episodio"])]
+        aciertos_por_fila.append(r["aciertos"])
 
         if cerca.empty:
             veredicto = "sin_cobertura"
@@ -391,29 +434,12 @@ def main():
         else:
             veredicto = "predicho"
 
-        # Que tan cerca estuvo la lluvia de lo que Caine pide. Es el numero que
-        # convierte una falla en informacion: una quebrada que se activo con el
-        # 0,7 de lo que el umbral exige dice donde deberia estar un umbral
-        # local, mientras que una que se activo con el 0,05 diria que el
-        # mecanismo es otro.
-        pares = gatillo[gatillo["id_cuenca"].isin(cerca["id_cuenca"])]
-        if pares.empty:
-            razon = float("nan")
-            lluvia = duracion = float("nan")
-        else:
-            critica = caine_intensidad_critica(pares["duracion_h"].to_numpy())
-            razones = pares["i_media_mm_h"].to_numpy() / critica
-            razon = float(np.nanmax(razones)) if len(razones) else float("nan")
-            mayor = pares.loc[pares["lluvia_mm"].idxmax()]
-            lluvia = float(mayor["lluvia_mm"])
-            duracion = float(mayor["duracion_h"])
-
         filas.append({**entrada, "nombre": nombre, "ubicacion": como,
                       "n_susceptibles": len(cerca), "n_positivas": len(acertadas),
                       "veredicto": veredicto,
-                      "razon_max_caine": round(razon, 3) if razon == razon else "",
-                      "lluvia_max_mm": round(lluvia, 1) if lluvia == lluvia else "",
-                      "duracion_h": round(duracion, 1) if duracion == duracion else "",
+                      "razon_max_caine": _redondeado(r["razon_max_caine"], 3),
+                      "lluvia_max_mm": _redondeado(r["lluvia_max_mm"], 1),
+                      "duracion_h": _redondeado(r["duracion_h"], 1),
                       "ids_positivas": " ".join(
                           str(int(i)) for i in acertadas["id_cuenca"].head(5)),
                       "ids_cercanas": " ".join(
@@ -460,13 +486,14 @@ def main():
         agosto = res[res["fecha"].str.startswith("2026-08")]
         print(f"  {'lectura':<18} {'todas':>14} {'evidencia fuerte':>18} "
               f"{'julio':>14} {'agosto':>14}")
-        for etiqueta, conjunto in positivas_por_lectura.items():
-            ids = {str(i) for i in conjunto}
+        for etiqueta in positivas_por_lectura:
             linea = []
             for grupo in (res, res[res["evidencia"].isin(EVIDENCIA_FUERTE)], julio, agosto):
                 ev = grupo[~grupo["veredicto"].isin(("sin_cobertura", "sin_ubicar"))]
-                aciertos = sum(1 for _, f in ev.iterrows()
-                               if set(str(f["ids_cercanas"]).split()) & ids)
+                # Aciertos de la fecha de cada entrada, no de toda la ventana:
+                # ver emparejar_entrada.
+                aciertos = sum(1 for i in ev.index
+                               if aciertos_por_fila[i].get(etiqueta))
                 linea.append(f"{aciertos}/{len(ev)} "
                              f"({100 * aciertos / max(len(ev), 1):.0f}%)")
             print(f"  {etiqueta:<18} {linea[0]:>14} {linea[1]:>18} "

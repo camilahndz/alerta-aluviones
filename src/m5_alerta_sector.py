@@ -108,26 +108,20 @@ import sys
 import warnings
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import comun  # noqa: E402
 import m5_calibracion as cal  # noqa: E402
 import m5_validacion as m5  # noqa: E402
+# La division administrativa de la region vive en comun.py. Se importa aca
+# tambien porque m5_niveles la lee como alerta.PROVINCIAS: es la misma tabla.
+from comun import PROVINCIA_DE, PROVINCIAS  # noqa: E402
 from m4_interpolacion import EVENTO_MINIMO_MM  # noqa: E402
 from m4_umbrales import caine_intensidad_critica  # noqa: E402
 
 RAIZ = Path(__file__).resolve().parent.parent
 ZONA = "America/Santiago"
-
-# La division administrativa vigente de la region (DPA de la SUBDERE). Las
-# claves van sin tildes, como las escribe m5_validacion.sin_tildes.
-PROVINCIAS = {
-    "Elqui": ("la serena", "coquimbo", "andacollo", "la higuera", "paihuano", "vicuna"),
-    "Limari": ("ovalle", "combarbala", "monte patria", "punitaqui", "rio hurtado"),
-    "Choapa": ("illapel", "canela", "los vilos", "salamanca"),
-}
-PROVINCIA_DE = {c: p for p, comunas in PROVINCIAS.items() for c in comunas}
 
 PAUSA_H = 24
 REGIONAL_MIN_ESTACIONES = 5
@@ -174,7 +168,7 @@ def provincia_de_cuencas(unidades, comunas) -> pd.Series:
 def etiquetar(tor: pd.DataFrame, inv: pd.DataFrame):
     """Etiqueta por provincia y temporal, y la del temporal entero."""
     inv = inv.copy()
-    inv["provincia"] = inv["comuna"].map(lambda c: PROVINCIA_DE.get(m5.sin_tildes(m5._texto(c))))
+    inv["provincia"] = inv["comuna"].map(lambda c: PROVINCIA_DE.get(comun.sin_tildes(m5._texto(c))))
     holgura = pd.Timedelta(days=cal.HOLGURA_DIAS)
     desde = (tor["inicio"].dt.tz_convert(ZONA).dt.normalize() - holgura).dt.date
     hasta = (tor["fin"].dt.tz_convert(ZONA).dt.normalize() + holgura).dt.date
@@ -261,8 +255,8 @@ def main():
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        comunas = m5.cargar_comunas()
-    unidades = gpd.read_file(procesados / "susceptibilidad.gpkg").to_crs(m5.CRS_METRICO)
+        comunas = comun.cargar_comunas()
+    unidades = gpd.read_file(procesados / "susceptibilidad.gpkg").to_crs(comun.CRS_METRICO)
     unidades = unidades[unidades["id_cuenca"].isin(gatillo["id_cuenca"])]
     prov = provincia_de_cuencas(unidades, comunas)
     print(f"\nCuencas con lluvia en M4: {len(unidades)}; por provincia: "

@@ -115,8 +115,10 @@ import osmnx as ox  # noqa: E402
 from osmnx._errors import InsufficientResponseError  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import config  # noqa: E402
 from clases_cuenca import CLASES_EXPOSICION  # noqa: E402
 from cobertura import COBERTURA_MINIMA, verificar_cobertura  # noqa: E402
+from comun import URL_COMUNAS, cargar_comunas  # noqa: E402, F401
 
 RAIZ = Path(__file__).resolve().parent.parent
 
@@ -272,13 +274,11 @@ REINTENTOS_OSM = 6
 ESPERA_OSM_S = 45
 PAUSA_ENTRE_CUADROS_S = 5
 
-# Fuente de comunas: geoBoundaries ADM3, que para Chile viene de la Biblioteca
-# del Congreso Nacional (BCN). Se apunta a un commit fijo para que la corrida
-# sea reproducible.
-URL_COMUNAS = (
-    "https://github.com/wmgeolab/geoBoundaries/raw/9469f09/"
-    "releaseData/gbOpen/CHL/ADM3/geoBoundaries-CHL-ADM3.geojson"
-)
+# Las comunas (geoBoundaries ADM3, de la BCN, en un commit fijo) se leen con
+# comun.cargar_comunas, de la copia local comprobada de data/raw/limites/.
+# Hasta octubre de 2026 M3 las leia de la URL en cada corrida, aunque esa
+# descarga ya habia llegado cortada dos veces. URL_COMUNAS se importa de comun
+# para quien la busque aca.
 
 
 # ===========================================================================
@@ -1011,7 +1011,7 @@ def main():
     ap.add_argument("--extracto-osm", type=Path, default=RUTA_EXTRACTO_OSM,
                     help="Extracto de Geofabrik con la red vial. Si existe se "
                          "usa en vez de consultar Overpass.")
-    ap.add_argument("--umbral-cauce-km2", type=float, default=0.15,
+    ap.add_argument("--umbral-cauce-km2", type=float, default=config.UMBRAL_CAUCE_KM2,
                     help="Area drenada bajo la cual el cauce deja de trazarse. "
                          "Por defecto, el mismo valor con que M1 definio la red.")
     # 45 m es tolerancia geometrica, NO alcance de runout. Ver la nota sobre
@@ -1038,7 +1038,7 @@ def main():
         if not ruta.exists():
             sys.exit(f"Falta {ruta}\nCorre antes los scripts de M1 y M2.")
 
-    cobertura = verificar_cobertura(
+    verificar_cobertura(
         args.procesados / "dem_utm19s.tif",
         RAIZ / "data" / "raw" / "limite_coquimbo.gpkg",
         args.cobertura_minima,
@@ -1087,9 +1087,9 @@ def main():
 
     verificar_solape(trayectorias, vias)
 
-    print("\nBajando limites comunales...")
-    comunas = gpd.read_file(URL_COMUNAS).to_crs(CRS_METRICO)
-    comunas = comunas.rename(columns={"shapeName": "comuna"})
+    print("\nLimites comunales (copia local de data/raw/limites/)...")
+    comunas = cargar_comunas()
+    print(f"  {len(comunas)} comunas")
 
     puntos = puntos_de_corte(trayectorias, vias, comunas, args.tolerancia_m)
     puntos["area_cruce_km2"] = area_en_cruce(puntos, trayectorias, ruta_acc).round(3)

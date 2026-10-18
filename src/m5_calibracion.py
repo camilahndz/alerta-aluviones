@@ -128,6 +128,7 @@ import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import config  # noqa: E402
 from clases_cuenca import CLASES_SUSCEPTIBLES  # noqa: E402
 from m4_umbrales import CAINE_ALFA, CAINE_BETA, caine_intensidad_critica  # noqa: E402
 import m5_validacion as m5  # noqa: E402
@@ -143,7 +144,9 @@ POSITIVOS = {
     "fuerte": ("aluvion", "activacion"),
 }
 DUDOSOS = ("escurrimiento", "alerta_preventiva")
-HOLGURA_DIAS = 1
+# La misma holgura que usa m5_validacion.emparejar_entrada: vive en config.py
+# para que las dos midan con la misma regla.
+HOLGURA_DIAS = config.HOLGURA_DIAS
 
 # Entrenamiento: inviernos hidrologicos 2024 y 2025 (abril a marzo, ver
 # m4_lluvia.invierno). Prueba: la ventana de m5_validacion.

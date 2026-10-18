@@ -66,7 +66,7 @@ import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import m5_alerta_sector as alerta  # noqa: E402
+import comun  # noqa: E402
 import m5_calibracion as cal  # noqa: E402
 import m5_cortes as mc  # noqa: E402
 import m5_validacion as m5  # noqa: E402
@@ -79,7 +79,7 @@ CAJA = (-71.85, -32.40, -69.70, -28.95)      # oeste, sur, este, norte
 RES_TEXTURA = 0.002                          # ~200 m
 RES_ELEVACION = 0.004                        # ~400 m; la malla no necesita mas
 SIMPLIFICAR_GRADOS = 0.0005                  # ~50 m, menos que un pixel de textura
-PROVINCIAS = list(alerta.PROVINCIAS)
+PROVINCIAS = list(comun.PROVINCIAS)
 NIVELES = ["ninguna"] + [n for n, _ in vivo.niv.NIVELES]
 
 ESCENARIOS = [
@@ -201,10 +201,10 @@ def capas(fijo):
     procesados = RAIZ / "data" / "processed"
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        comunas = m5.cargar_comunas()
+        comunas = comun.cargar_comunas()
 
     # --- provincias ---
-    comunas["provincia"] = comunas["clave"].map(alerta.PROVINCIA_DE)
+    comunas["provincia"] = comunas["clave"].map(comun.PROVINCIA_DE)
     prov = comunas[comunas["provincia"].notna()].dissolve("provincia").to_crs(4326)
     prov = prov.loc[PROVINCIAS]
     bordes = {"provincia": [], "c": []}
@@ -230,7 +230,7 @@ def capas(fijo):
     # --- cruces de ruta ---
     pc = gpd.read_file(procesados / "puntos_corte.gpkg", ignore_geometry=True)
     pc = pc.sort_values("rank")
-    pc["provincia"] = pc["comuna"].map(lambda c: alerta.PROVINCIA_DE.get(m5.sin_tildes(c)))
+    pc["provincia"] = pc["comuna"].map(lambda c: comun.PROVINCIA_DE.get(comun.sin_tildes(c)))
     guardar("cruces.json", {
         "lon": pc["lon"].round(5).tolist(), "lat": pc["lat"].round(5).tolist(),
         "rank": pc["rank"].astype(int).tolist(),
@@ -312,7 +312,7 @@ def activaciones(comunas):
             lon, lat = gpd_a_lonlat(punto)
             fila.update(lon=round(lon, 5), lat=round(lat, 5))
         if lineas is not None:
-            g = gpd.GeoSeries([lineas], crs=m5.CRS_METRICO).to_crs(4326).iloc[0]
+            g = gpd.GeoSeries([lineas], crs=comun.CRS_METRICO).to_crs(4326).iloc[0]
             g = g.simplify(SIMPLIFICAR_GRADOS)
             partes = [q for q in getattr(g, "geoms", [g]) if not q.is_empty]
             fila["lineas"] = [[round(x, 4) for xy in q.coords for x in xy[:2]] for q in partes]
@@ -326,7 +326,7 @@ def activaciones(comunas):
 
 def gpd_a_lonlat(punto):
     import geopandas as gpd
-    p = gpd.GeoSeries([punto], crs=m5.CRS_METRICO).to_crs(4326).iloc[0]
+    p = gpd.GeoSeries([punto], crs=comun.CRS_METRICO).to_crs(4326).iloc[0]
     return p.x, p.y
 
 
