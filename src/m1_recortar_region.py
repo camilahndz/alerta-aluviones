@@ -29,7 +29,6 @@ from __future__ import annotations
 
 import argparse
 import sys
-import urllib.request
 from pathlib import Path
 
 import geopandas as gpd
@@ -39,59 +38,14 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from cobertura import COBERTURA_MINIMA, verificar_cobertura  # noqa: E402
+# obtener_limite vive en cobertura.py desde octubre de 2026, para que el primer
+# paso de M1 lo tenga antes de verificar el DEM. Ver la cabecera de cobertura.
+from cobertura import (COBERTURA_MINIMA, NOMBRE_REGION, URL_REGIONES,  # noqa: E402, F401
+                       obtener_limite, verificar_cobertura)
 
 RAIZ = Path(__file__).resolve().parent.parent
 
 CRS_METRICO = "EPSG:32719"
-
-# geoBoundaries, division administrativa de Chile. Se apunta a un commit fijo
-# (9469f09) y no a la rama principal, para que el resultado sea reproducible:
-# si manana actualizan el dato, este script sigue bajando exactamente el mismo.
-#
-# Se prefirio esta fuente sobre Natural Earth despues de comparar ambas: da
-# 40.576 km2 contra los ~40.580 km2 oficiales de la region, con 182.558 vertices
-# de detalle. Natural Earth daba 37.407 km2 (8% de error) con solo 373 vertices.
-URL_REGIONES = (
-    "https://github.com/wmgeolab/geoBoundaries/raw/9469f09/"
-    "releaseData/gbOpen/CHL/ADM1/geoBoundaries-CHL-ADM1.geojson"
-)
-NOMBRE_REGION = "Coquimbo"
-
-
-def obtener_limite(cache: Path, nombre: str) -> gpd.GeoDataFrame:
-    """Baja el limite regional (o lo lee del cache) y lo deja en UTM 19S."""
-    if cache.exists():
-        print(f"Limite regional  : {cache} (ya estaba)")
-        return gpd.read_file(cache).to_crs(CRS_METRICO)
-
-    cache.parent.mkdir(parents=True, exist_ok=True)
-    crudo = cache.parent / "geoBoundaries-CHL-ADM1.geojson"
-
-    # Se baja el archivo entero a disco antes de abrirlo. Leerlo directo desde
-    # la URL falla de forma intermitente: GDAL lo lee en streaming y si la
-    # conexion se corta a la mitad revienta con "Unterminated array".
-    if not crudo.exists() or crudo.stat().st_size == 0:
-        print("Bajando division administrativa de Chile...")
-        temporal = crudo.with_suffix(".geojson.parcial")
-        with urllib.request.urlopen(URL_REGIONES, timeout=300) as respuesta:
-            temporal.write_bytes(respuesta.read())
-        temporal.rename(crudo)
-        print(f"  {crudo.stat().st_size / 1e6:.1f} MB -> {crudo}")
-
-    regiones = gpd.read_file(crudo)
-
-    limite = regiones[
-        regiones["shapeName"].str.contains(nombre, case=False, na=False)
-    ].copy()
-    if limite.empty:
-        disponibles = ", ".join(sorted(regiones["shapeName"].dropna()))
-        sys.exit(f"No encontre la region '{nombre}'.\nDisponibles: {disponibles}")
-
-    limite.to_file(cache, driver="GPKG")
-    print(f"  limite de {nombre} guardado en {cache}")
-
-    return limite.to_crs(CRS_METRICO)
 
 
 def filtrar(cuencas: gpd.GeoDataFrame, red: gpd.GeoDataFrame,
@@ -202,18 +156,18 @@ def main():
         if not ruta.exists():
             sys.exit(f"Falta {ruta}\nCorre antes: python src/m1_terreno.py")
 
+    # Primero el limite y despues la verificacion, que lo necesita. Hasta
+    # octubre de 2026 el orden era el inverso y, en una maquina limpia, la
+    # verificacion corria sin limite y no verificaba nada. Ver src/cobertura.py.
+    ruta_limite = RAIZ / "data" / "raw" / f"limite_{args.region.lower()}.gpkg"
+    limite = obtener_limite(ruta_limite, args.region)
+    print(f"  superficie de la region: {limite.geometry.area.sum() / 1e6:,.0f} km2")
+
     # Este script no lee el DEM, pero las cuencas que filtra salieron de el. Se
     # verifica igual: si el DEM en disco es parcial, las cuencas tambien lo son
-    # y filtrarlas por region solo esconderia el problema mas abajo. Ver
-    # src/cobertura.py.
-    verificar_cobertura(args.procesados / "dem_utm19s.tif",
-                        RAIZ / "data" / "raw" / "limite_coquimbo.gpkg",
+    # y filtrarlas por region solo esconderia el problema mas abajo.
+    verificar_cobertura(args.procesados / "dem_utm19s.tif", ruta_limite,
                         COBERTURA_MINIMA)
-
-    limite = obtener_limite(
-        RAIZ / "data" / "raw" / f"limite_{args.region.lower()}.gpkg", args.region
-    )
-    print(f"  superficie de la region: {limite.geometry.area.sum() / 1e6:,.0f} km2")
 
     cuencas = gpd.read_file(ruta_cuencas)
     red = gpd.read_file(ruta_red)

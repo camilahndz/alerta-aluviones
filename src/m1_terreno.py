@@ -11,7 +11,8 @@ eso es lo que hace este script, en cinco pasos:
     4. Acumulacion de flujo: cuantos pixeles drenan hacia cada pixel.
     5. Delinear la red de quebradas y las cuencas que las alimentan.
 
-Uso tipico:
+Uso tipico (cauce de 0,15 km2 y cuencas de 0,4 km2 o mas, los valores de
+src/config.py):
 
     python src/m1_terreno.py
 
@@ -43,6 +44,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import compat_pysheds  # noqa: E402,F401  parche numpy 2, tiene que ir antes de pysheds
+import config  # noqa: E402
 from cobertura import COBERTURA_MINIMA, verificar_cobertura  # noqa: E402
 from pysheds.grid import Grid  # noqa: E402
 from pysheds.sview import Raster, ViewFinder  # noqa: E402
@@ -627,9 +629,12 @@ def main():
                     help="GeoTIFF de elevacion de entrada.")
     ap.add_argument("--salida", type=Path, default=RAIZ / "data" / "processed",
                     help="Carpeta donde escribir los resultados.")
-    ap.add_argument("--umbral-km2", type=float, default=0.5,
+    # Los defaults salen de config.py. Hasta octubre de 2026 eran 0,5 y 1,0,
+    # distintos de los 0,15 y 0,4 con que se corrio todo: una corrida sin
+    # argumentos daba otra red de quebradas sin avisar. Auditoria 17-10, A5.
+    ap.add_argument("--umbral-km2", type=float, default=config.UMBRAL_CAUCE_KM2,
                     help="Area drenada minima para considerar que hay cauce (km2).")
-    ap.add_argument("--area-min-km2", type=float, default=1.0,
+    ap.add_argument("--area-min-km2", type=float, default=config.AREA_MIN_KM2,
                     help="Cuencas mas chicas que esto se descartan.")
     args = ap.parse_args()
 

@@ -78,6 +78,7 @@ import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import config  # noqa: E402
 from cobertura import COBERTURA_MINIMA, verificar_cobertura  # noqa: E402
 from m1_subcuencas import (bocas_de_afluente, cargar_flujo, etiquetar,  # noqa: E402
                            indice_aguas_abajo, vectorizar)
@@ -88,10 +89,12 @@ CRS_METRICO = "EPSG:32719"
 # Los id de tronco arrancan aca: 1..n son costeras, 100.000+ subcuencas.
 ID_BASE_TRONCO = 200_000
 
-AREA_MIN_KM2 = 50.0        # donde terminan las subcuencas de m1_subcuencas.py
-VALLE_MIN_KM2 = 200.0      # mismas reglas de boca que m1_subcuencas.py
-RAZON_MAX = 0.25
-UMBRAL_CAUCE_KM2 = 0.15
+# Las reglas de boca son las de m1_subcuencas.py, desde config.py: un tronco
+# empieza donde termina una subcuenca de confluencia.
+AREA_MIN_KM2 = config.AREA_MAX_KM2
+VALLE_MIN_KM2 = config.VALLE_MIN_KM2
+RAZON_MAX = config.RAZON_MAX
+UMBRAL_CAUCE_KM2 = config.UMBRAL_CAUCE_KM2
 TRAMO_NOMBRE_M = 3000.0    # largo del cauce, desde la boca, donde se lee el nombre
 RADIO_NOMBRE_M = 100.0
 

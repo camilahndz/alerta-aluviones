@@ -14,7 +14,9 @@ Por que Copernicus GLO-30 y no el ALOS PALSAR "12,5 m" que dice el README:
     Copernicus GLO-30 son 30 m reales, derivados de TanDEM-X, con cobertura
     global uniforme y sin registro. A igual resolucion efectiva, es mejor dato.
 
-Este script hace tres cosas:
+Este script hace tres cosas, despues de obtener el limite regional
+(data/raw/limite_coquimbo.gpkg) contra el que se verifica la cobertura de todo
+M1 (ver src/cobertura.py):
 
     1. Descarga los tiles de 1x1 grado que cubren la zona pedida.
     2. Los une en un solo raster continuo.
@@ -44,7 +46,8 @@ from rasterio.merge import merge
 from rasterio.warp import Resampling, calculate_default_transform, reproject
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from cobertura import COBERTURA_MINIMA, verificar_cobertura  # noqa: E402
+from cobertura import (COBERTURA_MINIMA, LIMITE_POR_DEFECTO, NOMBRE_REGION,  # noqa: E402
+                       obtener_limite, verificar_cobertura)
 
 RAIZ = Path(__file__).resolve().parent.parent
 
@@ -147,12 +150,17 @@ def descargar(bbox, carpeta: Path, hilos: int) -> list[Path]:
             print(f"  {n}: {e}")
         sys.exit("Vuelve a correr el script: los que ya bajaron no se repiten.")
 
-    disponibles = sorted(carpeta.glob("Copernicus_DSM_*.tif"))
+    # Solo los tiles de este bbox, no todo lo que haya en la carpeta. Con un
+    # glob de la carpeta, un tile de una prueba anterior con otro --bbox se
+    # colaba en el mosaico. Auditoria 17-10, M6.
+    disponibles = sorted(p for p in (carpeta / f"{n}.tif" for n in nombres) if p.exists())
     sin_datos = sum(1 for e in resultados.values() if "mar" in e)
     if sin_datos:
         print(f"  ({sin_datos} tiles son puro oceano y no existen, es normal)")
 
-    print(f"Tiles con terreno: {len(disponibles)}")
+    ajenos = len(list(carpeta.glob("Copernicus_DSM_*.tif"))) - len(disponibles)
+    print(f"Tiles con terreno: {len(disponibles)}"
+          + (f" ({ajenos} de otro bbox en la carpeta, no se usan)" if ajenos else ""))
     return disponibles
 
 
@@ -260,14 +268,20 @@ def main():
     carpeta_salida = RAIZ / "data" / "processed"
     carpeta_salida.mkdir(parents=True, exist_ok=True)
 
+    # El limite regional va primero, antes de bajar el primer tile: sin el,
+    # verificar_cobertura aborta, y todo M1 lo necesita. Hasta octubre de 2026
+    # lo creaba el tercer paso, y en una maquina limpia los dos primeros
+    # corrian sin verificar cobertura. Ver src/cobertura.py.
+    ruta_limite = RAIZ / "data" / "raw" / LIMITE_POR_DEFECTO.name
+    obtener_limite(ruta_limite, NOMBRE_REGION)
+
     tiles = descargar(args.bbox, carpeta_tiles, args.hilos)
     if not tiles:
         sys.exit("No se descargo ningun tile con terreno. Revisa el bbox.")
 
     mosaico = carpeta_salida / "dem_mosaico_wgs84.tif"
     unir(tiles, mosaico)
-    verificar_cobertura(mosaico, RAIZ / "data" / "raw" / "limite_coquimbo.gpkg",
-                        COBERTURA_MINIMA, etiqueta="mosaico")
+    verificar_cobertura(mosaico, ruta_limite, COBERTURA_MINIMA, etiqueta="mosaico")
 
     dem_final = carpeta_salida / "dem_utm19s.tif"
     reproyectar(mosaico, dem_final, args.resolucion, not args.conservar_mar)

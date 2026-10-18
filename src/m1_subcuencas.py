@@ -118,11 +118,13 @@ from pathlib import Path
 
 import geopandas as gpd
 import numpy as np
+import pandas as pd
 import rasterio
 from rasterio import features
 from shapely.geometry import shape
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import config  # noqa: E402
 from cobertura import COBERTURA_MINIMA, verificar_cobertura  # noqa: E402
 
 RAIZ = Path(__file__).resolve().parent.parent
@@ -252,8 +254,13 @@ def etiquetar(abajo: np.ndarray, bocas: np.ndarray) -> np.ndarray:
             break
         siguiente = nuevo
     else:
-        print(f"  AVISO: no convergio en {MAX_PASADAS} pasadas. "
-              "Puede haber un ciclo en la direccion de flujo.")
+        # Hasta octubre de 2026 esto era un aviso y el script seguia con las
+        # etiquetas a medio propagar: las celdas del ciclo, y todo lo que drena
+        # hacia el, quedaban asignadas a cualquier cosa. Auditoria 17-10, M5.
+        sys.exit(f"La duplicacion de punteros no convergio en {MAX_PASADAS} pasadas.\n"
+                 "Eso es un ciclo en la direccion de flujo, que no deberia existir "
+                 "despues del relleno de sumideros.\nRevisa direccion_flujo.tif "
+                 "(vuelve a correr m1_terreno.py) antes de seguir.")
 
     es_boca = np.zeros(abajo.size, bool)
     es_boca[bocas] = True
@@ -301,17 +308,18 @@ def main():
     ap = argparse.ArgumentParser(
         description="M1 - Delinea subcuencas en las confluencias con los valles.")
     ap.add_argument("--procesados", type=Path, default=RAIZ / "data" / "processed")
-    ap.add_argument("--umbral-km2", type=float, default=0.15,
+    # Los defaults salen de config.py, los mismos de m1_terreno y m1_troncos.
+    ap.add_argument("--umbral-km2", type=float, default=config.UMBRAL_CAUCE_KM2,
                     help="Area drenada minima para considerar que hay cauce. "
                          "El mismo valor con que M1 definio la red.")
-    ap.add_argument("--valle-min-km2", type=float, default=200.0,
+    ap.add_argument("--valle-min-km2", type=float, default=config.VALLE_MIN_KM2,
                     help="Area drenada minima del cauce receptor para que cuente "
                          "como valle principal.")
-    ap.add_argument("--area-min-km2", type=float, default=0.4,
+    ap.add_argument("--area-min-km2", type=float, default=config.AREA_MIN_KM2,
                     help="Area minima de la subcuenca. El mismo valor de M1.")
-    ap.add_argument("--area-max-km2", type=float, default=50.0,
+    ap.add_argument("--area-max-km2", type=float, default=config.AREA_MAX_KM2,
                     help="Area maxima: sobre esto ya no es una quebrada.")
-    ap.add_argument("--razon-max", type=float, default=0.25,
+    ap.add_argument("--razon-max", type=float, default=config.RAZON_MAX,
                     help="Razon maxima entre el area del afluente y la del "
                          "receptor, para no tomar ramas gemelas por afluentes.")
     ap.add_argument("--sensibilidad", action="store_true",
@@ -408,7 +416,7 @@ def main():
     costeras["origen"] = "costera"
 
     unidades = gpd.GeoDataFrame(
-        __import__("pandas").concat([costeras[cols], sub[cols]], ignore_index=True),
+        pd.concat([costeras[cols], sub[cols]], ignore_index=True),
         crs=costeras.crs)
     ruta_unidades = args.procesados / "unidades_coquimbo.gpkg"
     unidades.to_file(ruta_unidades, layer="unidades", driver="GPKG")
