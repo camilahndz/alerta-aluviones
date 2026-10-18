@@ -46,5 +46,48 @@ Para tener en cuenta en 1B:
   17 al 22. Eso mueve la tabla de recall, la de Caine × k y la conclusión de
   que Caine queda "un 30% alto". Hay que leerlo con la corrida guardada.
 
-Próximo paso exacto: prompt 1B de `docs/prompts_10_dias.md` (empieza por
-`pytest`, después `m4_lluvia.py` con cache).
+## Fase 1B (17-10-2026): re-correr y dejar las cifras verdaderas — HECHA
+
+Código sin cambios (commit `d70926f`); solo corridas y documentación. Antes de
+correr: 42 pruebas pasan, y los catálogos de VIPNET de hoy traen los mismos
+códigos que las series del cache (107 de lluvia, 113 de temperatura y 10 de
+nieve). R1 sigue en 107.
+
+Corridas, cada una con su "Verificación" contra la anterior:
+
+- `docs/corridas/2026-10-17_m4_antecedente.txt` (`m4_lluvia.py` y
+  `m4_deshielo.py`). En `m4_episodios.csv` solo cambian las tres columnas
+  `antecedente_*`: bajan en los 1.188 episodios, exactamente el primer paso. Con
+  más de 50 mm en 72 h, en 2026 hay 35 → 34 episodios; Río Choapa 265,6 → 265,2 mm
+  y Caimanes 239,4 → 239,0. En `gatillo.gpkg` hay además diferencias de 1e-16
+  relativo en la lluvia interpolada: el random forest con `n_jobs=-1` suma los
+  árboles en distinto orden. No es un cambio del modelo, pero para la fase 2
+  significa que `gatillo.gpkg` no sale idéntico byte a byte. Los catálogos
+  quedaron en `data/raw/lluvia/2024-06-01_2026-08-23/catalogo_{0,1,3}.json`.
+- `docs/corridas/2026-10-17_m5_m6_validacion_fecha.txt` (las tres variantes de
+  `m5_validacion.py`, la calibración, la alerta por sector, los niveles y
+  `m6 --repasar`). Recall con troncos, episodio: 6/26 → 4/26 (agosto 2/11 → 0/11);
+  ventana crítica 20/26 → 10/26 (julio 12/15 → 9/15, agosto 8/11 → 1/11). Llimpo y
+  Pichasca pasan a no predichas. El "Caine 30% alto" solo vale para el temporal
+  del 17 al 22 de julio (9 entradas). La calibración, la alerta por sector y los
+  niveles salen idénticos; b0 y b1 iguales a los congelados de m6; el repaso da 41
+  de 41.
+- `docs/corridas/2026-10-17_m3_exposicion.txt`. `puntos_corte.gpkg` es idéntico:
+  9.424 puntos, las mismas 18 comunas, los mismos atributos y la misma geometría.
+  El visor no se regeneró.
+
+README: el párrafo de antecedente de M4, la línea de la interpolación en M5 (de
+40%-72% a 24%-36%), "Cómo se corre M5", "Resultado de M5", "Las fallas son el
+hallazgo" con su párrafo "Corrección del 17 de octubre de 2026", y las corridas
+nuevas en "Reproducibilidad". `docs/contexto.md`: el AUC de los niveles (1,00 y
+0,95 eran de la versión con la estación más mojada; la vigente es 0,97 y 0,96).
+
+Quedó sin tocar, porque no viene de la 1B: en el README, la tabla de salidas de M4
+(`gatillo.gpkg` con "11.591 filas"; hoy son 30.499) y la sección de la auditoría
+del 11-10 ("No hay pruebas automáticas", "La alerta en vivo no avisa si falla"),
+que la fase 1A ya resolvió. Las dos son de la fase 2 o 3, cuando el README pase a
+`docs/bitacora.md`.
+
+Próximo paso exacto: prompt 2 de `docs/prompts_10_dias.md` (un comando, pruebas
+y CI). La regla de hash del punto 5 aplica a `m4_episodios.csv` y
+`m5_validacion.csv`; `gatillo.gpkg` necesita comparación con tolerancia.

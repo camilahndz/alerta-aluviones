@@ -687,11 +687,15 @@ Lo revisé buscando que lo fuera:
 
 #### La lluvia antecedente sigue siendo la variable que falta
 
-Hay 35 episodios que llegan con más de 50 mm acumulados en las 72 horas previas.
-El del 19 de julio en Río Choapa en Salamanca arrastra **265,6 mm de lluvia
-antecedente** y aun así se queda en 2,3 mm/h de intensidad media; el de Caimanes,
-239,4 mm con 2,1 mm/h. Un suelo con esa cantidad de agua encima no necesita un
-chaparrón para soltar material, y un umbral que solo mira I y D no ve nada de eso.
+Entre el 1 de junio y el 23 de agosto de 2026 hay 34 episodios que llegan con más
+de 50 mm acumulados en las 72 horas previas. El del 19 de julio en Río Choapa en
+Salamanca arrastra **265,2 mm de lluvia antecedente** y aun así se queda en
+2,3 mm/h de intensidad media; el de Caimanes, 239,0 mm con 2,1 mm/h. Un suelo con
+esa cantidad de agua encima no necesita un chaparrón para soltar material, y un
+umbral que solo mira I y D no ve nada de eso. (Hasta el 17-10-2026 decía 35
+episodios, 265,6 y 239,4 mm: el antecedente incluía el primer paso del propio
+episodio. Corrida:
+[`2026-10-17_m4_antecedente.txt`](docs/corridas/2026-10-17_m4_antecedente.txt).)
 
 Esas columnas ya se escriben en `m4_episodios.csv` y son el punto de partida de
 M5.
@@ -803,9 +807,10 @@ total del invierno de 2026, que es como se hizo el diagnóstico, el orden se
 repite: media regional 125,8 mm de MAE, estación cercana 158,2, bosque 107,7.
 
 La interpolación no cambia el recall de M5 leyendo el episodio entero, y lo sube
-en la ventana crítica de 40% a 72%. Pero también marca más cuencas (de 856 a
-1.000 en 2026), así que sin negativos no se sabía si eso era mejora. La
-calibración de M5 lo contesta, y la respuesta es que no.
+en la ventana crítica de 24% a 36% (sin troncos, con cada entrada medida en su
+fecha; hasta el 17-10-2026 decía 40% a 72%, ver la corrección en M5). Pero también
+marca más cuencas (de 856 a 1.000 en 2026), así que sin negativos no se sabía si
+eso era mejora. La calibración de M5 lo contesta, y la respuesta es que no.
 
 ---
 
@@ -816,16 +821,19 @@ python src/m5_validacion.py
 python src/m5_validacion.py --solo-fuertes   # solo aluvión y activación
 ```
 
-Cruza las activaciones documentadas del temporal de julio contra lo que el modelo
-predijo. El inventario está en
+Cruza las activaciones documentadas de 2026 contra lo que el modelo predijo. El
+inventario está en
 [`docs/inventario_activaciones_2026-07.csv`](docs/inventario_activaciones_2026-07.csv),
-con 18 entradas de prensa y comunicados de SENAPRED y Carabineros, cada una con su
-URL.
+con 33 entradas de prensa y comunicados de SENAPRED y Carabineros, cada una con su
+URL: 18 de julio y 15 del bloque del 14 al 17 de agosto, agregadas en octubre.
+Cada entrada se compara solo con los episodios de su fecha, con un día de holgura.
 
 Las entradas traen nombres, no coordenadas, así que se ubican en el extracto de
-OpenStreetMap que M3 ya usa. Catorce calzan directo entre los cauces con nombre,
-donde las quebradas aparecen como "Quebrada X"; las otras cuatro necesitan un
-alias, y los cuatro están escritos en el código con su motivo.
+OpenStreetMap que M3 ya usa: 17 en un cauce con nombre, donde las quebradas
+aparecen como "Quebrada X", y 12 en un lugar con nombre. Cuando la prensa escribe
+el nombre distinto que OSM hace falta un alias, y cada uno está escrito en el
+código con su motivo. Cuatro no se pueden ubicar: tres nombres no están en OSM y
+una entrada no trae nombre.
 
 ### Lo que M5 puede medir y lo que no
 
@@ -835,28 +843,39 @@ quebrada que bajó con fuerza en un cerro sin camino figura igual que una que no
 movió. Hay positivos observados y **no hay negativos observados**.
 
 Entonces se puede estimar el recall —de las activaciones documentadas, cuántas
-marcó el modelo— y nada más. La precisión no es estimable: el modelo marca 668
-cuencas y el inventario tiene 18 entradas, así que las 650 que no figuran no son
-falsos positivos, son lugares donde nadie fue a mirar. Reportar una precisión
-contra ese inventario sería inventar 2.571 verdaderos negativos.
+marcó el modelo— y nada más. La precisión no es estimable: en la primera versión
+el modelo marcaba 668 cuencas y el inventario de julio tenía 18 entradas, así que
+las 650 que no figuraban no eran falsos positivos, eran lugares donde nadie fue a
+mirar. Reportar una precisión contra ese inventario habría sido inventar 2.571
+verdaderos negativos.
 
 Por eso este hito no entrega AUC ni F1. Un número que no se puede defender es peor
 que no tenerlo.
 
 ### Resultado de M5
 
-| | Todas las entradas | Solo evidencia fuerte |
-|---|---|---|
-| Entradas | 18 | 9 |
-| Sin cobertura del modelo | 3 | 3 |
-| Evaluadas y no predichas | 11 | 5 |
-| Predichas | 4 | 1 |
-| **Recall sobre las evaluadas** | **27%** | **17%** |
+Corrida: [`2026-10-17_m5_m6_validacion_fecha.txt`](docs/corridas/2026-10-17_m5_m6_validacion_fecha.txt),
+con las unidades troncales y la lectura de Caine sobre el episodio entero.
 
-Las tres sin cobertura —Cruz de Caña, Tambillos y Cajón del Romero— no son errores
-de predicción. Caen en cuencas costeras de entre 195 y 538 km², y
-`m1_subcuencas.py` solo delinea una subcuenca cuando el cauce receptor drena al
-menos 200 km². El modelo nunca evaluó ese lugar.
+| | Todas | Solo evidencia fuerte | Julio | Agosto |
+|---|---|---|---|---|
+| Entradas | 33 | 23 | 18 | 15 |
+| Sin ubicar en OSM | 4 | 4 | 0 | 4 |
+| Sin cobertura del modelo | 3 | 3 | 3 | 0 |
+| Evaluadas y no predichas | 22 | 15 | 11 | 11 |
+| Predichas | 4 | 1 | 4 | 0 |
+| **Recall sobre las evaluadas** | **15%** | **6%** | **27%** | **0%** |
+
+Las cuatro predichas son del 17 de julio: El Rincón, Batuco, Estero de Punitaqui y
+Cárcamo. Agosto queda en cero, y es lo esperable: es el bloque de deshielo que
+ningún umbral de lluvia ve (ver la calibración, más abajo).
+
+Las tres sin cobertura —Cruz de Caña, Tambillos y Las Barrancas— no son errores de
+predicción: no tienen ninguna unidad susceptible a menos de 3 km, y el modelo nunca
+evaluó ese lugar. En la primera versión la tercera era Cajón del Romero, que desde
+octubre queda cubierto por unidades troncales; las tres de entonces caían en cuencas
+costeras de entre 195 y 538 km², y `m1_subcuencas.py` solo delinea una subcuenca
+cuando el cauce receptor drena al menos 200 km².
 
 Bajando `--valle-min-km2` a 25 aparecen unidades ahí. **No se hizo**, y el motivo
 es de método: bajar un parámetro hasta que cubra los casos de su propia validación
@@ -865,41 +884,87 @@ una iteración siguiente, con datos distintos de los que lo detectaron.
 
 ### Las fallas son el hallazgo
 
-Un recall de 17% suena a fracaso y no lo es, porque lo interesante no es cuántas
-falló sino **por cuánto**. Las tres quebradas con más unidades cerca:
+Un recall de 27% en julio suena a fracaso y no lo es, porque lo interesante no es
+cuántas falló sino **por cuánto**. Tres quebradas del temporal del 17 al 22 de
+julio, con la lluvia de su fecha:
 
-| Quebrada | Comuna | Lluvia | Duración | I media | Razón vs Caine | |
-|---|---|---|---|---|---|---|
-| El Rincón | Los Vilos | 238,6 mm | 52,5 h | 4,54 mm/h | **1,44** | acierto |
-| Marquesa | Vicuña | 198,7 mm | 112,0 h | 3,27 mm/h | **0,75** | falla |
-| Tres Cruces | Paihuano | 159,4 mm | 111,5 h | 2,34 mm/h | **0,67** | falla |
+| Quebrada | Comuna | Lluvia | Duración | Razón vs Caine | |
+|---|---|---|---|---|---|
+| El Rincón | Los Vilos | 222,6 mm | 53,5 h | **1,33** | acierto |
+| Marquesa | Vicuña | 242,5 mm | 116,5 h | **0,90** | falla |
+| Tres Cruces | Paihuano | 184,8 mm | 111,5 h | **0,70** | falla |
+
+La lluvia y la duración son las del episodio más lluvioso de las unidades
+cercanas en esa fecha; la razón, la mayor de esos episodios.
 
 El Choapa recibió casi la misma agua que el Elqui **en la mitad del tiempo**. No
 es que el modelo midiera mal el valle del Elqui: el Elqui no alcanzó la intensidad
 que Caine pide, y las quebradas se activaron igual.
 
-De las 11 entradas evaluadas y no predichas, **10 caen entre 0,55 y 0,80 de lo que
-Caine exige**, con mediana 0,75. Y el recall salta donde están:
+En ese temporal, **las cinco fallas caen entre 0,70 y 0,94 de lo que Caine
+exige**, con mediana 0,89. Fuera de él no: las seis del 31 de julio, un episodio
+con mucha menos lluvia, quedan entre 0,26 y 0,91 (mediana 0,41), y las de agosto
+entre 0,07 y 0,46 (mediana 0,12). Por eso el recall sube con Caine × k solo en el
+temporal grande:
 
-| Caine × k | Recall |
-|---|---|
-| 1,0 | 4/15 (27%) |
-| 0,9 | 4/15 (27%) |
-| 0,8 | 4/15 (27%) |
-| **0,7** | **12/15 (80%)** |
-| 0,6 | 13/15 (87%) |
-| 0,5 | 14/15 (93%) |
+| Caine × k | Julio, 17 al 22 | Todo julio | Todo 2026 |
+|---|---|---|---|
+| 1,0 | 4/9 | 4/15 (27%) | 4/26 (15%) |
+| 0,9 | 5/9 | 6/15 (40%) | 6/26 (23%) |
+| 0,8 | 8/9 | 9/15 (60%) | 9/26 (35%) |
+| **0,7** | **9/9** | **10/15 (67%)** | **10/26 (38%)** |
+| 0,6 | 9/9 | 10/15 (67%) | 10/26 (38%) |
+| 0,5 | 9/9 | 11/15 (73%) | 11/26 (42%) |
 
-O sea que el umbral global de Caine queda del orden de **un 30% alto** para la
-Región de Coquimbo. Es la medición que M4 venía pidiendo desde su resultado
-negativo, ahora con un número.
+O sea que en el temporal del 17 al 22 de julio el umbral global de Caine queda del
+orden de **un 30% alto**: con 0,7 de lo que pide, las nueve quebradas evaluadas
+de esas fechas quedan marcadas. Es la medición que M4 venía pidiendo desde su
+resultado negativo, ahora con un número, pero sobre nueve entradas de un solo
+temporal y no para la región. Fuera de él ningún factor razonable alcanza: el 31
+de julio llovió mucho menos y agosto es el bloque de deshielo.
 
 **Ese escalamiento no se adopta.** Elegir el k que maximiza el recall sobre este
 mismo inventario es ajustar el modelo contra su propia validación, y el número que
 saliera después no mediría nada. Además las entradas no son independientes: varias
-comparten la estación más cercana y por eso repiten exactamente la misma razón
-—0,747 aparece cuatro veces—, así que los 15 casos valen bastante menos de 15
-observaciones.
+comparten la estación y el episodio, y por eso repiten la misma razón —0,122
+aparece tres veces en agosto—, y las nueve del temporal de julio salen de un solo
+evento. Los casos valen bastante menos que su número.
+
+**Corrección del 17 de octubre de 2026.** Hasta esa fecha esta sección y la de M4
+tenían dos errores que no daban error, encontrados en la auditoría de ese día (A1 y A2 en
+[`docs/auditoria_2026-10-17.md`](docs/auditoria_2026-10-17.md)):
+
+* **La validación no miraba la fecha.** Una entrada contaba como predicha si
+  alguna unidad cercana superaba Caine en cualquier episodio entre el 1 de junio y
+  el 24 de agosto, y la razón, la lluvia y la duración salían de todos esos
+  episodios. Las activaciones del 31 de julio y las de agosto se medían con la
+  lluvia del temporal del 17 al 22: Llimpo, del 15 de agosto, figuraba predicha
+  con 216,0 mm en 53,5 h. Ahora cada entrada se compara solo con los episodios de
+  su fecha ±1 día, la regla que la calibración ya usaba.
+* **El antecedente contaba su propio paso.** La lluvia de las 24, 72 y 168 horas
+  previas incluía el primer paso de 30 minutos del episodio. Cambia el párrafo de
+  lluvia antecedente de M4 (35 episodios pasan a 34) y nada más: ningún modelo
+  ajustado usa esa columna.
+
+Cuánto cambió, con troncos, sobre las mismas 26 entradas evaluadas (15 de julio,
+11 de agosto):
+
+| Lectura de Caine | Todas | Julio | Agosto |
+|---|---|---|---|
+| Episodio entero | 6 → 4 | 4 → 4 | 2 → 0 |
+| Ventana crítica | 20 → 10 | 12 → 9 | 8 → 1 |
+
+Llimpo y Pichasca, de agosto, pasan de predichas a no predichas. Y la conclusión
+se achica. La primera versión de esta sección (18 entradas, lluvia de la
+estación) decía que 10 de 11 fallas caían entre 0,55 y 0,80 de Caine y que con
+k = 0,7 el recall de julio saltaba de 4/15 a 12/15; la corrida de tres inviernos
+del 10-10 daba un salto parecido, de 4/15 a 12/15 con k = 0,8. Con cada entrada en
+su fecha el mismo cálculo da 4, 6, 9 y 10 de 15: parte del salto lo hacían
+entradas medidas con la lluvia de otro día. La calibración, la alerta por
+provincia, los niveles y la alerta en vivo no cambiaron, porque ya emparejaban
+por fecha. Corridas:
+[`2026-10-17_m5_m6_validacion_fecha.txt`](docs/corridas/2026-10-17_m5_m6_validacion_fecha.txt)
+y [`2026-10-17_m4_antecedente.txt`](docs/corridas/2026-10-17_m4_antecedente.txt).
 
 Para calibrar en serio hace falta un inventario con episodios **sin** activación
 documentada. Eso se armó en octubre de 2026 y está en la sección siguiente.
@@ -1547,6 +1612,11 @@ del DEM verificada al 100% de la superficie regional y el extracto de OSM del 8
 de octubre. M4 y M5 sobre tres inviernos están en
 [`2026-10-10_m4_tres_inviernos.txt`](docs/corridas/2026-10-10_m4_tres_inviernos.txt)
 y [`2026-10-10_m5_tres_inviernos.txt`](docs/corridas/2026-10-10_m5_tres_inviernos.txt).
+Las del 17 de octubre rehacen M3, M4, M5 y el repaso de la alerta en vivo con los
+arreglos de la auditoría de ese día, cada una comparada contra la anterior:
+[`2026-10-17_m4_antecedente.txt`](docs/corridas/2026-10-17_m4_antecedente.txt),
+[`2026-10-17_m5_m6_validacion_fecha.txt`](docs/corridas/2026-10-17_m5_m6_validacion_fecha.txt)
+y [`2026-10-17_m3_exposicion.txt`](docs/corridas/2026-10-17_m3_exposicion.txt).
 
 Quedan guardadas también las dos corridas previas del mismo día, sobre las 444
 cuencas costeras: [`2026-10-10_reconstruccion_m1_m2_m4.txt`](docs/corridas/2026-10-10_reconstruccion_m1_m2_m4.txt)
