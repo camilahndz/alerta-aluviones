@@ -111,6 +111,8 @@ TRES INVIERNOS Y NO UNO (desde octubre de 2026)
           la ventana cruza seis cambios de hora. Ver ZONA_CHILE.
         - el cache: una subcarpeta por ventana, porque con una carpeta plana
           cambiar la ventana leia en silencio la serie vieja. Ver _ruta_cache.
+          Desde el 17-10-2026 el catalogo de estaciones (R1) tambien va ahi:
+          antes se pedia en cada corrida. Ver descargar_catalogo.
         - los conteos: se reportan por invierno, porque un total de tres anios
           no dice de cual viene cada positivo.
 
@@ -153,6 +155,8 @@ from m4_umbrales import (UMBRALES, caine_intensidad_critica,  # noqa: E402
                          evaluar, razon_critica)
 
 RAIZ = Path(__file__).resolve().parent.parent
+# Series y catalogos de VIPNET, una subcarpeta por ventana. Ver _ruta_cache.
+CACHE_LLUVIA = RAIZ / "data" / "raw" / "lluvia"
 
 # --- VIPNET ------------------------------------------------------------------
 VIPNET = "https://vipnet.mop.gob.cl"
@@ -337,20 +341,57 @@ def _verificar_ventana(inicio: str, fin: str):
                 )
 
 
-def descargar_catalogo(tipo: int, region: int = REGION_COQUIMBO) -> pd.DataFrame:
+def descargar_catalogo(tipo: int, region: int = REGION_COQUIMBO,
+                       cache: Path | None = None, refrescar: bool = False,
+                       inicio: str = VENTANA_INICIO, fin: str = VENTANA_FIN) -> pd.DataFrame:
     """Estaciones de la region que declaran el parametro pedido. Es la regla R1.
 
     Se pide con `mapStatistic` = 0 (acumulado) porque el catalogo viene pegado a
     una consulta de valores; el valor no se usa, solo la ficha de la estacion.
+
+    EL CATALOGO TAMBIEN VA AL CACHE
+
+        Hasta octubre de 2026 las series salian del cache y el catalogo se le
+        pedia a VIPNET en cada corrida. Ninguna corrida era offline, y una
+        estacion nueva en VIPNET cambiaba R1 -y con eso todo lo que viene
+        despues- sin que nada lo dijera (auditoria del 17-10-2026, A6).
+
+        Ahora se guarda junto a las series de la ventana, en
+        <cache>/<inicio>_<fin>/catalogo_<tipo>.json, con la respuesta completa
+        de VIPNET (todas las regiones; el filtro por region se aplica al leer),
+        la consulta y la hora en que se bajo. `refrescar` lo vuelve a pedir,
+        igual que a las series.
     """
-    cuerpo = _post(EP_ESTACIONES, {
+    cache = CACHE_LLUVIA if cache is None else Path(cache)
+    ruta = cache / f"{inicio}_{fin}" / f"catalogo_{tipo}.json"
+    consulta = {
         "tipoEstacion": tipo,
         "mapStatistic": 0,
         "currentTabIndex": 0,
-        "fetchDay": VENTANA_FIN,
+        "fetchDay": fin,
         "fetchHour": 23,
         "hoursRange": 24,
-    })
+    }
+
+    if ruta.exists() and not refrescar:
+        guardado = json.loads(ruta.read_text(encoding="utf-8"))
+        estaciones = guardado["data"]
+        print(f"  catalogo tipo {tipo}: cache del {guardado['bajado_utc'][:10]} "
+              f"({len(estaciones)} estaciones del pais, {ruta.name})")
+    else:
+        estaciones = _post(EP_ESTACIONES, consulta)["data"]
+        ruta.parent.mkdir(parents=True, exist_ok=True)
+        # Se escribe a un temporal y se renombra: un catalogo cortado a la
+        # mitad en disco se leeria en todas las corridas siguientes.
+        temporal = ruta.with_suffix(".json.parcial")
+        temporal.write_text(json.dumps({
+            "bajado_utc": pd.Timestamp.now(tz="UTC").isoformat(),
+            "consulta": consulta,
+            "data": estaciones,
+        }, ensure_ascii=False), encoding="utf-8")
+        temporal.replace(ruta)
+        print(f"  catalogo tipo {tipo}: bajado de VIPNET ({len(estaciones)} estaciones "
+              f"del pais) -> {ruta.name}")
 
     filas = [{
         "codigo": e["codigoEstacion"],
@@ -360,8 +401,15 @@ def descargar_catalogo(tipo: int, region: int = REGION_COQUIMBO) -> pd.DataFrame
         "altitud_m": e.get("altitud"),
         "fuente": e.get("fuenteEstacion"),
         "region": e.get("region"),
-    } for e in cuerpo["data"] if e.get("region") == region]
+    } for e in estaciones if e.get("region") == region]
 
+    # Cero estaciones en la region no es un catalogo vacio: es una consulta que
+    # salio mal o un codigo de region que cambio. Seguir daria una corrida sin
+    # lluvia que se veria como un invierno seco.
+    if not filas:
+        sys.exit(f"El catalogo tipo {tipo} no trae ninguna estacion de la region "
+                 f"{region} ({len(estaciones)} en el pais). Revisa {ruta} o "
+                 "corre con --refrescar.")
     return pd.DataFrame(filas).sort_values("codigo").reset_index(drop=True)
 
 
@@ -779,9 +827,15 @@ def detectar_episodios(serie: pd.DataFrame, corte_seco_h: float,
     if df.empty:
         return df
 
+    # La lluvia antecedente es la que cayo ANTES del episodio: termina en el
+    # paso anterior al inicio. `.loc` con fechas incluye los dos extremos, y
+    # hasta octubre de 2026 la ventana terminaba en `ini`, asi que cada
+    # episodio contaba su primer paso como antecedente: uno de un solo paso de
+    # 10 mm reportaba 10 mm de antecedente en 24 h. Auditoria 17-10, A2.
+    paso = timedelta(minutes=PASO_MIN)
     for horas in ANTECEDENTES_H:
         df[f"antecedente_{horas}h_mm"] = [
-            float(mm.loc[ini - timedelta(hours=horas):ini].sum(skipna=True))
+            float(mm.loc[ini - timedelta(hours=horas):ini - paso].sum(skipna=True))
             for ini in df["inicio"]
         ]
     return df
@@ -1194,12 +1248,13 @@ def main():
     ap = argparse.ArgumentParser(
         description="M4 - Arma la lluvia de 30 min y le aplica los umbrales publicados.")
     ap.add_argument("--refrescar", action="store_true",
-                    help="vuelve a pedirle las series a VIPNET en vez de usar el cache")
+                    help="vuelve a pedirle las series y el catalogo a VIPNET en vez "
+                         "de usar el cache")
     ap.add_argument("--inicio", default=VENTANA_INICIO)
     ap.add_argument("--fin", default=VENTANA_FIN)
     ap.add_argument("--corte-seco", type=float, default=CORTE_SECO_H,
                     help="horas secas que separan dos episodios")
-    ap.add_argument("--cache", type=Path, default=RAIZ / "data" / "raw" / "lluvia")
+    ap.add_argument("--cache", type=Path, default=CACHE_LLUVIA)
     ap.add_argument("--procesados", type=Path, default=RAIZ / "data" / "processed")
     args = ap.parse_args()
 
@@ -1213,7 +1268,8 @@ def main():
     print("=" * 74)
 
     # --- R1 ---
-    catalogo = descargar_catalogo(TIPO_PRECIPITACION)
+    catalogo = descargar_catalogo(TIPO_PRECIPITACION, cache=args.cache,
+                                  refrescar=args.refrescar, inicio=args.inicio, fin=args.fin)
     print(f"\nR1  estaciones de precipitacion en Coquimbo: {len(catalogo)}")
 
     # --- Series de lluvia ---
@@ -1228,7 +1284,8 @@ def main():
 
     # --- Isoterma 0 observada ---
     print("\nAjustando la isoterma 0 observada, dia a dia...")
-    cat_temp = descargar_catalogo(TIPO_TEMPERATURA)
+    cat_temp = descargar_catalogo(TIPO_TEMPERATURA, cache=args.cache,
+                                  refrescar=args.refrescar, inicio=args.inicio, fin=args.fin)
     temperaturas, altitudes = {}, {}
     for cod, alt in zip(cat_temp["codigo"], cat_temp["altitud_m"]):
         datos = serie_con_cache(cod, TIPO_TEMPERATURA, args.cache,

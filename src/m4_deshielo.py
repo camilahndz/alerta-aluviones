@@ -135,7 +135,8 @@ def serie_diaria(datos: list[dict]) -> pd.Series:
 
 
 def nieve_regional(cache: Path, refrescar: bool, inicio: str, fin: str):
-    catalogo = m4.descargar_catalogo(TIPO_NIEVE)
+    catalogo = m4.descargar_catalogo(TIPO_NIEVE, cache=cache, refrescar=refrescar,
+                                     inicio=inicio, fin=fin)
     dias = pd.date_range(inicio, fin, freq="D")
     tabla = {}
     for cod in catalogo["codigo"]:
@@ -161,7 +162,8 @@ def nieve_regional(cache: Path, refrescar: bool, inicio: str, fin: str):
 
 
 def isoterma_altas(cache: Path, refrescar: bool, inicio: str, fin: str):
-    catalogo = m4.descargar_catalogo(m4.TIPO_TEMPERATURA)
+    catalogo = m4.descargar_catalogo(m4.TIPO_TEMPERATURA, cache=cache, refrescar=refrescar,
+                                     inicio=inicio, fin=fin)
     altas = catalogo[catalogo["altitud_m"] >= ALTITUD_ALTA_M]
     dias = pd.date_range(inicio, fin, freq="D")
     tabla = {}
@@ -212,7 +214,7 @@ def main():
     ap.add_argument("--refrescar", action="store_true")
     ap.add_argument("--inicio", default=m4.VENTANA_INICIO)
     ap.add_argument("--fin", default=m4.VENTANA_FIN)
-    ap.add_argument("--cache", type=Path, default=RAIZ / "data" / "raw" / "lluvia")
+    ap.add_argument("--cache", type=Path, default=m4.CACHE_LLUVIA)
     args = ap.parse_args()
 
     print("=" * 74)
